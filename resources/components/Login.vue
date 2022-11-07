@@ -42,6 +42,7 @@
                     size="large"
                     variant="elevated"
                     density="comfortable"
+                       href="/register"
                 >Register</v-btn>
             </v-form>
         </v-card>

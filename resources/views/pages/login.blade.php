@@ -1,5 +1,5 @@
 @extends('layouts.general')
-@section('title', 'Daftar Blog - SahilApp Nusagates')
+@section('title', 'Login')
 @section('content')
    <v-app><login/></v-app>
 @endsection
