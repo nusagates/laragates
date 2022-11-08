@@ -4,10 +4,7 @@
             <v-sheet class="d-flex justify-center my-2">
                 <img width="100" src="/assets/images/logo.png"/>
             </v-sheet>
-            <v-form
-                v-model="form"
-                @submit.prevent="onSubmit"
-            >
+            <v-form>
                 <v-text-field
                     class="mb-2"
                     clearable
@@ -16,6 +13,7 @@
                     variant="outlined"
                     prepend-inner-icon="mdi-email"
                     density="comfortable"
+                    v-model="field.user.email"
                 ></v-text-field>
 
                 <v-text-field
@@ -27,6 +25,7 @@
                     :type="field.user.showPassword?'text':'password'"
                     :append-inner-icon="field.user.showPassword?'mdi-eye-off':'mdi-eye'"
                     @click:appendInner="field.user.showPassword=!field.user.showPassword"
+                    v-model="field.user.password"
                 ></v-text-field>
 
                 <v-btn
@@ -35,23 +34,27 @@
                     size="large"
                     variant="elevated"
                     density="comfortable"
+                    @click="login"
                 >Login</v-btn>
                 <v-btn class="my-2"
                     block
                     color="info"
                     size="large"
-                    variant="elevated"
+                    variant="text"
                     density="comfortable"
                        href="/register"
                 >Register</v-btn>
             </v-form>
         </v-card>
+        <toast ref="message"/>
     </v-container>
 </template>
 
 <script>
+import Toast from "./helpers/Toast.vue";
 export default {
     name: "Login",
+    components: {Toast},
     data() {
         return {
             collection: {},
@@ -62,14 +65,25 @@ export default {
                     showPassword:false
                 }
             },
-            dialog: {},
-            loading: {},
-            selected: {},
-            option: {},
-            table: {},
+            loading: {
+                submit: false
+            },
         }
     },
-    methods: {},
+    methods: {
+        login(){
+            this.loading.submit=true
+            axios.post('/api/v1/login', this.field.user).then(res=>{
+                if(res.data.code===200){
+                    this.$refs.message.show(res.data.message)
+                }else{
+                    this.$refs.message.show(res.data.message, 'warning')
+                }
+            }).finally(()=>{
+                this.loading.submit=false
+            })
+        }
+    },
 }
 </script>
 

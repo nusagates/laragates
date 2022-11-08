@@ -62,7 +62,7 @@
                        block
                        color="info"
                        size="large"
-                       variant="elevated"
+                       variant="text"
                        density="comfortable"
                        href="/login"
                 >Login
