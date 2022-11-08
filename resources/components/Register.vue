@@ -4,10 +4,7 @@
             <v-sheet class="d-flex justify-center my-2">
                 <img width="100" src="/assets/images/logo.png"/>
             </v-sheet>
-            <v-form
-                v-model="form"
-                @submit.prevent="onSubmit"
-            >
+            <v-form>
                 <v-text-field
                     class="mb-2"
                     clearable
@@ -15,6 +12,7 @@
                     variant="outlined"
                     prepend-inner-icon="mdi-email"
                     density="comfortable"
+                    v-model="field.user.email"
                 ></v-text-field>
                 <v-text-field
                     class="mb-2"
@@ -23,6 +21,7 @@
                     variant="outlined"
                     prepend-inner-icon="mdi-account"
                     density="comfortable"
+                    v-model="field.user.name"
                 ></v-text-field>
 
                 <v-text-field
@@ -34,6 +33,7 @@
                     :type="field.user.showPassword?'text':'password'"
                     :append-inner-icon="field.user.showPassword?'mdi-eye-off':'mdi-eye'"
                     @click:appendInner="field.user.showPassword=!field.user.showPassword"
+                    v-model="field.user.password"
                 ></v-text-field>
                 <v-text-field
                     clearable
@@ -44,9 +44,13 @@
                     :type="field.user.showPasswordConfirmation?'text':'password'"
                     :append-inner-icon="field.user.showPasswordConfirmation?'mdi-eye-off':'mdi-eye'"
                     @click:appendInner="field.user.showPasswordConfirmation=!field.user.showPasswordConfirmation"
+                    v-model="field.user.password_confirmation"
                 ></v-text-field>
 
                 <v-btn
+                    @click="register"
+                    :disabled="loading.register"
+                    :loading="loading.register"
                     block
                     color="success"
                     size="large"
@@ -65,12 +69,15 @@
                 </v-btn>
             </v-form>
         </v-card>
+        <toast ref="message"/>
     </v-container>
 </template>
 
 <script>
+import Toast from "./helpers/Toast.vue";
 export default {
     name: "Register",
+    components: {Toast},
     data() {
         return {
             collection: {},
@@ -84,14 +91,25 @@ export default {
                     showPasswordConfirmation: false
                 }
             },
-            dialog: {},
-            loading: {},
-            selected: {},
-            option: {},
-            table: {},
+            loading: {
+                register: false
+            },
         }
     },
-    methods: {},
+    methods: {
+        register() {
+            this.loading.register = true
+            axios.post('/api/v1/register', this.field.user).then(res => {
+                if(res.data.code===200){
+                    this.$refs.message.show(res.data.message)
+                }else{
+                    this.$refs.message.show(res.data.message, 'warning')
+                }
+            }).finally(() => {
+                this.loading.register = false
+            })
+        }
+    },
 }
 </script>
 

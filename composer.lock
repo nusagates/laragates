@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ccbd816a07b206f971042295b899d1ba",
+    "content-hash": "ef2a2c4f3f7fc96110194ed03392b3d1",
     "packages": [
         {
             "name": "brick/math",
@@ -2105,6 +2105,55 @@
             "time": "2022-10-28T22:51:32+00:00"
         },
         {
+            "name": "nusagates/laravel-helper",
+            "version": "v0.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/nusagates/laravel-helper.git",
+                "reference": "5cd068c835ed9e0ed5dbbf3eff7264c9a9cce0d9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/nusagates/laravel-helper/zipball/5cd068c835ed9e0ed5dbbf3eff7264c9a9cce0d9",
+                "reference": "5cd068c835ed9e0ed5dbbf3eff7264c9a9cce0d9",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.3|^8.0|^8.1"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Nusagates\\Helper\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Ahmad Budairi",
+                    "email": "budairi.contact@gmail.com",
+                    "homepage": "https://nusagates.co.id/author/cakbud/",
+                    "role": "Author"
+                }
+            ],
+            "description": "General helper fol building Laravel Application",
+            "homepage": "https://github.com/nusagates/laravel-helper",
+            "keywords": [
+                "Laravel helper",
+                "addon",
+                "helper",
+                "laravel"
+            ],
+            "support": {
+                "issues": "https://github.com/nusagates/laravel-helper/issues",
+                "source": "https://github.com/nusagates/laravel-helper/tree/0.1.0"
+            },
+            "time": "2022-11-07T04:49:32+00:00"
+        },
+        {
             "name": "phpoption/phpoption",
             "version": "1.9.0",
             "source": {
@@ -2545,16 +2594,16 @@
         },
         {
             "name": "psy/psysh",
-            "version": "v0.11.8",
+            "version": "v0.11.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/bobthecow/psysh.git",
-                "reference": "f455acf3645262ae389b10e9beba0c358aa6994e"
+                "reference": "1acec99d6684a54ff92f8b548a4e41b566963778"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/bobthecow/psysh/zipball/f455acf3645262ae389b10e9beba0c358aa6994e",
-                "reference": "f455acf3645262ae389b10e9beba0c358aa6994e",
+                "url": "https://api.github.com/repos/bobthecow/psysh/zipball/1acec99d6684a54ff92f8b548a4e41b566963778",
+                "reference": "1acec99d6684a54ff92f8b548a4e41b566963778",
                 "shasum": ""
             },
             "require": {
@@ -2615,9 +2664,9 @@
             ],
             "support": {
                 "issues": "https://github.com/bobthecow/psysh/issues",
-                "source": "https://github.com/bobthecow/psysh/tree/v0.11.8"
+                "source": "https://github.com/bobthecow/psysh/tree/v0.11.9"
             },
-            "time": "2022-07-28T14:25:11+00:00"
+            "time": "2022-11-06T15:29:46+00:00"
         },
         {
             "name": "ralouphie/getallheaders",
