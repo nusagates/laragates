@@ -41,20 +41,19 @@
           A new verification link has been sent to your email address.
         </div>
       </div>
-      <v-row align="center" justify="start">
-        <v-btn
-            :loading="form.processing"
-            :disabled="form.processing"
-            color="primary"
-            type="submit"
-        >
-          Save
-        </v-btn>
-        <span v-if="form.recentlySuccessful" class="text-body-2 text-grey-darken-1 ms-4">
+      <v-btn
+          :loading="form.processing"
+          :disabled="form.processing"
+          color="primary"
+          type="submit"
+      >
+        Save
+      </v-btn>
+      <span v-if="form.recentlySuccessful" class="text-body-2 text-grey-darken-1 ms-4">
           Saved.
         </span>
-      </v-row>
     </v-form>
+    <v-divider thickness="2" class="mt-12"/>
   </v-sheet>
 </template>
 

@@ -6,9 +6,9 @@
       </v-btn>
       <v-container class="d-flex align-center">
         <Link :href="route('dashboard')" class="me-4">
-          <ApplicationLogo class="h-9 w-auto" />
+          <ApplicationLogo class="h-9 w-auto"/>
         </Link>
-        <v-spacer />
+        <v-spacer/>
         <v-menu>
           <template #activator="{ props }">
             <v-btn v-bind="props" text>
@@ -17,7 +17,7 @@
             </v-btn>
           </template>
           <v-list>
-            <v-list-item prepend-icon="mdi-account" :to="route('profile.edit')" title="Profile"/>
+            <v-list-item prepend-icon="mdi-account" @click="goTo(route('profile.edit'))" title="Profile"/>
             <v-list-item prepend-icon="mdi-logout" title="Logout" @click="router.post(`/logout`)" color="error"/>
           </v-list>
         </v-menu>
@@ -26,11 +26,13 @@
 
     <v-navigation-drawer v-model="drawer" app>
       <v-list>
-        <v-list-item
-            :to="route('dashboard')"
+        <v-list-item link
+            v-navTo="route('dashboard')"
             :active="route().current('dashboard')" title="Dashboard"/>
-        <v-divider />
-        <v-list-item :to="route('profile.edit')">
+        <v-divider/>
+        <v-list-item link
+            v-navTo="route('profile.edit')"
+            :active="route().current('profile.edit')">
           <v-list-item-title>Profile</v-list-item-title>
         </v-list-item>
       </v-list>
@@ -38,17 +40,28 @@
 
     <v-main>
       <v-container>
-        <slot name="header" v-if="$slots.header" />
-        <slot />
+        <slot name="header" v-if="$slots.header"/>
+        <slot/>
       </v-container>
     </v-main>
   </v-app>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import {ref} from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import {Link, router} from '@inertiajs/vue3';
 
 const drawer = ref(false);
+const goTo = (route) => {
+  router.visit(route)
+}
+const vGoTo = {
+  mounted(el, binding) {
+    el.addEventListener('click', () => goTo(binding.value));
+  },
+  unmounted(el) {
+    el.removeEventListener('click', () => goTo(binding.value));
+  },
+};
 </script>
