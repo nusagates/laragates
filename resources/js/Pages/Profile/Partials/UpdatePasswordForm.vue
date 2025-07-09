@@ -38,26 +38,25 @@
           class="mb-4"
           required
       />
-      <v-row align="center" justify="start">
-        <v-btn
-            :loading="form.processing"
-            :disabled="form.processing"
-            color="primary"
-            type="submit"
-        >
-          Save
-        </v-btn>
-        <span v-if="form.recentlySuccessful" class="text-body-2 text-grey-darken-1 ms-4">
+      <v-btn
+          :loading="form.processing"
+          :disabled="form.processing"
+          color="primary"
+          type="submit"
+      >
+        Save
+      </v-btn>
+      <span v-if="form.recentlySuccessful" class="text-body-2 text-grey-darken-1 ms-4">
           Saved.
         </span>
-      </v-row>
     </v-form>
+    <v-divider thickness="2" class="mt-12"/>
   </v-sheet>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import {ref} from 'vue';
+import {useForm} from '@inertiajs/vue3';
 
 const form = useForm({
   current_password: '',
