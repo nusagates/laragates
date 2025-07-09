@@ -12,7 +12,7 @@
               :error-messages="form.errors.email"
               required
               autofocus
-              autocomplete="username"
+              autocomplete="email"
           />
           <v-text-field
               v-model="form.password"

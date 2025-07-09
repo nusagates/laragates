@@ -33,10 +33,10 @@ defineProps({
   <Head title="Welcome"/>
   <v-app
       style="background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/path/to/your/image.jpg'); background-size: cover; background-position: center; min-height: 100vh;">
-    <v-app-bar title="Welcome" app>
+    <v-app-bar title="Welcome - Tutorial Laravel" app>
       <v-spacer/>
-      <v-btn v-if="canLogin" href="/login" color="primary" variant="text">Login</v-btn>
-      <v-btn v-if="canRegister" href="/register" color="secondary" variant="text">Register</v-btn>
+      <v-btn v-if="canLogin" href="/login" color="primary" prepend-icon="mdi-login" variant="text">Login</v-btn>
+      <v-btn v-if="canRegister" href="/register" color="secondary" prepend-icon="mdi-account" variant="text">Register</v-btn>
     </v-app-bar>
     <v-main>
       <v-container class="d-flex justify-center align-center" style="height: calc(100vh - 64px);">

@@ -64,7 +64,7 @@ const submit = () => {
           />
           <div class="d-flex justify-end align-center mt-4">
             <Link
-                :href="route('login')"
+                v-to="route('login')"
                 class="me-4 text-decoration-underline"
             >
               Already registered?
