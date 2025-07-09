@@ -17,8 +17,8 @@
             </v-btn>
           </template>
           <v-list>
-            <v-list-item prepend-icon="mdi-account" @click="goTo(route('profile.edit'))" title="Profile"/>
-            <v-list-item prepend-icon="mdi-logout" title="Logout" @click="router.post(`/logout`)" color="error"/>
+            <v-list-item prepend-icon="mdi-account" link v-to="route('profile.edit')" title="Profile"/>
+            <v-list-item prepend-icon="mdi-logout" title="Logout" link @click="router.post(`/logout`)" color="error"/>
           </v-list>
         </v-menu>
       </v-container>
@@ -27,11 +27,11 @@
     <v-navigation-drawer v-model="drawer" app>
       <v-list>
         <v-list-item link
-            v-navTo="route('dashboard')"
+            v-to="route('dashboard')"
             :active="route().current('dashboard')" title="Dashboard"/>
         <v-divider/>
         <v-list-item link
-            v-navTo="route('profile.edit')"
+            v-to="route('profile.edit')"
             :active="route().current('profile.edit')">
           <v-list-item-title>Profile</v-list-item-title>
         </v-list-item>

@@ -33,7 +33,7 @@ createInertiaApp({
             .use(plugin)
             .use(ZiggyVue)
             .use(vuetify)
-            .directive('navTo', navTo)
+            .directive('to', navTo)
             .mount(el);
     },
     progress: {
