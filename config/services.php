@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'waba' => [
+       'base_url' => env('WABA_BASE_URL', 'https://graph.facebook.com'),
+         'version'  => env('WABA_API_VERSION', 'v21.0'),
+    ],
+
+
 ];
