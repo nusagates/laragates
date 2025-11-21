@@ -32,14 +32,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('tickets', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('chat_session_id')->constrained()->onDelete('cascade');
-            $table->string('subject')->nullable();
-            $table->enum('status', ['pending', 'resolved'])->default('pending');
-            $table->timestamps();
-        });
-
         Schema::create('broadcasts', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -76,7 +68,6 @@ return new class extends Migration
         Schema::dropIfExists('whatsapp_templates');
         Schema::dropIfExists('broadcast_logs');
         Schema::dropIfExists('broadcasts');
-        Schema::dropIfExists('tickets');
         Schema::dropIfExists('chat_messages');
         Schema::dropIfExists('chat_sessions');
         Schema::dropIfExists('customers');

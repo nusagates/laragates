@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WabaWebhookController;
 use App\Http\Controllers\AgentController;
+use App\Http\Controllers\TicketController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -65,6 +66,37 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Tickets Route
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'verified'])->group(function () {
+
+    // ... route lain
+
+    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
+
+    // API kecil untuk ajax
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
+    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
+    Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])->name('tickets.status');
+    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
+
+    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store'); // kalau mau tombol "New Ticket"
+    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])
+    ->name('tickets.reply');
+});
+
+Route::get('/cek-waktu', function () {
+    return [
+        'php_time'   => date('Y-m-d H:i:s'),
+        'carbon_now' => \Carbon\Carbon::now()->toDateTimeString(),
+        'timezone'   => config('app.timezone'),
+    ];
+});
+
 
 Route::get('/webhook/whatsapp', [WabaWebhookController::class, 'verify']);
 Route::post('/webhook/whatsapp', [WabaWebhookController::class, 'receive']);

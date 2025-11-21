@@ -3,26 +3,34 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Ticket extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
-        'chat_session_id',
-        'agent_id',
+        'customer_name',
+        'customer_phone',
         'subject',
-        'description',
         'status',
+        'priority',
+        'channel',
+        'assigned_to',
+        'last_message_at',
     ];
 
-    public function session(): BelongsTo
+    protected $casts = [
+        'last_message_at' => 'datetime',
+    ];
+
+    public function messages()
     {
-        return $this->belongsTo(ChatSession::class, 'chat_session_id');
+        return $this->hasMany(TicketMessage::class)->orderBy('created_at', 'asc');
     }
 
-    public function agent(): BelongsTo
+    public function agent()
     {
-        return $this->belongsTo(User::class, 'agent_id');
+        return $this->belongsTo(User::class, 'assigned_to');
     }
 }
-

@@ -1,64 +1,180 @@
 <script setup>
+/* === LOGIC TETAP, HANYA DIRAPIKAN === */
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { Head, usePage, router } from '@inertiajs/vue3'
+import { ref, computed, onMounted, watch } from 'vue'
+import axios from 'axios'
 
-// ====================== DUMMY TICKETS ======================
-const tickets = ref([
-  { id: 1, customer: "John Doe", subject: "Pesanan belum diterima", status: "ongoing", time: "10:20" },
-  { id: 2, customer: "Aldi Widakdo", subject: "Minta Invoice Pembayaran", status: "pending", time: "09:38" },
-  { id: 3, customer: "Michelle", subject: "Barang saya salah", status: "closed", time: "Kemarin" },
-])
+const page    = usePage()
+const tickets = ref(page.props.tickets || [])
+const counts  = ref(page.props.counts || {})
+const agents  = ref(page.props.agents || [])
+const filters = ref(page.props.filters || { status: 'all', q: '' })
 
-// ====================== DUMMY MESSAGES ======================
-const messages = ref([
-  { id: 1, type: "customer", name: "John Doe", text: "Halo kak, pesanan saya belum datang", at: "10:15" },
-  { id: 2, type: "agent", name: "Agent Bale", text: "Baik kak, saya cek dulu ya 🙏", at: "10:17" },
-])
+// Sidebar state
+const search       = ref(filters.value.q || '')
+const statusFilter = ref(filters.value.status || 'all')
 
-// ====================== STATE ======================
-const query = ref("")
-const activeTicketId = ref(tickets.value[0].id)
-const replyMessage = ref("")
-const showAssign = ref(false)
-const showDetail = ref(false)
-const showStatus = ref(false)
-const selectedStatus = ref(null)
+// Ticket aktif
+const activeTicketId = ref(tickets.value[0]?.id || null)
+const activeTicket   = ref(null)
+const messages       = ref([])
 
-// ====================== FILTER & FUNCTIONS ======================
-const filtered = computed(() => {
-  if (!query.value) return tickets.value
-  return tickets.value.filter(t =>
-    t.customer.toLowerCase().includes(query.value.toLowerCase())
-  )
+// Form reply
+const replyText    = ref('')
+const loadingReply = ref(false)
+const loadingTicket = ref(false)
+
+// Warna status badge
+const badgeColor = (status) => {
+  if (status === 'pending') return 'orange'
+  if (status === 'ongoing') return 'blue'
+  if (status === 'closed')  return 'green'
+  return 'grey'
+}
+
+// Filter ticket (front-end, sync sama backend)
+const filteredTickets = computed(() => {
+  let data = tickets.value
+
+  if (statusFilter.value && statusFilter.value !== 'all') {
+    data = data.filter(t => t.status === statusFilter.value)
+  }
+
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    data = data.filter(t =>
+      t.customer_name.toLowerCase().includes(q) ||
+      t.subject.toLowerCase().includes(q)
+    )
+  }
+
+  return data
 })
 
-function openTicket(id) {
-  activeTicketId.value = id
-}
-
-function sendReply() {
-  if (!replyMessage.value.trim()) return
-  messages.value.push({
-    id: Date.now(),
-    type: "agent",
-    name: "You",
-    text: replyMessage.value,
-    at: "Now"
+function changeStatusFilter(v) {
+  statusFilter.value = v
+  router.get('/tickets', { status: v, q: search.value }, {
+    preserveState: true,
+    replace: true,
+    onSuccess: res => {
+      tickets.value = res.props.tickets
+      counts.value  = res.props.counts
+    },
   })
-  replyMessage.value = ""
 }
 
-function changeTicketStatus(status) {
-  const ticket = tickets.value.find(t => t.id === activeTicketId.value)
-  if (ticket) ticket.status = status
-  showStatus.value = false
+function doSearch() {
+  router.get('/tickets', { status: statusFilter.value, q: search.value }, {
+    preserveState: true,
+    replace: true,
+    onSuccess: res => {
+      tickets.value = res.props.tickets
+      counts.value  = res.props.counts
+    },
+  })
 }
 
-function assignAgent(agent) {
-  console.log("Assign to:", agent)
-  showAssign.value = false
+// Load detail ticket
+async function loadTicket(id) {
+  if (!id) return
+  loadingTicket.value = true
+  activeTicketId.value = id
+
+  try {
+    const res = await axios.get(`/tickets/${id}`)
+    activeTicket.value = res.data.ticket
+    messages.value     = res.data.messages
+  } finally {
+    loadingTicket.value = false
+  }
 }
+
+function openTicket(id) {
+  loadTicket(id)
+}
+
+// Kirim balasan
+async function sendReply() {
+  if (!replyText.value.trim() || !activeTicketId.value) return
+
+  loadingReply.value = true
+  const text = replyText.value
+  replyText.value = ''
+
+  try {
+    const res = await axios.post(`/tickets/${activeTicketId.value}/reply`, {
+      message: text,
+    })
+
+    messages.value.push(res.data)
+    await refreshTicketsList()
+  } finally {
+    loadingReply.value = false
+  }
+}
+
+// Update status ticket
+async function updateStatus(newStatus) {
+  if (!activeTicketId.value) return
+
+  await axios.post(`/tickets/${activeTicketId.value}/status`, {
+    status: newStatus,
+  })
+
+  if (activeTicket.value) {
+    activeTicket.value.status = newStatus
+  }
+
+  await refreshTicketsList()
+}
+
+// Assign agent
+async function assignAgent(userId) {
+  if (!activeTicketId.value) return
+
+  await axios.post(`/tickets/${activeTicketId.value}/assign`, {
+    assigned_to: userId || null,
+  })
+
+  const a = agents.value.find(x => x.id === userId)
+
+  if (activeTicket.value) {
+    activeTicket.value.assigned_to   = userId
+    activeTicket.value.assigned_name = a ? a.name : null
+  }
+
+  await refreshTicketsList()
+}
+
+// Refresh list di sidebar setelah ada perubahan
+async function refreshTicketsList() {
+  await router.get('/tickets', {
+    status: statusFilter.value,
+    q: search.value,
+  }, {
+    preserveState: true,
+    replace: true,
+    only: ['tickets', 'counts'],
+    onSuccess: res => {
+      tickets.value = res.props.tickets
+      counts.value  = res.props.counts
+    },
+  })
+}
+
+// Init
+onMounted(() => {
+  if (activeTicketId.value) {
+    loadTicket(activeTicketId.value)
+  }
+})
+
+// Sinkron kalau ada props baru dari Inertia
+watch(
+  () => page.props.tickets,
+  val => { if (val) tickets.value = val },
+)
 </script>
 
 <template>
@@ -67,195 +183,450 @@ function assignAgent(agent) {
   <AdminLayout>
     <template #title>Tickets</template>
 
-    <div class="ticket-flex">
-      <!-- ===================== SIDEBAR ===================== -->
-      <div class="ticket-sidebar">
-        <v-card class="pa-4 scroll-box" elevation="2">
+    <div class="tickets-flex">
+      <!-- ================= SIDEBAR ================= -->
+      <div class="tickets-sidebar">
+        <v-card class="tickets-sidebar-card" elevation="1">
+          <!-- Search -->
           <v-text-field
-            v-model="query"
+            v-model="search"
             placeholder="Search ticket..."
-            prepend-inner-icon="mdi-magnify"
+            density="compact"
+            variant="solo"
+            flat
             hide-details
-            density="comfortable"
             rounded
-            class="mb-3"
+            clearable
+            prepend-inner-icon="mdi-magnify"
+            @keyup.enter="doSearch"
+            class="tickets-search"
           />
 
-          <v-divider></v-divider>
+          <!-- Filter status -->
+          <v-chip-group
+            v-model="statusFilter"
+            mandatory
+            class="tickets-chip-group"
+            @update:modelValue="changeStatusFilter"
+          >
+            <v-chip value="all" filter>
+              All ({{ counts.all ?? 0 }})
+            </v-chip>
+            <v-chip value="pending" filter color="orange">
+              Pending ({{ counts.pending ?? 0 }})
+            </v-chip>
+            <v-chip value="ongoing" filter color="blue">
+              Ongoing ({{ counts.ongoing ?? 0 }})
+            </v-chip>
+            <v-chip value="closed" filter color="green">
+              Closed ({{ counts.closed ?? 0 }})
+            </v-chip>
+          </v-chip-group>
 
-          <v-list>
-            <v-list-item
-              v-for="t in filtered"
-              :key="t.id"
-              @click="openTicket(t.id)"
-              :class="{ 'bg-active': t.id === activeTicketId }"
-              style="cursor: pointer;"
-            >
-              <v-list-item-content>
-                <div class="d-flex justify-space-between">
-                  <span class="font-weight-medium">{{ t.customer }}</span>
-                  <small>{{ t.time }}</small>
+          <v-divider />
+
+          <!-- List tiket -->
+          <div class="tickets-scroll">
+            <v-list density="compact">
+              <v-list-item
+                v-for="t in filteredTickets"
+                :key="t.id"
+                :class="{ 'active-ticket': t.id === activeTicketId }"
+                class="tickets-item"
+                @click="openTicket(t.id)"
+              >
+                <div class="ticket-line">
+                  <span class="ticket-name">{{ t.customer_name }}</span>
+                  <small class="ticket-time">{{ t.last_message_at }}</small>
                 </div>
-                <div class="text-grey-darken-1 text-caption">{{ t.subject }}</div>
-                <v-chip
-                  size="x-small"
-                  class="mt-1"
-                  :color="t.status === 'pending' ? 'red' : t.status === 'closed' ? 'green' : 'orange'"
-                  dark
-                >{{ t.status }}</v-chip>
-              </v-list-item-content>
-            </v-list-item>
-          </v-list>
+                <div class="ticket-sub">
+                  <span class="ticket-subject">
+                    {{ t.subject }}
+                  </span>
+                  <v-chip
+                    :color="badgeColor(t.status)"
+                    size="x-small"
+                    label
+                    class="ticket-badge text-capitalize"
+                  >
+                    {{ t.status }}
+                  </v-chip>
+                </div>
+              </v-list-item>
+            </v-list>
+
+            <div v-if="!filteredTickets.length" class="no-tickets">
+              No tickets
+            </div>
+          </div>
         </v-card>
       </div>
 
-      <!-- ===================== MAIN PANEL ===================== -->
-      <div class="ticket-panel">
-        <v-card class="ticket-content" elevation="2">
+      <!-- ================= DETAIL / CHAT ================= -->
+      <div class="tickets-detail">
+        <v-card class="tickets-window" elevation="1">
+          <div
+            v-if="!activeTicketId"
+            class="no-select"
+          >
+            Select a ticket to view detail
+          </div>
 
-          <!-- ===== HEADER ===== -->
-          <div class="ticket-header">
-            <div>
-              <h3 class="text-h6 font-weight-bold mb-1">
-                {{ tickets.find(t => t.id === activeTicketId)?.customer }}
-              </h3>
-              <span class="text-caption">
-                {{ tickets.find(t => t.id === activeTicketId)?.subject }}
-              </span>
+          <template v-else>
+            <!-- Header detail -->
+            <div
+              v-if="activeTicket"
+              class="tickets-header"
+            >
+              <div>
+                <h3 class="ticket-title">
+                  {{ activeTicket.customer_name }}
+                </h3>
+                <div class="ticket-desc">
+                  {{ activeTicket.subject }}
+                </div>
+              </div>
+
+              <div class="ticket-actions">
+                <v-select
+                  :items="[
+                    { value: 'pending', title: 'Pending' },
+                    { value: 'ongoing', title: 'Ongoing' },
+                    { value: 'closed',  title: 'Closed'  },
+                  ]"
+                  v-model="activeTicket.status"
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  class="mr-2"
+                  style="max-width: 140px"
+                  @update:modelValue="updateStatus"
+                />
+
+                <v-select
+                  :items="agents.map(a => ({ value: a.id, title: a.name }))"
+                  :model-value="activeTicket.assigned_to"
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  clearable
+                  label="Assign"
+                  style="max-width: 180px"
+                  @update:modelValue="assignAgent"
+                />
+              </div>
             </div>
 
-            <div class="d-flex align-center gap-2">
+            <v-divider />
+
+            <!-- Body chat -->
+            <div
+              v-if="!loadingTicket"
+              class="tickets-body"
+            >
+              <div
+                v-for="m in messages"
+                :key="m.id"
+                :class="['bubble-wrapper', m.sender_type]"
+              >
+                <div class="bubble-meta">
+                  {{ m.sender_name ?? m.sender_type }} · {{ m.time }}
+                </div>
+
+                <div
+                  class="bubble"
+                  :class="m.sender_type"
+                >
+                  {{ m.message }}
+                </div>
+              </div>
+
+              <div
+                v-if="!messages.length"
+                class="no-messages"
+              >
+                No messages yet
+              </div>
+            </div>
+
+            <div
+              v-else
+              class="tickets-body loading-center"
+            >
+              Loading...
+            </div>
+
+            <v-divider />
+
+            <!-- Input reply -->
+            <div class="tickets-input">
+              <v-textarea
+                v-model="replyText"
+                placeholder="Type a reply..."
+                rows="1"
+                auto-grow
+                variant="outlined"
+                hide-details
+                class="reply-text"
+              />
               <v-btn
                 color="primary"
-                variant="outlined"
-                size="small"
-                @click="showAssign = true"
-                prepend-icon="mdi-account-switch"
-              >Assign</v-btn>
-
-              <v-btn
-                color="grey"
-                variant="outlined"
-                size="small"
-                @click="showStatus = true"
-                prepend-icon="mdi-circle-slice-6"
-              >Status</v-btn>
-
-              <v-btn
-                icon
-                variant="text"
-                color="grey"
-                @click="showDetail = true"
-              ><v-icon>mdi-information-outline</v-icon></v-btn>
+                :loading="loadingReply"
+                @click="sendReply"
+                class="reply-btn"
+              >
+                SEND
+              </v-btn>
             </div>
-          </div>
-
-          <!-- ===== MESSAGES ===== -->
-          <div class="ticket-body scroll-box">
-            <div
-              v-for="m in messages"
-              :key="m.id"
-              class="msg"
-              :class="[m.type === 'agent' ? 'agent' : 'customer']"
-            >
-              <div class="msg-header">
-                <v-avatar size="26">
-                  <v-icon v-if="m.type === 'agent'">mdi-headset</v-icon>
-                  <v-icon v-else>mdi-account</v-icon>
-                </v-avatar>
-                <span class="name">{{ m.name }}</span>
-                <small class="time text-grey-darken-1">{{ m.at }}</small>
-              </div>
-              <div class="msg-bubble">{{ m.text }}</div>
-            </div>
-          </div>
-
-          <!-- ===== REPLY ===== -->
-          <div class="ticket-reply">
-            <v-row no-gutters align="center">
-              <v-col>
-                <v-textarea
-                  v-model="replyMessage"
-                  placeholder="Type a reply..."
-                  auto-grow
-                  rows="1"
-                  variant="outlined"
-                />
-              </v-col>
-
-              <v-col cols="auto" class="d-flex gap-2">
-                <v-btn icon><v-icon>mdi-paperclip</v-icon></v-btn>
-                <v-btn color="primary" @click="sendReply">Send</v-btn>
-              </v-col>
-            </v-row>
-          </div>
+          </template>
         </v-card>
       </div>
     </div>
-
-    <!-- ===================== ASSIGN MODAL ===================== -->
-    <v-dialog v-model="showAssign" width="400">
-      <v-card class="pa-4">
-        <h3 class="text-h6 mb-3 font-weight-bold">Assign Ticket</h3>
-        <v-select
-          :items="['Renaldi','Jonathan','Michelle','Aldi']"
-          label="Choose Agent"
-          prepend-inner-icon="mdi-account-outline"
-        />
-        <div class="d-flex justify-end mt-4 gap-2">
-          <v-btn variant="text" @click="showAssign = false">Cancel</v-btn>
-          <v-btn color="primary" @click="assignAgent">Assign</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- ===================== STATUS MODAL ===================== -->
-    <v-dialog v-model="showStatus" width="380">
-      <v-card class="pa-4">
-        <h3 class="text-h6 mb-3 font-weight-bold">Change Status</h3>
-        <v-list>
-          <v-list-item @click="changeTicketStatus('pending')">Pending</v-list-item>
-          <v-list-item @click="changeTicketStatus('ongoing')">On Going</v-list-item>
-          <v-list-item @click="changeTicketStatus('closed')">Closed</v-list-item>
-        </v-list>
-      </v-card>
-    </v-dialog>
-
-    <!-- ===================== DETAIL MODAL ===================== -->
-    <v-dialog v-model="showDetail" width="420">
-      <v-card class="pa-4">
-        <h3 class="text-h6 mb-3 font-weight-bold">Customer Details</h3>
-        <p>Name: {{ tickets.find(t => t.id === activeTicketId)?.customer }}</p>
-        <p>Subject: {{ tickets.find(t => t.id === activeTicketId)?.subject }}</p>
-        <p>Status: {{ tickets.find(t => t.id === activeTicketId)?.status }}</p>
-
-        <div class="d-flex justify-end mt-4">
-          <v-btn variant="text" @click="showDetail = false">Close</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
   </AdminLayout>
 </template>
 
-<!-- ===================== STYLE ===================== -->
 <style scoped>
-.ticket-flex { height: calc(100vh - 120px); display: flex; gap: 16px; }
-.ticket-sidebar { flex: 0 0 27%; max-width: 27%; }
-.ticket-panel { flex: 1; }
+/* Layout utama */
+.tickets-flex {
+  height: calc(100vh - 120px);
+  display: flex;
+  gap: 12px;
+}
 
-.ticket-content { height: 100%; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; }
+.tickets-sidebar {
+  flex: 0 0 26%;
+  max-width: 26%;
+}
 
-.ticket-header { padding: 16px 20px; border-bottom: 1px solid rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; }
+.tickets-detail {
+  flex: 1;
+}
 
-.ticket-body { flex: 1; padding: 20px; background: #f6f8fb; }
+/* Sidebar card */
+.tickets-sidebar-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
 
-.msg { margin-bottom: 14px; }
-.msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 13px; }
-.msg-bubble { background: white; padding: 10px 14px; border-radius: 12px; max-width: 65%; font-size: 14px; }
-.msg.agent .msg-bubble { background:#e3f2fd; margin-left:auto; }
-.msg.agent .msg-header { justify-content: flex-end; flex-direction: row-reverse; }
-.ticket-reply { border-top: 1px solid rgba(0,0,0,0.08); padding: 12px 16px; background: white; }
+.tickets-search {
+  margin-bottom: 6px;
+}
 
-.bg-active { background-color: rgba(25,118,210,0.1) !important; border-left: 4px solid #1976d2; }
-.scroll-box { overflow-y: auto; border-radius: 12px; }
+.tickets-search input {
+  font-size: 13px !important;
+}
+
+/* Chip filter */
+.tickets-chip-group {
+  margin: 4px 0 8px;
+}
+
+.tickets-chip-group .v-chip {
+  font-size: 11px !important;
+}
+
+/* List tiket */
+.tickets-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.tickets-item {
+  cursor: pointer !important;
+  padding: 8px 6px !important;
+  border-radius: 6px;
+}
+
+.tickets-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.active-ticket {
+  background-color: rgba(25, 118, 210, 0.1) !important;
+  border-left: 3px solid #1976d2;
+}
+
+/* Isi item tiket */
+.ticket-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ticket-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ticket-time {
+  font-size: 11px;
+  color: #888;
+}
+
+.ticket-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.ticket-subject {
+  font-size: 12px;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-badge {
+  font-size: 10px;
+}
+
+.no-tickets {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #777;
+}
+
+/* Detail window */
+.tickets-window {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.no-select {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777;
+  font-size: 14px;
+}
+
+/* Header detail */
+.tickets-header {
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ticket-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ticket-desc {
+  font-size: 14px;
+  color: #777;
+}
+
+.ticket-actions {
+  display: flex;
+  align-items: center;
+}
+
+/* Body chat */
+.tickets-body {
+  flex: 1;
+  padding: 10px 20px;
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+.loading-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bubble chat */
+.bubble-wrapper {
+  margin-bottom: 10px;
+  max-width: 78%;
+}
+
+.bubble-wrapper.agent {
+  margin-left: auto;
+  text-align: right;
+}
+
+.bubble-meta {
+  font-size: 11px;
+  margin-bottom: 2px;
+  color: #666;
+}
+
+.bubble {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 16px;
+  white-space: pre-wrap;
+  font-size: 13px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.bubble.agent {
+  background: #d1f2d6;
+  border-radius: 14px 14px 4px 14px;
+}
+
+.bubble.customer {
+  background: #ffffff;
+  border-radius: 14px 14px 14px 4px;
+}
+
+.bubble.system {
+  background: #e0e0e0;
+  font-style: italic;
+  border-radius: 12px;
+}
+
+.no-messages {
+  color: #777;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 13px;
+}
+
+/* Input reply */
+.tickets-input {
+  padding: 10px 14px;
+  display: flex;
+  gap: 10px;
+  background: #fff;
+}
+
+.reply-text {
+  font-size: 13px;
+}
+
+.reply-btn {
+  height: 38px;
+  align-self: flex-end;
+}
+
+/* Sedikit responsif untuk layar kecil */
+@media (max-width: 1024px) {
+  .tickets-flex {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .tickets-sidebar,
+  .tickets-detail {
+    max-width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .tickets-window {
+    min-height: 400px;
+  }
+}
 </style>
