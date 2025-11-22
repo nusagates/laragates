@@ -127,4 +127,14 @@ class AgentController extends Controller
 
         return redirect()->back()->with('success', 'Agent deleted.');
     }
+
+    public function heartbeat()
+    {
+       auth()->user()->update([
+          'last_seen' => now(),
+    ]);
+
+    return response()->json(['status' => 'ok']);
+    }
+
 }

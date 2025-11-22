@@ -87,6 +87,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store'); // kalau mau tombol "New Ticket"
     Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])
     ->name('tickets.reply');
+
+    Route::post('/agent/heartbeat', [\App\Http\Controllers\AgentController::class, 'heartbeat'])
+    ->middleware('auth');
+
 });
 
 Route::get('/cek-waktu', function () {

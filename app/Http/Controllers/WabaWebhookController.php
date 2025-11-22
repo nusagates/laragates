@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Models\ChatSession;
-use App\Models\ChatMessage;
+use App\Models\Ticket;
+use App\Models\TicketMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -15,9 +15,9 @@ class WabaWebhookController extends Controller
     {
         $verifyToken = env('WABA_VERIFY_TOKEN');
 
-        $mode       = $request->get('hub_mode');
-        $token      = $request->get('hub_verify_token');
-        $challenge  = $request->get('hub_challenge');
+        $mode      = $request->get('hub_mode');
+        $token     = $request->get('hub_verify_token');
+        $challenge = $request->get('hub_challenge');
 
         if ($mode === 'subscribe' && $token === $verifyToken) {
             return response($challenge, 200);
@@ -32,7 +32,6 @@ class WabaWebhookController extends Controller
         $data = $request->all();
         Log::info('WABA Webhook received', $data);
 
-        // Struktur standard Cloud API
         if (!isset($data['entry'][0]['changes'][0]['value']['messages'][0])) {
             return response()->json(['status' => 'ignored']);
         }
@@ -41,40 +40,40 @@ class WabaWebhookController extends Controller
         $message = $value['messages'][0];
         $contact = $value['contacts'][0];
 
-        $fromPhone = $message['from'];               // nomor customer
-        $waMsgId   = $message['id'];
-        $text      = $message['text']['body'] ?? null;
+        $phone = $message['from'];
+        $waMessageId = $message['id'];
+        $text = $message['text']['body'] ?? null;
 
-        // 1. find / create customer
+        // 1) Find/create customer
         $customer = Customer::firstOrCreate(
-            ['phone' => $fromPhone],
-            ['name' => $contact['profile']['name'] ?? null]
+            ['phone' => $phone],
+            ['name' => $contact['profile']['name'] ?? $phone]
         );
 
-        // 2. find / create open session
-        $session = ChatSession::firstOrCreate(
+        // 2) Find/create open ticket (pending or ongoing)
+        $ticket = Ticket::firstOrCreate(
             [
                 'customer_id' => $customer->id,
-                'status'      => 'open',
+                'status'      => 'pending'
             ],
-            []
+            [
+                'subject' => 'New WhatsApp Conversation'
+            ]
         );
 
-        // 3. simpan message
-        ChatMessage::create([
-            'chat_session_id' => $session->id,
-            'sender'          => 'customer',
-            'message'         => $text,
-            'type'            => 'text',
-            'wa_message_id'   => $waMsgId,
+        // 3) Save message into TICKET_MESSAGES
+        TicketMessage::create([
+            'ticket_id'   => $ticket->id,
+            'sender_type' => 'customer',
+            'sender_id'   => null,
+            'message'     => $text,
         ]);
 
-        $customer->update([
-            'last_message_at' => now(),
-        ]);
+        // 4) Update last activity
+        $ticket->update(['last_message_at' => now()]);
+        $customer->update(['last_message_at' => now()]);
 
-        // TODO: broadcast ke frontend (Pusher / Laravel Websockets)
+        // TODO (next step): broadcast realtime
         return response()->json(['status' => 'ok']);
     }
 }
-

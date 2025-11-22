@@ -16,8 +16,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',     // Admin, Supervisor, Agent
-        'status',   // online, offline, pending
+        'role',          // Admin, Supervisor, Agent
+        'status',       // online, offline, pending
+        'last_seen',   // Last Seen Timestamp
     ];
 
     protected $hidden = [
@@ -50,6 +51,12 @@ class User extends Authenticatable
     public function scopeOnline($query)
     {
         return $query->where('status', 'online');
+    }
+
+    public function isOnline()
+    {
+        return $this->last_seen &&
+           $this->last_seen->gt(now()->subMinutes(3));
     }
 
     public function scopeOffline($query)
