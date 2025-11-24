@@ -32,13 +32,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('broadcasts', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->text('message');
-            $table->timestamps();
-        });
-
         Schema::create('broadcast_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('broadcast_id')->constrained()->onDelete('cascade');
@@ -47,12 +40,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('whatsapp_templates', function (Blueprint $table) {
-            $table->id();
-            $table->string('template_name');
-            $table->text('content');
-            $table->timestamps();
-        });
 
         Schema::create('settings', function (Blueprint $table) {
             $table->id();
@@ -65,7 +52,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('settings');
-        Schema::dropIfExists('whatsapp_templates');
         Schema::dropIfExists('broadcast_logs');
         Schema::dropIfExists('broadcasts');
         Schema::dropIfExists('chat_messages');

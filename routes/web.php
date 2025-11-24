@@ -1,13 +1,14 @@
 <?php
 
+use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WabaWebhookController;
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\WhatsappTemplateController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -16,24 +17,16 @@ use Inertia\Inertia;
 */
 Route::get('/', function () {
     return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
+        'canLogin'      => Route::has('login'),
+        'canRegister'   => Route::has('register'),
+        'laravelVersion'=> Application::VERSION,
+        'phpVersion'    => PHP_VERSION,
     ]);
 });
 
-/*
-|--------------------------------------------------------------------------
-| Protected Routes (UI Only)
-|--------------------------------------------------------------------------
-*/
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    // Dashboard
     Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
-
-    // Chat Panel
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
     // Agents
@@ -44,13 +37,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
 
     // Tickets
-    Route::get('/tickets', fn () => Inertia::render('Tickets/Index'))->name('tickets');
+    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
+    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
+    Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])->name('tickets.status');
+    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
+    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
 
-    // Templates
+    // Templates UI
     Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
 
+    // Templates API
+    Route::prefix('templates')->group(function () {
+        Route::get('/{template}', [WhatsappTemplateController::class, 'show']);
+        Route::post('/', [WhatsappTemplateController::class, 'store']);
+        Route::put('/{template}', [WhatsappTemplateController::class, 'update']);
+        Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy']);
+        Route::post('/sync', [WhatsappTemplateController::class, 'sync']);
+    });
+
     // Broadcast
-    Route::get('/broadcast', fn () => Inertia::render('Broadcast/Index'))->name('broadcast');
+    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
+    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
 
     // Settings
     Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings');
@@ -58,7 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Profile Route
+| Profile
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
@@ -69,41 +77,10 @@ Route::middleware('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Tickets Route
+| Webhook
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'verified'])->group(function () {
-
-    // ... route lain
-
-    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
-
-    // API kecil untuk ajax
-    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
-    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
-    Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])->name('tickets.status');
-    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
-
-    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store'); // kalau mau tombol "New Ticket"
-    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])
-    ->name('tickets.reply');
-
-    Route::post('/agent/heartbeat', [\App\Http\Controllers\AgentController::class, 'heartbeat'])
-    ->middleware('auth');
-
-});
-
-Route::get('/cek-waktu', function () {
-    return [
-        'php_time'   => date('Y-m-d H:i:s'),
-        'carbon_now' => \Carbon\Carbon::now()->toDateTimeString(),
-        'timezone'   => config('app.timezone'),
-    ];
-});
-
-
 Route::get('/webhook/whatsapp', [WabaWebhookController::class, 'verify']);
 Route::post('/webhook/whatsapp', [WabaWebhookController::class, 'receive']);
-
 
 require __DIR__.'/auth.php';

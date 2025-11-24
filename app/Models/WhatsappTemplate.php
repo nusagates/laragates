@@ -7,15 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 class WhatsappTemplate extends Model
 {
     protected $fillable = [
-        'name',
-        'category',
-        'language',
-        'status',
-        'structure',
+        'name', 'category', 'language', 'status',
+        'header', 'body', 'footer', 'buttons',
+        'meta_id', 'last_synced_at'
     ];
 
     protected $casts = [
-        'structure' => 'array',
+        'buttons' => 'array',
+        'last_synced_at' => 'datetime',
     ];
 }
-
