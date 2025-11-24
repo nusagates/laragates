@@ -1,38 +1,47 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { ref } from 'vue'
+
+/* ===================== LOAD DATA DARI BACKEND ===================== */
+const page = usePage()
+const s = page.props.settings // shortcut biar rapi
 
 /* ===================== TAB CONTROL ===================== */
 const tab = ref('general')
 
 /* ===================== GENERAL ===================== */
-const general = ref({
-  company_name: 'CS WABA Demo',
-  timezone: 'Asia/Jakarta',
+const general = useForm({
+  company_name: s?.company_name ?? 'CS WABA Demo',
+  timezone: s?.timezone ?? 'Asia/Jakarta',
 })
+
+function saveGeneral() {
+  general.post('/settings/general')
+}
 
 /* ===================== WHATSAPP ===================== */
-const whatsapp = ref({
-  phone_number: '+62 811-xxxx-xxxx',
-  webhook_url: 'https://your-domain.com/api/webhook/whatsapp',
-  api_key: 'secret-api-12345',
-  status: 'connected',
-  show_key: false
+const whatsapp = useForm({
+  phone_number: s?.wa_phone_number ?? '',
+  webhook_url: s?.wa_webhook_url ?? '',
+  api_key: s?.wa_api_key ?? '',
+  status: s?.wa_phone_number ? 'connected' : 'disconnected',
+  show_key: false,
 })
+
+function saveWhatsApp() {
+  whatsapp.post('/settings/whatsapp')
+}
 
 /* ===================== PREFERENCES ===================== */
-const preferences = ref({
-  sound_notification: true,
-  desktop_notification: true,
-  auto_assign_ticket: false,
+const preferences = useForm({
+  sound_notification: s?.notif_sound ?? true,
+  desktop_notification: s?.notif_desktop ?? true,
+  auto_assign_ticket: s?.auto_assign ?? false,
 })
 
-/* ===================== SAVE SETTINGS ===================== */
-const saving = ref(false)
-function saveSettings() {
-  saving.value = true
-  setTimeout(() => saving.value = false, 1200) // fake loading
+function savePreferences() {
+  preferences.post('/settings/preferences')
 }
 
 /* ===================== TEST WEBHOOK MODAL ===================== */
@@ -86,6 +95,10 @@ function testWebhook() {
             placeholder="Asia/Jakarta"
             class="mb-3"
           />
+
+          <v-btn color="primary" class="mt-4" :loading="general.processing" @click="saveGeneral">
+            Save Changes
+          </v-btn>
         </div>
 
         <!-- ===================== WHATSAPP ===================== -->
@@ -134,33 +147,21 @@ function testWebhook() {
           <p class="text-caption text-grey-darken-1">
             Pastikan webhook URL di atas sudah dipasang di provider WhatsApp Anda.
           </p>
+
+          <v-btn color="primary" class="mt-4" :loading="whatsapp.processing" @click="saveWhatsApp">
+            Save Changes
+          </v-btn>
         </div>
 
         <!-- ===================== PREFERENCES ===================== -->
         <div v-if="tab === 'preferences'">
           <h3 class="text-h6 mb-4 font-weight-bold">Preferences</h3>
 
-          <v-switch
-            v-model="preferences.sound_notification"
-            label="Enable sound notification for new messages"
-          />
-          <v-switch
-            v-model="preferences.desktop_notification"
-            label="Show desktop notification for new chats"
-          />
-          <v-switch
-            v-model="preferences.auto_assign_ticket"
-            label="Auto-assign new tickets to available agents"
-          />
-        </div>
+          <v-switch v-model="preferences.sound_notification" label="Enable sound notification for new messages" />
+          <v-switch v-model="preferences.desktop_notification" label="Show desktop notification for new chats" />
+          <v-switch v-model="preferences.auto_assign_ticket" label="Auto-assign new tickets to available agents" />
 
-        <!-- ===================== SAVE BTN ===================== -->
-        <div class="d-flex justify-end mt-4">
-          <v-btn
-            color="primary"
-            :loading="saving"
-            @click="saveSettings"
-          >
+          <v-btn color="primary" class="mt-4" :loading="preferences.processing" @click="savePreferences">
             Save Changes
           </v-btn>
         </div>

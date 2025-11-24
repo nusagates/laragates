@@ -27,7 +27,7 @@ class ChatMessage extends Model
 
     public function session(): BelongsTo
     {
-        return $this->belongsTo(ChatSession::class, 'chat_session_id');
+        return $this->belongsTo(\App\Models\ChatSession::class, 'chat_session_id');
     }
 
     public function user(): BelongsTo

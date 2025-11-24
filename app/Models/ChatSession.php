@@ -33,13 +33,13 @@ class ChatSession extends Model
     }
 
     public function messages(): HasMany
-    {
-        return $this->hasMany(ChatMessage::class);
+    {  
+        return $this->hasMany(ChatMessage::class, 'chat_session_id');
     }
 
-    public function lastMessage(): HasOne
+    public function lastMessage()
     {
-        return $this->hasOne(ChatMessage::class)->latestOfMany();
+        return $this->hasOne(ChatMessage::class, 'chat_session_id')->latestOfMany();
     }
 
     public function ticket(): HasMany

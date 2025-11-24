@@ -40,18 +40,10 @@ return new class extends Migration
             $table->timestamps();
         });
 
-
-        Schema::create('settings', function (Blueprint $table) {
-            $table->id();
-            $table->string('key')->unique();
-            $table->text('value')->nullable();
-            $table->timestamps();
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('settings');
         Schema::dropIfExists('broadcast_logs');
         Schema::dropIfExists('broadcasts');
         Schema::dropIfExists('chat_messages');
