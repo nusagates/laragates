@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ChatMessage extends Model
 {
+    protected $table = 'chat_messages';
+
     protected $fillable = [
         'chat_session_id',
         'sender',
@@ -14,25 +16,39 @@ class ChatMessage extends Model
         'message',
         'type',
         'wa_message_id',
-        'meta',
-        'delivered_at',
-        'read_at',
+        'status',
+        'is_outgoing',
+        'is_internal',
+        'is_bot',
+        'media_url',
+        'media_type',
     ];
 
     protected $casts = [
-        'meta'         => 'array',
-        'delivered_at' => 'datetime',
-        'read_at'      => 'datetime',
+        'is_outgoing' => 'boolean',
+        'is_internal' => 'boolean',
+        'is_bot'      => 'boolean',
     ];
 
     public function session(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\ChatSession::class, 'chat_session_id');
+        return $this->belongsTo(ChatSession::class, 'chat_session_id');
     }
 
-    public function user(): BelongsTo
+    public function agent(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Agent::class, 'user_id');
     }
-    
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'user_id');
+    }
+
+    public function lastMessage()
+    {
+        return $this->hasOne(ChatMessage::class)
+        ->orderBy('id', 'desc');
+    }
+
 }
