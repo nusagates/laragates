@@ -11,10 +11,24 @@ use Inertia\Inertia;
 class AgentController extends Controller
 {
     /**
+     * Pastikan hanya admin / supervisor yang boleh manage agents.
+     */
+    private function ensureCanManageAgents(): void
+    {
+        $role = auth()->user()->role ?? null;
+
+        if (! in_array($role, ['admin', 'supervisor'])) {
+            abort(403, 'Only admin or supervisor can manage agents.');
+        }
+    }
+
+    /**
      * Tampilkan halaman Agents + data dari DB
      */
     public function index(Request $request)
     {
+        $this->ensureCanManageAgents();
+
         $status = $request->query('status'); // all | online | offline | pending
 
         $baseQuery = User::agents();
@@ -23,20 +37,20 @@ class AgentController extends Controller
             $baseQuery->where('status', $status);
         }
 
-        $agents = $baseQuery
-            ->orderBy('name')
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id'     => $user->id,
-                    'name'   => $user->name,
-                    'email'  => $user->email,
-                    'role'   => $user->role,
-                    'status' => $user->status,
-                ];
-            });
+        // Tambah approved_at untuk UI
+        $agents = $baseQuery->orderBy('name')->get()->map(function ($user) {
+            return [
+                'id'          => $user->id,
+                'name'        => $user->name,
+                'email'       => $user->email,
+                'role'        => $user->role,
+                'status'      => $user->status,
+                'approved_at' => $user->approved_at,
+                'last_seen'   => $user->last_seen,
+            ];
+        });
 
-        // Untuk badge filter di atas (All, Online, Offline, Pending)
+        // Stat untuk badge tab
         $statsQuery = User::agents();
         $counts = [
             'all'     => (clone $statsQuery)->count(),
@@ -48,93 +62,148 @@ class AgentController extends Controller
         return Inertia::render('Agents/Index', [
             'agents'  => $agents,
             'counts'  => $counts,
-            'filters' => [
-                'status' => $status,
+            'filters' => ['status' => $status],
+        ]);
+    }
+
+    /**
+     * Buat Agent Baru
+     */
+    public function store(Request $request)
+    {
+        $this->ensureCanManageAgents();
+
+        $data = $request->validate([
+            'name'  => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:150', 'unique:users,email'],
+            'role'  => ['required', 'in:Admin,Supervisor,Agent'],
+        ]);
+
+        $passwordPlain = Str::random(10);
+
+        User::create([
+            'name'        => $data['name'],
+            'email'       => $data['email'],
+            'role'        => strtolower($data['role']),
+            'status'      => 'pending',        // Belum bisa online
+            'approved_at' => null,             // Wajib approval dulu
+            'is_active'   => false,
+            'password'    => Hash::make($passwordPlain),
+        ]);
+
+        return redirect()->back()->with([
+            'success'  => 'Agent created successfully. Approval required.',
+            'newAgent' => [
+                'email'    => $data['email'],
+                'password' => $passwordPlain,
             ],
         ]);
     }
 
     /**
-     * Simpan agent baru dari form "ADD AGENT"
-     */
-    public function store(Request $request)
-{
-    $data = $request->validate([
-        'name'  => ['required', 'string', 'max:100'],
-        'email' => ['required', 'email', 'max:150', 'unique:users,email'],
-        'role'  => ['required', 'in:Admin,Supervisor,Agent'],
-    ]);
-
-    $passwordPlain = Str::random(10);
-
-    User::create([
-        'name'     => $data['name'],
-        'email'    => $data['email'],
-        'role'     => strtolower($data['role']),
-        'status'   => 'offline',
-        'password' => Hash::make($passwordPlain),
-    ]);
-
-    return redirect()->back()->with([
-        'success'  => 'Agent created successfully.',
-        'newAgent' => [
-            'email'    => $data['email'],
-            'password' => $passwordPlain,
-        ]
-    ]);
-}
-
-    /**
-     * Update data agent (nama, email, role)
+     * Update Settings Agent (Nama/Email/Role)
      */
     public function update(Request $request, User $user)
     {
+        $this->ensureCanManageAgents();
+
         $data = $request->validate([
             'name'  => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:150', 'unique:users,email,' . $user->id],
             'role'  => ['required', 'in:Admin,Supervisor,Agent'],
         ]);
 
-        $user->update($data);
+        $user->update([
+            'name'  => $data['name'],
+            'email' => $data['email'],
+            'role'  => strtolower($data['role']),
+        ]);
 
         return redirect()->back()->with('success', 'Agent updated.');
     }
 
     /**
-     * Update status agent: online / offline / pending
+     * SUPER ADMIN / ADMIN / SUPERVISOR -> Approve Agent
+     */
+    public function approve(User $user)
+    {
+        $this->ensureCanManageAgents();
+
+        $user->update([
+            'approved_at' => now(),
+            'status'      => 'offline',  // setelah approve, status default offline
+            'is_active'   => true,
+        ]);
+
+        return back()->with('success', 'Agent approved successfully.');
+    }
+
+    /**
+     * Update Online/Offline/Pending (manual via admin)
      */
     public function updateStatus(Request $request, User $user)
     {
+        $this->ensureCanManageAgents();
+
         $data = $request->validate([
             'status' => ['required', 'in:online,offline,pending'],
         ]);
 
         $user->update(['status' => $data['status']]);
 
-        return redirect()->back()->with('success', 'Status updated.');
+        return back()->with('success', 'Status updated.');
     }
 
     /**
-     * Hapus Agent (kecuali diri sendiri)
+     * Delete agent
      */
     public function destroy(User $user)
     {
+        $this->ensureCanManageAgents();
+
         if (auth()->id() === $user->id) {
-            return redirect()->back()->with('error', 'You cannot delete yourself.');
+            return back()->with('error', 'You cannot delete yourself.');
         }
 
         $user->delete();
 
-        return redirect()->back()->with('success', 'Agent deleted.');
+        return back()->with('success', 'Agent deleted.');
     }
 
+    /**
+     * Heartbeat → Update Last Seen realtime (dipanggil dari FE).
+     * Boleh dipakai semua role yang sudah di-approve.
+     */
     public function heartbeat()
     {
-       auth()->user()->update([
-          'last_seen' => now(),
-    ]);
+        if (auth()->check()) {
+            $user = auth()->user();
 
-    return response()->json(['status' => 'ok']);
+            if ($user->approved_at) {
+                $user->update([
+                    'last_seen' => now(),
+                    'status'    => 'online',
+                    'is_active' => true,
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'ok']);
     }
 
+    /**
+     * Dipanggil ketika user AFK / tab lama tidak aktif.
+     */
+    public function forceOffline()
+    {
+        if (auth()->check()) {
+            auth()->user()->update([
+                'status'    => 'offline',
+                'is_active' => false,
+                'last_seen' => now(),
+            ]);
+        }
+
+        return response()->json(['status' => 'ok']);
+    }
 }

@@ -1,117 +1,154 @@
 <script setup>
-import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head, useForm, usePage, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
+import { Head, usePage } from '@inertiajs/vue3'
+import AdminLayout from '@/Layouts/AdminLayout.vue'
+import axios from 'axios'
 
-/* ====== PROPS DARI BACKEND ====== */
-const page = usePage()
-const agents  = computed(() => page.props.agents || [])
-const counts  = computed(() => page.props.counts || {})
-const filters = computed(() => page.props.filters || { status: 'all' })
-
-/* ====== FILTER ====== */
-const filterStatus = ref(filters.value.status ?? 'all')
-
-function changeFilter(v) {
-  router.get('/agents', { status: v }, {
-    preserveState: true,
-    replace: true,
-  })
-}
-
-/* ====== MODALS & STATE ====== */
-const dialog        = ref(false)
-const editDialog    = ref(false)
-const deleteDialog  = ref(false)
-const successDialog = ref(false)
-const selectedAgent = ref(null)
-
-/* ====== DATA UNTUK POPUP PASSWORD ====== */
-const newAgent = ref({
-  email: '',
-  password: '',
+// ==== PROPS DARI LARAVEL ====
+const props = defineProps({
+  agents: { type: Array, default: () => [] },
+  counts: { type: Object, default: () => ({}) },
+  filters: { type: Object, default: () => ({}) },
 })
 
-/* ====== FORM ====== */
-const form = useForm({
+// ==== ROLE GUARD (HANYA ADMIN / SUPERVISOR) ====
+const page = usePage()
+const meRole = computed(() => page.props.auth?.user?.role ?? 'agent')
+const canManageAgents = computed(() => ['admin', 'supervisor'].includes(meRole.value))
+
+// ==== STATE UI ====
+const tab = ref('all')           // all | online | offline | pending
+const search = ref('')
+const loading = ref(false)
+
+// Dialog form
+const dialog = ref(false)
+const isEdit = ref(false)
+const formLoading = ref(false)
+const form = ref({
+  id: null,
   name: '',
   email: '',
   role: 'Agent',
 })
 
-/* ====== OPEN MODAL ====== */
-function openAdd() {
-  selectedAgent.value = null
-  form.reset()
-  form.role = 'Agent'
+// ==== FILTERED LIST ====
+const filteredAgents = computed(() => {
+  let data = props.agents || []
+
+  if (tab.value !== 'all') {
+    data = data.filter(a => a.status === tab.value)
+  }
+
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    data = data.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      a.email.toLowerCase().includes(q)
+    )
+  }
+
+  return data
+})
+
+// ==== HELPER ====
+function openCreate() {
+  isEdit.value = false
+  form.value = {
+    id: null,
+    name: '',
+    email: '',
+    role: 'Agent',
+  }
   dialog.value = true
 }
 
 function openEdit(agent) {
-  selectedAgent.value = agent
-  form.name  = agent.name
-  form.email = agent.email
-  form.role  = agent.role
-  editDialog.value = true
-}
-
-function openDelete(agent) {
-  selectedAgent.value = agent
-  deleteDialog.value = true
-}
-
-/* ====== CREATE / UPDATE ====== */
-function saveAgent() {
-  // CREATE
-  if (!selectedAgent.value) {
-    form.post('/agents', {
-      preserveState: true,
-      onSuccess: (pageResponse) => {
-        dialog.value = false
-
-        // Ambil flash dari response terbaru
-        const flash = pageResponse.props.flash || {}
-
-        if (flash.newAgent) {
-          newAgent.value = flash.newAgent
-          successDialog.value = true
-        }
-      },
-    })
-    return
+  isEdit.value = true
+  form.value = {
+    id: agent.id,
+    name: agent.name,
+    email: agent.email,
+    role: agent.role === 'admin'
+      ? 'Admin'
+      : agent.role === 'supervisor'
+        ? 'Supervisor'
+        : 'Agent',
   }
-
-  // UPDATE
-  form.put(`/agents/${selectedAgent.value.id}`, {
-    preserveState: true,
-    onSuccess: () => {
-      editDialog.value = false
-    },
-  })
+  dialog.value = true
 }
 
-/* ====== DELETE ====== */
-function deleteAgent() {
-  router.delete(`/agents/${selectedAgent.value.id}`, {
-    preserveState: true,
-    onSuccess: () => {
-      deleteDialog.value = false
-    },
-  })
+function roleBadgeColor(role) {
+  if (role === 'admin') return 'deep-purple'
+  if (role === 'supervisor') return 'green'
+  return 'blue'
 }
 
-/* ====== BADGE STATUS ====== */
-const badgeColor = (status) => {
+function statusBadgeColor(status) {
   if (status === 'online') return 'green'
   if (status === 'offline') return 'grey'
   return 'orange'
 }
 
-/* ====== FILTER VIEW ====== */
-const filteredAgents = computed(() => {
-  if (filterStatus.value === 'all') return agents.value
-  return agents.value.filter(a => a.status === filterStatus.value)
-})
+// ==== APPROVE ====
+async function approveAgent(id) {
+  if (!confirm('Approve this agent?')) return
+  try {
+    loading.value = true
+    await axios.post(`/agents/${id}/approve`)
+    window.location.reload()
+  } catch (e) {
+    console.error(e)
+    alert('Failed to approve agent')
+  } finally {
+    loading.value = false
+  }
+}
+
+// ==== CREATE / UPDATE ====
+async function submitForm() {
+  formLoading.value = true
+
+  try {
+    if (isEdit.value && form.value.id) {
+      await axios.put(`/agents/${form.value.id}`, {
+        name: form.value.name,
+        email: form.value.email,
+        role: form.value.role,
+      })
+    } else {
+      await axios.post('/agents', {
+        name: form.value.name,
+        email: form.value.email,
+        role: form.value.role,
+      })
+    }
+
+    dialog.value = false
+    window.location.reload()
+  } catch (e) {
+    console.error(e)
+    alert('Failed to save agent')
+  } finally {
+    formLoading.value = false
+  }
+}
+
+// ==== DELETE ====
+async function deleteAgent(agent) {
+  if (!confirm(`Delete agent ${agent.name}?`)) return
+
+  try {
+    loading.value = true
+    await axios.delete(`/agents/${agent.id}`)
+    window.location.reload()
+  } catch (e) {
+    console.error(e)
+    alert('Failed to delete agent')
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <template>
@@ -120,174 +157,235 @@ const filteredAgents = computed(() => {
   <AdminLayout>
     <template #title>Agents</template>
 
-    <v-card elevation="2" class="pa-4">
-      <!-- Header -->
-      <v-row align="center" class="mb-4">
-        <v-col>
-          <h3 class="text-h6 font-weight-bold">Agents Management</h3>
+    <!-- Jika BUKAN admin/supervisor -->
+    <v-alert
+      v-if="!canManageAgents"
+      type="error"
+      variant="tonal"
+      title="Access Denied"
+      class="mb-4"
+    >
+      You don't have permission to manage agents.
+    </v-alert>
+
+    <v-card v-if="canManageAgents" class="pa-4" elevation="2">
+      <!-- HEADER -->
+      <div class="d-flex flex-wrap align-center justify-space-between mb-4">
+        <div>
+          <h3 class="text-h6 mb-1">Agents Management</h3>
           <p class="text-body-2 text-grey-darken-1">
-            Kelola daftar agent yang bertanggung jawab menangani pesan pelanggan.
+            Kelola daftar agent yang bertanggung jawab menjawab pesan pelanggan.
           </p>
-        </v-col>
-        <v-col cols="auto">
-          <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openAdd">
-            Add Agent
+        </div>
+
+        <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">
+          Add Agent
+        </v-btn>
+      </div>
+
+      <!-- FILTER BAR -->
+      <div class="d-flex flex-wrap align-center justify-space-between mb-4 gap-3">
+        <div class="d-flex flex-wrap gap-2">
+          <v-btn
+            size="small"
+            :variant="tab === 'all' ? 'flat' : 'text'"
+            color="primary"
+            class="font-weight-medium"
+            @click="tab = 'all'"
+          >
+            All ({{ counts.all ?? 0 }})
           </v-btn>
-        </v-col>
-      </v-row>
 
-      <!-- FILTER -->
-      <v-chip-group v-model="filterStatus" mandatory @update:modelValue="changeFilter">
-        <v-chip value="all" filter>All ({{ counts.all }})</v-chip>
-        <v-chip value="online" filter color="green">Online ({{ counts.online }})</v-chip>
-        <v-chip value="offline" filter color="grey">Offline ({{ counts.offline }})</v-chip>
-        <v-chip value="pending" filter color="orange">Pending ({{ counts.pending }})</v-chip>
-      </v-chip-group>
+          <v-btn
+            size="small"
+            :variant="tab === 'online' ? 'flat' : 'text'"
+            color="green"
+            class="font-weight-medium"
+            @click="tab = 'online'"
+          >
+            Online ({{ counts.online ?? 0 }})
+          </v-btn>
 
-      <v-divider class="my-4" />
+          <v-btn
+            size="small"
+            :variant="tab === 'offline' ? 'flat' : 'text'"
+            color="grey"
+            class="font-weight-medium"
+            @click="tab = 'offline'"
+          >
+            Offline ({{ counts.offline ?? 0 }})
+          </v-btn>
+
+          <v-btn
+            size="small"
+            :variant="tab === 'pending' ? 'flat' : 'text'"
+            color="orange"
+            class="font-weight-medium"
+            @click="tab = 'pending'"
+          >
+            Pending ({{ counts.pending ?? 0 }})
+          </v-btn>
+        </div>
+
+        <v-text-field
+          v-model="search"
+          placeholder="Search name or email..."
+          density="compact"
+          hide-details
+          prepend-inner-icon="mdi-magnify"
+          style="max-width: 260px"
+        />
+      </div>
 
       <!-- TABLE -->
-      <v-table density="comfortable" hover>
+      <v-table fixed-header height="420px">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Action</th>
+            <th class="text-left">Name</th>
+            <th class="text-left">Email</th>
+            <th class="text-left">Role</th>
+            <th class="text-left">Status</th>
+            <th class="text-center">Approval</th>
+            <th class="text-center">Action</th>
           </tr>
         </thead>
 
         <tbody>
-          <tr v-if="!filteredAgents.length">
-            <td colspan="5" class="text-center py-6">No agents found</td>
-          </tr>
+          <tr v-for="agent in filteredAgents" :key="agent.id" class="hover-card">
+            <td class="font-weight-medium">
+              {{ agent.name }}
+            </td>
+            <td>{{ agent.email }}</td>
 
-          <tr v-for="a in filteredAgents" :key="a.id">
+            <!-- Role badge -->
             <td>
-              <div class="d-flex align-center">
-                <v-avatar color="blue" size="32" class="mr-2">
-                  {{ a.name.charAt(0) }}
-                </v-avatar>
-                {{ a.name }}
-              </div>
-            </td>
-            <td>{{ a.email }}</td>
-            <td>
-              <v-chip size="small">{{ a.role }}</v-chip>
-            </td>
-            <td>
-              <v-chip :color="badgeColor(a.status)" dark size="small">
-                {{ a.status }}
+              <v-chip
+                size="small"
+                :color="roleBadgeColor(agent.role)"
+                class="text-white"
+                variant="flat"
+              >
+                {{ agent.role }}
               </v-chip>
             </td>
+
+            <!-- Status badge -->
             <td>
-              <v-btn icon variant="text" color="primary" @click="openEdit(a)">
-                <v-icon>mdi-pencil</v-icon>
-              </v-btn>
-              <v-btn icon variant="text" color="red" @click="openDelete(a)">
-                <v-icon>mdi-delete</v-icon>
-              </v-btn>
+              <v-chip
+                size="small"
+                :color="statusBadgeColor(agent.status)"
+                class="text-white"
+                variant="flat"
+              >
+                {{ agent.status }}
+              </v-chip>
+            </td>
+
+            <!-- Approval -->
+            <td class="text-center">
+              <v-tooltip v-if="agent.approved_at === null" text="Approve agent">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    color="success"
+                    icon="mdi-check"
+                    size="small"
+                    @click="approveAgent(agent.id)"
+                  />
+                </template>
+              </v-tooltip>
+
+              <v-chip
+                v-else
+                size="small"
+                color="blue"
+                variant="tonal"
+              >
+                <v-icon start size="16">mdi-shield-check</v-icon>
+                Approved
+              </v-chip>
+            </td>
+
+            <!-- Action button -->
+            <td class="text-center">
+              <v-btn
+                icon="mdi-pencil"
+                size="small"
+                variant="text"
+                @click="openEdit(agent)"
+              />
+              <v-btn
+                icon="mdi-delete"
+                size="small"
+                variant="text"
+                color="red"
+                @click="deleteAgent(agent)"
+              />
+            </td>
+          </tr>
+
+          <tr v-if="!filteredAgents.length">
+            <td colspan="6" class="text-center text-grey pa-4">
+              No agents found.
             </td>
           </tr>
         </tbody>
       </v-table>
     </v-card>
 
-    <!-- ADD AGENT -->
-    <v-dialog v-model="dialog" width="450">
+    <!-- DIALOG ADD / EDIT -->
+    <v-dialog v-model="dialog" max-width="480">
       <v-card class="pa-4">
-        <h3 class="text-h6 mb-4">Add New Agent</h3>
-        <v-text-field v-model="form.name" label="Full Name" />
-        <v-text-field v-model="form.email" label="Email" class="mt-3" />
+        <h3 class="text-h6 mb-2">
+          {{ isEdit ? 'Edit Agent' : 'Add Agent' }}
+        </h3>
+        <p class="text-body-2 text-grey-darken-1 mb-4">
+          {{ isEdit ? 'Update agent information.' : 'Create a new customer service agent.' }}
+        </p>
+
+        <v-text-field
+          v-model="form.name"
+          label="Full Name"
+          class="mb-3"
+          required
+        />
+        <v-text-field
+          v-model="form.email"
+          label="Email"
+          class="mb-3"
+          required
+        />
         <v-select
           v-model="form.role"
-          class="mt-3"
           :items="['Admin', 'Supervisor', 'Agent']"
           label="Role"
+          class="mb-4"
         />
-        <v-divider class="my-4" />
-        <div class="d-flex justify-end gap-2">
-          <v-btn variant="text" @click="dialog = false">Cancel</v-btn>
-          <v-btn color="primary" @click="saveAgent" :loading="form.processing">
+
+        <div class="d-flex justify-end gap-2 mt-2">
+          <v-btn variant="text" @click="dialog = false">
+            Cancel
+          </v-btn>
+          <v-btn color="primary" :loading="formLoading" @click="submitForm">
             Save
           </v-btn>
         </div>
       </v-card>
     </v-dialog>
-
-    <!-- EDIT AGENT -->
-    <v-dialog v-model="editDialog" width="450">
-      <v-card class="pa-4">
-        <h3 class="text-h6 mb-4">Edit Agent</h3>
-        <v-text-field v-model="form.name" label="Full Name" />
-        <v-text-field v-model="form.email" class="mt-3" label="Email" />
-        <v-select
-          v-model="form.role"
-          class="mt-3"
-          :items="['Admin', 'Supervisor', 'Agent']"
-          label="Role"
-        />
-        <v-divider class="my-4" />
-        <div class="d-flex justify-end gap-2">
-          <v-btn variant="text" @click="editDialog = false">Cancel</v-btn>
-          <v-btn color="primary" @click="saveAgent" :loading="form.processing">
-            Update
-          </v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- DELETE AGENT -->
-    <v-dialog v-model="deleteDialog" width="400">
-      <v-card class="pa-4 text-center">
-        <v-icon size="48" color="red" class="mb-2">mdi-alert-circle</v-icon>
-        <h3 class="text-h6 mb-2">Delete Agent?</h3>
-        <p class="text-body-2 mb-4">
-          Are you sure want to delete <strong>{{ selectedAgent?.name }}</strong>?
-        </p>
-        <div class="d-flex justify-center gap-2">
-          <v-btn variant="text" @click="deleteDialog = false">Cancel</v-btn>
-          <v-btn color="red" @click="deleteAgent">Delete</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
-    <!-- SUCCESS PASSWORD POPUP -->
-    <v-dialog v-model="successDialog" width="420">
-      <v-card class="pa-4 text-center">
-        <v-icon size="48" color="green" class="mb-2">mdi-check-circle</v-icon>
-        <h3 class="text-h6 mb-2">Agent Created Successfully!</h3>
-
-        <p class="mb-1">
-          <strong>Email:</strong> {{ newAgent.email }}
-        </p>
-
-        <v-text-field
-          v-model="newAgent.password"
-          label="Temporary Password"
-          type="text"
-          readonly
-          density="comfortable"
-          variant="outlined"
-          class="mb-3"
-          prepend-inner-icon="mdi-lock"
-        />
-
-        <v-btn
-          color="primary"
-          block
-          class="mb-3"
-          @click="navigator.clipboard.writeText(newAgent.password)"
-        >
-          <v-icon left>mdi-content-copy</v-icon>
-          Copy Password
-        </v-btn>
-
-        <v-btn variant="text" block @click="successDialog = false">
-          Close
-        </v-btn>
-      </v-card>
-    </v-dialog>
   </AdminLayout>
 </template>
+
+<style scoped>
+td {
+  vertical-align: middle;
+}
+
+.hover-card:hover {
+  background-color: rgba(18, 131, 218, 0.07);
+  transition: 0.2s ease;
+}
+
+.font-weight-medium {
+  font-weight: 500;
+}
+</style>

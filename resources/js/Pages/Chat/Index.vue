@@ -4,6 +4,9 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head } from '@inertiajs/vue3'
 import ChatRoom from './Room.vue'
 import axios from 'axios'
+import { useToast } from "vue-toastification";
+
+const toast = useToast();
 
 /* ====== STATE ====== */
 const rooms = ref([])
@@ -30,12 +33,32 @@ async function loadRooms() {
   try {
     const res = await axios.get('/chat/sessions')
     rooms.value = res.data
+
     if (!activeRoomId.value && rooms.value?.length) {
       activeRoomId.value = rooms.value[0]?.session_id
     }
-  } catch (e) { console.error(e) }
+  } catch (e) {
+    console.error(e)
+  }
 }
-onMounted(() => loadRooms())
+
+onMounted(() => {
+  loadRooms()
+
+  // ====== REALTIME LISTENER (Assigned to Agent) ======
+  const userId = window?.Laravel?.user?.id ?? document.querySelector('meta[name="user-id"]')?.content ?? null
+  if (!userId) return
+
+  window.Echo.private(`agent.${userId}`)
+    .listen(".session.assigned", (e) => {
+      loadRooms()
+
+      toast.success(`New chat assigned from ${e.session.customer?.name ?? e.session.customer?.phone ?? 'Unknown'}`, {
+        timeout: 3200,
+        icon: "💬",
+      })
+    })
+})
 
 /* SEARCH FILTER */
 const filtered = computed(() => {

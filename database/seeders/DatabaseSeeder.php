@@ -11,10 +11,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Panggil seeder lainnya
+        // Jalankan Super Admin Seeder
         $this->call([
-            UserSeeder::class,
-            TicketSeeder::class,
+            SuperAdminSeeder::class,
         ]);
     }
 }

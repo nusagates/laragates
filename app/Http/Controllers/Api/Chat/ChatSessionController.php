@@ -8,6 +8,7 @@ use App\Models\ChatMessage;
 use App\Models\Customer;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -34,6 +35,25 @@ class ChatSessionController extends Controller
         return response()->json($sessions);
     }
 
+    /** ===============================
+     *      AUTO ROUTING AGENT
+     * ===============================*/
+    private function assignAgent()
+    {
+        $agents = User::availableAgent()->get();
+
+        if ($agents->isEmpty()) {
+            return null; // Tidak ada agent online → unassigned
+        }
+
+        // Cari agent dengan jumlah chat aktif paling sedikit
+        $agent = $agents->sortBy(function ($a) {
+            return $a->sessions()->where('status', 'open')->count();
+        })->first();
+
+        return $agent->id;
+    }
+
     /** CREATE OUTBOUND: POST /chat/sessions/outbound */
     public function outbound(Request $request)
     {
@@ -53,10 +73,13 @@ class ChatSessionController extends Controller
             ['name'  => $data['name'] ?: $phone]
         );
 
+        // ==== Gunakan Auto Routing ====
+        $assigned = $this->assignAgent() ?? $agent->id;
+
         $session = ChatSession::create([
             'customer_id' => $customer->id,
             'status'      => 'open',
-            'assigned_to' => $agent->id,
+            'assigned_to' => $assigned,
         ]);
 
         $message = ChatMessage::create([

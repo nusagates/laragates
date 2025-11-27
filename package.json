@@ -25,6 +25,7 @@
     "dependencies": {
         "@mdi/font": "^7.4.47",
         "laravel-echo": "^2.2.6",
-        "pusher-js": "^8.4.0"
+        "pusher-js": "^8.4.0",
+        "vue-toastification": "^2.0.0-rc.5"
     }
 }

@@ -41,46 +41,63 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
     /*
-|--------------------------------------------------------------------------
-| Chat Advanced (sessions + messages + typing)
-|--------------------------------------------------------------------------
-*/
-Route::prefix('chat')->middleware(['auth', 'verified'])->group(function () {
-
-    // ===== Sessions (chat_sessions)
-    Route::get('/sessions',              [ChatSessionController::class, 'index']);
-    Route::get('/sessions/{session}',    [ChatSessionController::class, 'show']);
-    Route::post('/sessions/{session}/pin',       [ChatSessionController::class, 'pin']);
-    Route::post('/sessions/{session}/unpin',     [ChatSessionController::class, 'unpin']);
-    Route::post('/sessions/{session}/mark-read', [ChatSessionController::class, 'markRead']);
-
-    // ===== Messages (chat_messages)
-    Route::get('/sessions/{session}/messages', [ChatMessageController::class, 'index']);
-    Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
-    Route::post('/messages/{message}/retry',    [ChatMessageController::class, 'retry']);
-    Route::post('/messages/{message}/mark-read',[ChatMessageController::class, 'markRead']);
-
-    // ===== New Outbound Chat (CS start chat)
-    Route::post('/sessions/outbound', [ChatSessionController::class, 'outbound']);
-
-    // ===== Convert Chat → Ticket
-    Route::post('/sessions/{session}/convert-ticket', [ChatSessionController::class, 'convertToTicket']);
-
-    // ===== Typing Indicator (realtime)
-    Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
-});
-
+    |--------------------------------------------------------------------------
+    | 🔥 Heartbeat (Update Online Status)
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat'])->name('agent.heartbeat');
+    Route::post('/agent/offline', [AgentController::class, 'forceOffline'])->name('agent.forceOffline');
 
     /*
     |--------------------------------------------------------------------------
-    | Agents
+    | Chat Advanced (sessions + messages + typing)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('chat')->group(function () {
+
+        // Sessions
+        Route::get('/sessions', [ChatSessionController::class, 'index']);
+        Route::get('/sessions/{session}', [ChatSessionController::class, 'show']);
+        Route::post('/sessions/{session}/pin', [ChatSessionController::class, 'pin']);
+        Route::post('/sessions/{session}/unpin', [ChatSessionController::class, 'unpin']);
+        Route::post('/sessions/{session}/mark-read', [ChatSessionController::class, 'markRead']);
+
+        // Messages
+        Route::get('/sessions/{session}/messages', [ChatMessageController::class, 'index']);
+        Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
+        Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
+        Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
+
+        // Outbound (Start Chat)
+        Route::post('/sessions/outbound', [ChatSessionController::class, 'outbound']);
+
+        // Convert to Ticket
+        Route::post('/sessions/{session}/convert-ticket', [ChatSessionController::class, 'convertToTicket']);
+
+        // Typing Indicator
+        Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agents (Manage CS, Approval)
     |--------------------------------------------------------------------------
     */
     Route::get('/agents', [AgentController::class, 'index'])->name('agents');
     Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+    Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
     Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
     Route::patch('/agents/{user}/status', [AgentController::class, 'updateStatus'])->name('agents.status');
     Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
+    
+    Route::middleware(['auth', 'role:admin,supervisor'])->group(function () {
+    Route::get('/agents', [AgentController::class, 'index'])->name('agents');
+    Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
+    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
+    Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings');
+});
+
+
 
     /*
     |--------------------------------------------------------------------------
@@ -102,10 +119,10 @@ Route::prefix('chat')->middleware(['auth', 'verified'])->group(function () {
     Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
     Route::prefix('templates')->group(function () {
         Route::get('/{template}', [WhatsappTemplateController::class, 'show']);
-        Route::post('/',           [WhatsappTemplateController::class, 'store']);
-        Route::put('/{template}',  [WhatsappTemplateController::class, 'update']);
-        Route::delete('/{template}',[WhatsappTemplateController::class, 'destroy']);
-        Route::post('/sync',       [WhatsappTemplateController::class, 'sync']);
+        Route::post('/', [WhatsappTemplateController::class, 'store']);
+        Route::put('/{template}', [WhatsappTemplateController::class, 'update']);
+        Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy']);
+        Route::post('/sync', [WhatsappTemplateController::class, 'sync']);
     });
 
     /*
@@ -113,8 +130,8 @@ Route::prefix('chat')->middleware(['auth', 'verified'])->group(function () {
     | Broadcast
     |--------------------------------------------------------------------------
     */
-    Route::get('/broadcast',               [BroadcastController::class, 'index'])->name('broadcast');
-    Route::post('/broadcast/campaigns',    [BroadcastController::class, 'store'])->name('broadcast.store');
+    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
+    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
 
     /*
     |--------------------------------------------------------------------------
@@ -130,17 +147,17 @@ Route::prefix('chat')->middleware(['auth', 'verified'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
-    Route::get('/profile',       [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile',     [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile',    [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Webhook
+| Webhook WA
 |--------------------------------------------------------------------------
 */
-Route::get('/webhook/whatsapp',  [WabaWebhookController::class, 'verify']);
+Route::get('/webhook/whatsapp', [WabaWebhookController::class, 'verify']);
 Route::post('/webhook/whatsapp', [WabaWebhookController::class, 'receive']);
 
 require __DIR__.'/auth.php';

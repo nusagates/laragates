@@ -14,15 +14,17 @@ class ChatSession extends Model
     protected $fillable = [
         'customer_id',
         'assigned_to',
-        'status',
+        'status',              // open, pending, closed
         'pinned',
-        'priority',
+        'priority',            // vip, normal, low
         'last_agent_read_at',
+        'closed_at',
     ];
 
     protected $casts = [
-        'pinned'            => 'boolean',
-        'last_agent_read_at'=> 'datetime',
+        'pinned'             => 'boolean',
+        'last_agent_read_at' => 'datetime',
+        'closed_at'          => 'datetime',
     ];
 
     /** Customer pemilik chat ini */
@@ -60,5 +62,22 @@ class ChatSession extends Model
     public function ticket(): HasOne
     {
         return $this->hasOne(Ticket::class, 'chat_session_id');
+    }
+
+    /* ========= Scopes praktis ========= */
+
+    public function scopeOpen($query)
+    {
+        return $query->where('status', 'open');
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    public function scopeClosed($query)
+    {
+        return $query->where('status', 'closed');
     }
 }

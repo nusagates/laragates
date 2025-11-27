@@ -11,8 +11,8 @@ class ChatMessage extends Model
 
     protected $fillable = [
         'chat_session_id',
-        'sender',
-        'user_id',
+        'sender',          // customer | agent | system
+        'user_id',         // null jika customer
         'message',
         'type',
         'wa_message_id',
@@ -30,25 +30,23 @@ class ChatMessage extends Model
         'is_bot'      => 'boolean',
     ];
 
+    /** Relasi ke session chat */
     public function session(): BelongsTo
     {
         return $this->belongsTo(ChatSession::class, 'chat_session_id');
     }
 
+    /** Agent yang mengirim pesan (hanya jika sender = agent) */
     public function agent(): BelongsTo
     {
-        return $this->belongsTo(Agent::class, 'user_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** Customer tidak pakai user_id, relasi ke tabel customers */
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'user_id');
     }
 
-    public function lastMessage()
-    {
-        return $this->hasOne(ChatMessage::class)
-        ->orderBy('id', 'desc');
-    }
-
+    /** Message tidak punya lastMessage, itu di session */
 }

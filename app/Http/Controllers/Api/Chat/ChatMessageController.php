@@ -6,14 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 
 class ChatMessageController extends Controller
 {
-    /**
-     * GET message list of chat session
-     */
+    /** ===============================
+     *  GET messages of chat session
+     *  ===============================*/
     public function index(ChatSession $session)
     {
         return ChatMessage::where('chat_session_id', $session->id)
@@ -21,114 +21,95 @@ class ChatMessageController extends Controller
             ->get();
     }
 
-    /**
-     * STORE: Send Message (Text + Media)
-     */
+    /** ===============================
+     *  SEND MESSAGE (TEXT + MEDIA)
+     *  ===============================*/
     public function store(Request $request, ChatSession $session)
     {
-        // Validate minimal rule
+        if (!$this->checkApproval()) {
+            return response()->json(['error' => 'Your account is pending approval'], 403);
+        }
+
         $request->validate([
-            'message'   => 'nullable|string',
-            'media'     => 'nullable|file|max:5120', // 5MB
+            'message' => 'nullable|string',
+            'media'   => 'nullable|file|max:5120', // 5MB
         ]);
 
-        $text       = $request->input('message');
-        $mediaUrl   = null;
-        $mediaType  = null;
+        $text = $request->input('message');
+        $mediaUrl = null;
+        $mediaType = null;
         $bubbleType = 'text';
 
-        /** ===============================
-         *  UPLOAD MEDIA (if exists)
-         *  ===============================*/
+        // Upload media
         if ($request->hasFile('media')) {
             $file = $request->file('media');
-
-            // Generate filename
             $name = Str::random(32) . '.' . $file->getClientOriginalExtension();
 
-            // Save to storage/app/public/chat-media
-            $path = $file->storeAs('public/chat-media', $name);
-
-            // Convert to full URL
+            $file->storeAs('public/chat-media', $name);
             $mediaUrl = asset('storage/chat-media/' . $name);
-
-            // Set MIME & message type
             $mediaType = $file->getMimeType();
             $bubbleType = 'media';
 
-            // If media uploaded but no text, auto-fill text bubble
             if (!$text) {
-                if (Str::contains($mediaType, 'image')) {
-                    $text = '[photo]';
-                } elseif (Str::contains($mediaType, 'pdf')) {
-                    $text = '[pdf]';
-                } elseif (Str::contains($mediaType, 'video')) {
-                    $text = '[video]';
-                } elseif (Str::contains($mediaType, 'audio')) {
-                    $text = '[audio]';
-                } else {
-                    $text = '[file]';
-                }
+                if (Str::contains($mediaType, 'image')) $text = '[photo]';
+                elseif (Str::contains($mediaType, 'pdf')) $text = '[pdf]';
+                elseif (Str::contains($mediaType, 'video')) $text = '[video]';
+                elseif (Str::contains($mediaType, 'audio')) $text = '[audio]';
+                else $text = '[file]';
             }
         }
 
-        /** ===============================
-         *  Prevent message NULL
-         *  ===============================*/
         if (!$text) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Message cannot be empty if no media uploaded',
-            ], 422);
+            return response()->json(['success' => false, 'message' => 'Message cannot be empty'], 422);
         }
 
-        /** ===============================
-         *  Save to Database
-         *  ===============================*/
         $msg = ChatMessage::create([
-            'chat_session_id'   => $session->id,
-            'sender'            => 'agent',
-            'user_id'           => auth()->id(),
-            'is_outgoing'       => true,
-            'is_internal'       => false,
-            'is_bot'            => false,
-            'message'           => $text,
-            'media_url'         => $mediaUrl,
-            'media_type'        => $mediaType,
-            'type'              => $bubbleType,
-            'status'            => 'sent',
+            'chat_session_id' => $session->id,
+            'sender'          => 'agent',
+            'user_id'         => auth()->id(),
+            'is_outgoing'     => true,
+            'is_internal'     => false,
+            'is_bot'          => false,
+            'message'         => $text,
+            'media_url'       => $mediaUrl,
+            'media_type'      => $mediaType,
+            'type'            => $bubbleType,
+            'status'          => 'sent',
         ]);
+
+        $session->touch(); // update "updated_at" so sidebar sorting updated
 
         return response()->json([
             'success' => true,
             'message' => 'Message sent',
-            'data' => $msg
+            'data'    => $msg
         ]);
     }
 
-
-    /**
-     * RETRY Failed outgoing message (manual)
-     */
+    /** ===============================
+     *  RETRY
+     *  ===============================*/
     public function retry(ChatMessage $message)
     {
         if ($message->status !== 'failed') {
             return response()->json(['success' => false, 'message' => 'Message is not failed'], 400);
         }
 
-        // Example retry logic (future I/O WhatsApp API)
         $message->update(['status' => 'sent']);
-
         return response()->json(['success' => true, 'message' => 'Message retried']);
     }
 
-
-    /**
-     * Mark message as read (manual)
-     */
+    /** ===============================
+     *  MARK READ
+     *  ===============================*/
     public function markRead(ChatMessage $message)
     {
         $message->update(['status' => 'read']);
         return response()->json(['success' => true]);
+    }
+
+    private function checkApproval(): bool
+    {
+        return !empty(Auth::user()->approved_at);
     }
 }

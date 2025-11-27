@@ -16,9 +16,13 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',          // Admin, Supervisor, Agent
-        'status',       // online, offline, pending
-        'last_seen',   // Last Seen Timestamp
+        'role',
+        'status',
+        'last_seen',
+        'idle_timeout_minutes',
+        'skills',
+        'is_active',
+        'approved_at',
     ];
 
     protected $hidden = [
@@ -28,35 +32,35 @@ class User extends Authenticatable
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'last_seen'         => 'datetime',
+        'approved_at'       => 'datetime',
+        'skills'            => 'array'
     ];
 
     /* =======================
-     |  Relationships
-     |======================= */
+     | Relationships
+     ======================= */
+    public function sessions()
+    {
+        return $this->hasMany(\App\Models\ChatSession::class, 'assigned_to');
+    }
 
     public function tickets()
     {
-        return $this->hasMany(Ticket::class, 'agent_id');
+        return $this->hasMany(\App\Models\Ticket::class, 'assigned_to');
     }
 
     /* =======================
-     |  Scopes
-     |======================= */
-
+     | Scopes
+     ======================= */
     public function scopeAgents($query)
     {
-        return $query->whereIn('role', ['Admin', 'Supervisor', 'Agent']);
+        return $query->whereIn('role', ['agent', 'admin', 'superadmin']);
     }
 
     public function scopeOnline($query)
     {
         return $query->where('status', 'online');
-    }
-
-    public function isOnline()
-    {
-        return $this->last_seen &&
-           $this->last_seen->gt(now()->subMinutes(3));
     }
 
     public function scopeOffline($query)
@@ -67,5 +71,23 @@ class User extends Authenticatable
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
+    }
+
+    // === Ambil agent yang memenuhi syarat auto-routing ===
+    public function scopeAvailableAgent($query)
+    {
+        return $query->where([
+            ['role', 'agent'],
+            ['status', 'online'],
+            ['is_active', true],
+        ])->whereNotNull('approved_at');
+    }
+
+    /* =======================
+     | Helper
+     ======================= */
+    public function isOnline(): bool
+    {
+        return $this->last_seen && $this->last_seen->gt(now()->subMinutes(3));
     }
 }
