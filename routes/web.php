@@ -7,7 +7,7 @@ use App\Http\Controllers\AgentController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\WhatsappTemplateController;
 
-// Chat Advanced Controllers
+// Chat Advanced
 use App\Http\Controllers\Api\Chat\ChatSessionController;
 use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\Api\Chat\TypingController;
@@ -32,26 +32,20 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
-| Authenticated Panel Routes
+| Protected Routes (Authenticated & Verified)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    // =======================
-    //   ACCESS: ALL ROLES
-    // =======================
+    /* Dashboard */
+    Route::get('/dashboard', fn () => Inertia::render('Dashboard'))
+        ->name('dashboard');
 
-    // Dashboard
-    Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
+    /* Chat UI */
+    Route::get('/chat', fn () => Inertia::render('Chat/Index'))
+        ->name('chat');
 
-    // Chat UI
-    Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Chat Advanced (sessions + messages + typing)
-    |--------------------------------------------------------------------------
-    */
+    /* Chat Advanced API */
     Route::prefix('chat')->group(function () {
 
         // Sessions
@@ -67,22 +61,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
 
-        // Outbound (Start Chat)
+        // Outbound & Ticket
         Route::post('/sessions/outbound', [ChatSessionController::class, 'outbound']);
-
-        // Convert to Ticket
         Route::post('/sessions/{session}/convert-ticket', [ChatSessionController::class, 'convertToTicket']);
 
-        // Typing Indicator
+        // Typing
         Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
     });
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Ticket System (accessible by agent + superadmin)
-    |--------------------------------------------------------------------------
-    */
+    /* Ticketing System */
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
     Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
     Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
@@ -90,18 +77,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
 
-
-    // ============================
-    //   ACCESS: SUPERADMIN ONLY
-    // ============================
-
+    /*
+    |--------------------------------------------------------------------------
+    | SUPERADMIN ONLY
+    |--------------------------------------------------------------------------
+    */
     Route::middleware(['role:superadmin'])->group(function () {
 
-        /*
-        |--------------------------------------------------------------------------
-        | Agent Management
-        |--------------------------------------------------------------------------
-        */
+        /* Agent Management */
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
         Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
         Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
@@ -111,34 +94,46 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         /*
         |--------------------------------------------------------------------------
-        | Templates
+        | TEMPLATE MODULE (Management + Workflow + Sync)
         |--------------------------------------------------------------------------
         */
-        Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
+
+        // MAIN PAGE (Inertia)
+        Route::get('/templates', [WhatsappTemplateController::class, 'index'])
+            ->name('templates.index');
+
+        // LIST API
+        Route::get('/templates-list', [WhatsappTemplateController::class, 'list'])
+            ->name('templates.list');
 
         Route::prefix('templates')->group(function () {
-            Route::get('/{template}', [WhatsappTemplateController::class, 'show']);
-            Route::post('/', [WhatsappTemplateController::class, 'store']);
-            Route::put('/{template}', [WhatsappTemplateController::class, 'update']);
-            Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy']);
-            Route::post('/sync', [WhatsappTemplateController::class, 'sync']);
+
+            // CRUD
+            Route::post('/', [WhatsappTemplateController::class, 'store'])->name('templates.store');
+            Route::get('/{template}', [WhatsappTemplateController::class, 'show'])->name('templates.show');
+            Route::put('/{template}', [WhatsappTemplateController::class, 'update'])->name('templates.update');
+            Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy');
+
+            // Workflow
+            Route::post('/{template}/submit', [WhatsappTemplateController::class, 'submit'])->name('templates.submit');
+            Route::post('/{template}/approve', [WhatsappTemplateController::class, 'approve'])->name('templates.approve');
+            Route::post('/{template}/reject', [WhatsappTemplateController::class, 'reject'])->name('templates.reject');
+
+            // Sync ke Meta
+            Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync'])->name('templates.sync');
+
+            // ⭐⭐⭐ NEW — SEND TEMPLATE ⭐⭐⭐
+            Route::post('/{template}/send', [WhatsappTemplateController::class, 'send'])
+                ->name('templates.send');
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Broadcast
-        |--------------------------------------------------------------------------
-        */
+        /* Broadcast */
         Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
         Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
 
-        /*
-        |--------------------------------------------------------------------------
-        | Settings
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings');
-
+        /* Settings */
+        Route::get('/settings', fn () => Inertia::render('Settings/Index'))
+            ->name('settings');
     });
 });
 
