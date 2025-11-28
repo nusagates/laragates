@@ -38,11 +38,19 @@ Route::get('/', function () {
 */
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    /* Dashboard */
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard
+    |--------------------------------------------------------------------------
+    */
     Route::get('/dashboard', fn () => Inertia::render('Dashboard'))
         ->name('dashboard');
 
-    /* Chat UI */
+    /*
+    |--------------------------------------------------------------------------
+    | Chat UI (Inertia)
+    |--------------------------------------------------------------------------
+    */
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))
         ->name('chat');
 
@@ -107,15 +115,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         /*
         |--------------------------------------------------------------------------
+        | Settings Page (FIXED — sebelumnya menyebabkan 404)
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/settings', function () {
+            return Inertia::render('Settings/Index');
+        })->name('settings');
+
+        /*
+        |--------------------------------------------------------------------------
         | TEMPLATE MODULE (Management + Workflow + Sync)
         |--------------------------------------------------------------------------
         */
-
-        // MAIN PAGE (Inertia)
         Route::get('/templates', [WhatsappTemplateController::class, 'index'])
             ->name('templates.index');
 
-        // LIST API
         Route::get('/templates-list', [WhatsappTemplateController::class, 'list'])
             ->name('templates.list');
 
@@ -132,8 +146,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/{template}/approve', [WhatsappTemplateController::class, 'approve'])->name('templates.approve');
             Route::post('/{template}/reject', [WhatsappTemplateController::class, 'reject'])->name('templates.reject');
 
-            // Sync ke META
-            Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync'])->name('templates.sync');
+            // Sync From Meta (single)
+            Route::post('/{template}/sync', [WhatsappTemplateController::class, 'syncSingle'])
+                ->name('templates.sync');
 
             // Send Template
             Route::post('/{template}/send', [WhatsappTemplateController::class, 'send'])
@@ -142,8 +157,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // Versions
             Route::post('/{template}/versions', [WhatsappTemplateController::class, 'createVersion'])->name('templates.versions.create');
             Route::post('/{template}/versions/{version}/revert', [WhatsappTemplateController::class, 'revertVersion'])->name('templates.versions.revert');
-            Route::post('/{template}/notes', [WhatsappTemplateController::class, 'addNote'])->name('templates.notes.add');
 
+            // Notes
+            Route::post('/{template}/notes', [WhatsappTemplateController::class, 'addNote'])->name('templates.notes.add');
         });
 
         /*
@@ -156,11 +172,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/broadcast', [BroadcastController::class, 'index'])
             ->name('broadcast');
 
-        // CREATE CAMPAIGN (draft)
+        // Create Campaign
         Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])
             ->name('broadcast.store');
 
-        // Upload CSV/Excel Targets
+        // Upload CSV/Excel
         Route::post('/broadcast/campaigns/{campaign}/upload-targets',
             [BroadcastController::class, 'uploadTargets']
         )->name('broadcast.upload-targets');
@@ -170,12 +186,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             [BroadcastApprovalController::class, 'requestApproval']
         )->name('broadcast.request-approval');
 
-        // Approve Campaign (Admin)
+        // Approve (Admin)
         Route::post('/broadcast/{campaign}/approve',
             [BroadcastApprovalController::class, 'approve']
         )->name('broadcast.approve');
 
-        // Reject Campaign (Admin)
+        // Reject (Admin)
         Route::post('/broadcast/{campaign}/reject',
             [BroadcastApprovalController::class, 'reject']
         )->name('broadcast.reject');
