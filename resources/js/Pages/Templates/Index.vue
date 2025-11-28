@@ -1,147 +1,220 @@
 <script setup>
+/**
+ * Templates Index.vue
+ * - Full functionality: load, list, create, update, delete
+ * - Workflow: submit, approve, reject
+ * - Sync per-template
+ * - Send template (with optional components JSON)
+ * - Modals: Add, Edit, View, Send
+ *
+ * Replace your existing Index.vue with this file.
+ */
+
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head } from '@inertiajs/vue3'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
-// Data template
+// ====== STATE ======
 const templates = ref([])
 const loading = ref(false)
 
-// Modal control
+// Dialogs / modals
 const modalAdd = ref(false)
-const modalView = ref(false)
 const modalEdit = ref(false)
+const modalView = ref(false)
 const modalSend = ref(false)
+
+// Selected/current item
 const selected = ref(null)
 
-// Form Template
+// Form for create/edit
 const form = ref({
   name: '',
-  category: '',
-  language: '',
-  body: ''
+  category: 'Utility',
+  language: 'id',
+  header: '',
+  body: '',
+  footer: '',
+  buttons: null, // can be JSON / array
 })
 
-// Send form
+// Send form (for sending a template to phone)
 const sendForm = ref({
   to: '',
   language: '',
-  // components as JSON string (advanced). For simple cases leave empty.
-  componentsJson: ''
+  componentsJson: '', // optional advanced components
 })
 
-// ====================== API Calls ======================
+// small UI state
+const formLoading = ref(false)
+const actionLoading = ref(false)
 
-// LOAD Templates
+// ====== HELPERS / UTILS ======
+const statusColor = (status) => {
+  if (!status) return 'grey'
+  const s = status.toString().toLowerCase()
+  if (s === 'approved') return 'green'
+  if (s === 'submitted') return 'blue'
+  if (s === 'draft') return 'grey'
+  if (s === 'rejected') return 'red'
+  if (s === 'pending') return 'orange'
+  return 'grey'
+}
+
+// safe parse JSON
+function tryParseJSON(text) {
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    return null
+  }
+}
+
+// format date fallback
+function fmtDate(d) {
+  if (!d) return '-'
+  try {
+    return new Date(d).toISOString()
+  } catch {
+    return d
+  }
+}
+
+// ====== API / ACTIONS ======
+
+// load list (used by page mount and refresh)
 async function loadTemplates() {
   loading.value = true
   try {
-    const res = await axios.get('/templates/all') // ensure route exists and returns JSON
-    templates.value = res.data
+    // prefer dedicated JSON endpoint
+    const res = await axios.get('/templates-list')
+    templates.value = Array.isArray(res.data) ? res.data : []
   } catch (e) {
-    console.error(e)
-    // fallback: try /templates (Inertia) — but prefer /templates/all
+    // fallback to /templates (if it returns JSON)
     try {
-      const res2 = await axios.get('/templates')
-      templates.value = res2.data
+      const res2 = await axios.get('/templates/all')
+      templates.value = Array.isArray(res2.data) ? res2.data : []
     } catch (e2) {
-      console.error(e2)
+      console.error('Failed loading templates', e, e2)
+      templates.value = []
     }
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
-// SYNC per template (ke Meta)
-async function syncTemplate(id) {
-  loading.value = true
+// create or update template
+async function saveTemplate() {
+  formLoading.value = true
   try {
-    await axios.post(`/templates/${id}/sync`)
-    await loadTemplates()
-  } catch (e) {
-    console.error(e)
-    alert('Sync failed')
-  }
-  loading.value = false
-}
+    // normalize buttons if string
+    const payload = { ...form.value }
+    if (typeof payload.buttons === 'string' && payload.buttons.trim()) {
+      payload.buttons = tryParseJSON(payload.buttons) || payload.buttons
+    }
 
-// SUBMIT FOR APPROVAL (local workflow)
-async function submitForApproval(id) {
-  loading.value = true
-  try {
-    await axios.post(`/templates/${id}/submit`)
-    await loadTemplates()
-    modalView.value = false
-  } catch (e) {
-    console.error(e)
-    alert('Submit failed')
-  }
-  loading.value = false
-}
-
-// APPROVE
-async function approveTemplate(id) {
-  loading.value = true
-  try {
-    await axios.post(`/templates/${id}/approve`)
-    await loadTemplates()
-    modalView.value = false
-  } catch (e) {
-    console.error(e)
-    alert('Approve failed')
-  }
-  loading.value = false
-}
-
-// REJECT
-async function rejectTemplate(id) {
-  const reason = prompt("Reason for rejection?")
-  if (!reason) return
-
-  loading.value = true
-  try {
-    await axios.post(`/templates/${id}/reject`, { reason })
-    await loadTemplates()
-    modalView.value = false
-  } catch (e) {
-    console.error(e)
-    alert('Reject failed')
-  }
-  loading.value = false
-}
-
-// SAVE (Add / Update)
-async function save() {
-  try {
-    if (modalEdit.value && selected.value) {
-      await axios.put(`/templates/${selected.value.id}`, form.value)
+    if (modalEdit.value && selected.value?.id) {
+      await axios.put(`/templates/${selected.value.id}`, payload)
     } else {
-      await axios.post('/templates', form.value)
+      await axios.post('/templates', payload)
     }
 
     modalAdd.value = false
     modalEdit.value = false
     await loadTemplates()
-  } catch (e) {
-    console.error(e)
-    alert('Save failed')
+  } catch (err) {
+    console.error(err)
+    alert('Failed to save template: ' + (err.response?.data?.message || err.message))
+  } finally {
+    formLoading.value = false
   }
 }
 
-// DELETE TEMPLATE
-async function remove(id) {
-  if (!confirm("Delete this template?")) return
+// delete
+async function deleteTemplate(id) {
+  if (!confirm('Delete this template?')) return
+  actionLoading.value = true
   try {
     await axios.delete(`/templates/${id}`)
     await loadTemplates()
-  } catch (e) {
-    console.error(e)
-    alert('Delete failed')
+  } catch (err) {
+    console.error(err)
+    alert('Failed to delete template')
+  } finally {
+    actionLoading.value = false
   }
 }
 
-// SEND template
-async function openSend(item) {
+// sync per-template (sync with Meta/WhatsApp Cloud API)
+async function syncTemplate(id) {
+  if (!confirm('Sync this template with provider?')) return
+  actionLoading.value = true
+  try {
+    await axios.post(`/templates/${id}/sync`)
+    await loadTemplates()
+    alert('Synced successfully (server response)')
+  } catch (err) {
+    console.error(err)
+    alert('Sync failed: ' + (err.response?.data?.error || err.message))
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+// workflow: submit for approval (local)
+async function submitForApproval(id) {
+  if (!confirm('Submit this template for approval?')) return
+  actionLoading.value = true
+  try {
+    await axios.post(`/templates/${id}/submit`)
+    await loadTemplates()
+    modalView.value = false
+  } catch (err) {
+    console.error(err)
+    alert('Submit failed')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+// approve
+async function approveTemplate(id) {
+  if (!confirm('Approve this template?')) return
+  actionLoading.value = true
+  try {
+    await axios.post(`/templates/${id}/approve`)
+    await loadTemplates()
+    modalView.value = false
+  } catch (err) {
+    console.error(err)
+    alert('Approve failed')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+// reject (with notes)
+async function rejectTemplate(id) {
+  const reason = prompt('Reason for rejection (visible to submitter):')
+  if (!reason) return
+  actionLoading.value = true
+  try {
+    await axios.post(`/templates/${id}/reject`, { reason })
+    await loadTemplates()
+    modalView.value = false
+  } catch (err) {
+    console.error(err)
+    alert('Reject failed')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+// ====== SEND TEMPLATE ======
+// prepare send modal
+function openSendModal(item) {
   selected.value = item
   sendForm.value = {
     to: '',
@@ -151,74 +224,91 @@ async function openSend(item) {
   modalSend.value = true
 }
 
-/**
- * Send the template.
- * componentsJson is optional - if provided must be valid JSON (array) that follows Meta components structure.
- */
+// send; payload may include "components" parsed from componentsJson
 async function sendTemplate() {
   if (!selected.value) return
-  const id = selected.value.id
-  const payload = {
-    to: sendForm.value.to,
-    language: sendForm.value.language || selected.value.language
+  if (!sendForm.value.to) {
+    alert('Provide a phone number to send to')
+    return
   }
 
-  // parse components JSON if provided
-  if (sendForm.value.componentsJson && sendForm.value.componentsJson.trim().length) {
-    try {
-      payload.components = JSON.parse(sendForm.value.componentsJson)
-    } catch (e) {
-      alert('Invalid components JSON')
-      return
-    }
-  }
-
+  actionLoading.value = true
   try {
-    loading.value = true
-    const res = await axios.post(`/templates/${id}/send`, payload)
-    modalSend.value = false
-    // show result basic
-    if (res.data?.sent) {
-      alert('Template sent successfully')
-    } else if (res.data?.warning) {
-      alert(`Warning: ${res.data.warning}`)
-    } else {
-      alert('Sent (response received). Check server logs for details.')
+    const payload = {
+      to: sendForm.value.to,
+      language: sendForm.value.language || selected.value.language
     }
+
+    if (sendForm.value.componentsJson && sendForm.value.componentsJson.trim()) {
+      try {
+        payload.components = JSON.parse(sendForm.value.componentsJson)
+      } catch (err) {
+        alert('Invalid components JSON')
+        actionLoading.value = false
+        return
+      }
+    }
+
+    const res = await axios.post(`/templates/${selected.value.id}/send`, payload)
+
+    // server should respond with success / warning
+    if (res?.data?.warning) {
+      alert('Warning: ' + res.data.warning)
+    } else if (res?.data?.sent || res?.status === 200) {
+      alert('Template sent (check logs/provider).')
+    } else {
+      alert('Send request finished, check server response.')
+    }
+
+    modalSend.value = false
     await loadTemplates()
-  } catch (e) {
-    console.error(e)
-    alert('Send failed: ' + (e.response?.data?.error ?? e.message))
+  } catch (err) {
+    console.error(err)
+    alert('Send failed: ' + (err.response?.data?.error || err.message))
   } finally {
-    loading.value = false
+    actionLoading.value = false
   }
 }
 
-// ====================== Helpers ======================
-
-// Badge color
-const statusColor = (status) => {
-  if (status === 'approved') return 'green'
-  if (status === 'submitted') return 'blue'
-  if (status === 'draft') return 'grey'
-  if (status === 'rejected') return 'red'
-  return 'orange'
+// ====== UI helpers for open modals ======
+function openAdd() {
+  modalAdd.value = true
+  modalEdit.value = false
+  selected.value = null
+  form.value = {
+    name: '',
+    category: 'Utility',
+    language: 'id',
+    header: '',
+    body: '',
+    footer: '',
+    buttons: null,
+  }
 }
 
-// Open Preview
-function openPreview(item) {
+function openEdit(item) {
+  selected.value = item
+  modalEdit.value = true
+  modalAdd.value = false
+
+  // copy server fields to form (buttons likely stored as JSON)
+  form.value = {
+    name: item.name || '',
+    category: item.category || 'Utility',
+    language: item.language || 'id',
+    header: item.header || '',
+    body: item.body || '',
+    footer: item.footer || '',
+    buttons: (item.buttons && typeof item.buttons === 'object') ? JSON.stringify(item.buttons, null, 2) : (item.buttons || null),
+  }
+}
+
+function openView(item) {
   selected.value = item
   modalView.value = true
 }
 
-// Open Edit
-function openEdit(item) {
-  selected.value = item
-  form.value = { ...item }
-  modalEdit.value = true
-}
-
-// Auto load when page opened
+// ====== LIFECYCLE ======
 onMounted(loadTemplates)
 </script>
 
@@ -228,24 +318,28 @@ onMounted(loadTemplates)
   <AdminLayout>
     <template #title>Templates</template>
 
-    <v-card elevation="2" class="pa-4">
+    <v-card elevation="3" class="pa-4">
 
       <!-- Header -->
-      <v-row class="mb-4" align="center">
-        <v-col>
-          <h3 class="text-h6 font-weight-bold">WhatsApp Message Templates</h3>
-          <p class="text-body-2 text-grey-darken-1">
-            Kelola template pesan resmi WhatsApp.
-          </p>
-        </v-col>
+      <div class="d-flex align-center justify-space-between mb-4">
+        <div>
+          <h3 class="text-h6">WhatsApp Message Templates</h3>
+          <p class="text-body-2 text-grey-darken-1">Kelola template pesan resmi WhatsApp (create, sync, workflow, send).</p>
+        </div>
 
-        <v-col cols="auto" class="d-flex gap-2">
-          <v-btn color="primary" prepend-icon="mdi-plus" @click="modalAdd = true">NEW TEMPLATE</v-btn>
-        </v-col>
-      </v-row>
+        <div class="d-flex align-center gap-3">
+          <v-btn color="primary" prepend-icon="mdi-sync" @click="loadTemplates" :loading="loading">
+            Refresh
+          </v-btn>
+
+          <v-btn color="primary" prepend-icon="mdi-plus" @click="openAdd" class="ml-2">
+            NEW TEMPLATE
+          </v-btn>
+        </div>
+      </div>
 
       <!-- Table -->
-      <v-table density="comfortable" hover>
+      <v-table fixed-header height="420" density="comfortable">
         <thead>
           <tr>
             <th>Name</th>
@@ -253,160 +347,170 @@ onMounted(loadTemplates)
             <th>Language</th>
             <th>Status</th>
             <th>Last Updated</th>
-            <th>Action</th>
+            <th class="text-center">Action</th>
           </tr>
         </thead>
 
         <tbody>
-          <tr v-for="t in templates" :key="t.id">
-            <td>{{ t.name }}</td>
+          <tr v-for="t in templates" :key="t.id" class="hover-row">
+            <td class="font-weight-medium">{{ t.name }}</td>
             <td>{{ t.category }}</td>
             <td>{{ t.language }}</td>
 
             <td>
-              <v-chip :color="statusColor(t.status)" size="small" dark>{{ t.status }}</v-chip>
+              <v-chip :color="statusColor(t.status)" size="small" class="text-white" variant="flat">
+                {{ t.status }}
+              </v-chip>
             </td>
 
-            <td>{{ t.updated_at }}</td>
+            <td>{{ fmtDate(t.updated_at) }}</td>
 
-            <td class="d-flex gap-1">
-              <v-btn icon size="small" @click="openPreview(t)">
-                <v-icon>mdi-eye</v-icon>
-              </v-btn>
+            <td class="text-center">
+              <div class="d-flex justify-center gap-2">
+                <!-- View -->
+                <v-btn icon size="small" variant="text" @click="openView(t)" title="Preview">
+                  <v-icon>mdi-eye</v-icon>
+                </v-btn>
 
-              <v-btn icon size="small" @click="openEdit(t)">
-                <v-icon>mdi-pencil</v-icon>
-              </v-btn>
+                <!-- Edit -->
+                <v-btn icon size="small" variant="text" @click="openEdit(t)" title="Edit">
+                  <v-icon>mdi-pencil</v-icon>
+                </v-btn>
 
-              <v-btn icon size="small" color="blue" @click="syncTemplate(t.id)">
-                <v-icon>mdi-sync</v-icon>
-              </v-btn>
+                <!-- Sync -->
+                <v-btn icon size="small" color="blue" variant="flat" @click="syncTemplate(t.id)" title="Sync with Provider">
+                  <v-icon>mdi-sync</v-icon>
+                </v-btn>
 
-              <v-btn icon size="small" color="teal" @click="openSend(t)" title="Send template">
-                <v-icon>mdi-send</v-icon>
-              </v-btn>
+                <!-- Send -->
+                <v-btn icon size="small" color="teal" variant="flat" @click="openSendModal(t)" title="Send Template">
+                  <v-icon>mdi-send</v-icon>
+                </v-btn>
 
-              <v-btn icon size="small" color="red" @click="remove(t.id)">
-                <v-icon>mdi-delete</v-icon>
-              </v-btn>
+                <!-- Delete -->
+                <v-btn icon size="small" color="red" variant="flat" @click="deleteTemplate(t.id)" title="Delete">
+                  <v-icon>mdi-delete</v-icon>
+                </v-btn>
+              </div>
             </td>
           </tr>
 
-          <tr v-if="templates.length === 0">
-            <td colspan="6" class="text-center pa-4">
-              Belum ada template. Klik <b>NEW TEMPLATE</b>.
-            </td>
+          <tr v-if="!templates.length">
+            <td colspan="6" class="text-center pa-4 text-grey">Belum ada template. Klik NEW TEMPLATE untuk membuat.</td>
           </tr>
         </tbody>
       </v-table>
-
     </v-card>
 
-    <!-- ==================== MODAL ADD ==================== -->
-    <v-dialog v-model="modalAdd" width="520">
+    <!-- ================= MODAL ADD ================= -->
+    <v-dialog v-model="modalAdd" max-width="640">
       <v-card class="pa-4">
-        <h3 class="text-h6 mb-4 font-weight-bold">Add New Template</h3>
+        <h3 class="text-h6 mb-3">Add New Template</h3>
 
-        <v-text-field v-model="form.name" label="Template Name" class="mb-3" />
-        <v-select v-model="form.category" :items="['Utility','Marketing','Authentication']" label="Category" class="mb-3" />
-        <v-select v-model="form.language" :items="['id','en']" label="Language" class="mb-3" />
-        <v-textarea v-model="form.body" label="Body Message" rows="4" variant="outlined" />
+        <v-text-field v-model="form.name" label="Template Name" class="mb-3" dense />
+        <v-select v-model="form.category" :items="['Utility','Marketing','Authentication']" label="Category" class="mb-3" dense />
+        <v-select v-model="form.language" :items="['id','en']" label="Language" class="mb-3" dense />
 
-        <div class="d-flex justify-end mt-4 gap-2">
+        <v-text-field v-model="form.header" label="Header (optional)" class="mb-3" dense />
+        <v-textarea v-model="form.body" label="Body (required)" rows="4" class="mb-3" dense />
+        <v-text-field v-model="form.footer" label="Footer (optional)" class="mb-3" dense />
+
+        <v-textarea v-model="form.buttons" label="Buttons JSON (optional)" rows="3" hint='Example: [{"type":"quick_reply","text":"Yes"}]' class="mb-3" dense />
+
+        <div class="d-flex justify-end gap-2 mt-3">
           <v-btn variant="text" @click="modalAdd = false">Cancel</v-btn>
-          <v-btn color="primary" @click="save">Save</v-btn>
+          <v-btn color="primary" :loading="formLoading" @click="saveTemplate">Save</v-btn>
         </div>
       </v-card>
     </v-dialog>
 
-    <!-- ==================== MODAL EDIT ==================== -->
-    <v-dialog v-model="modalEdit" width="520">
+    <!-- ================= MODAL EDIT ================= -->
+    <v-dialog v-model="modalEdit" max-width="640">
       <v-card class="pa-4">
-        <h3 class="text-h6 mb-4 font-weight-bold">Edit Template</h3>
+        <h3 class="text-h6 mb-3">Edit Template</h3>
 
-        <v-text-field v-model="form.name" label="Template Name" class="mb-3" />
-        <v-select v-model="form.category" :items="['Utility','Marketing','Authentication']" label="Category" class="mb-3" />
-        <v-select v-model="form.language" :items="['id','en']" label="Language" class="mb-3" />
-        <v-textarea v-model="form.body" label="Body Message" rows="4" variant="outlined" />
+        <v-text-field v-model="form.name" label="Template Name" class="mb-3" dense />
+        <v-select v-model="form.category" :items="['Utility','Marketing','Authentication']" label="Category" class="mb-3" dense />
+        <v-select v-model="form.language" :items="['id','en']" label="Language" class="mb-3" dense />
 
-        <div class="d-flex justify-end mt-4 gap-2">
+        <v-text-field v-model="form.header" label="Header (optional)" class="mb-3" dense />
+        <v-textarea v-model="form.body" label="Body (required)" rows="4" class="mb-3" dense />
+        <v-text-field v-model="form.footer" label="Footer (optional)" class="mb-3" dense />
+
+        <v-textarea v-model="form.buttons" label="Buttons JSON (optional)" rows="3" hint='Example: [{"type":"quick_reply","text":"Yes"}]' class="mb-3" dense />
+
+        <div class="d-flex justify-end gap-2 mt-3">
           <v-btn variant="text" @click="modalEdit = false">Cancel</v-btn>
-          <v-btn color="primary" @click="save">Update</v-btn>
+          <v-btn color="primary" :loading="formLoading" @click="saveTemplate">Update</v-btn>
         </div>
       </v-card>
     </v-dialog>
 
-    <!-- ==================== MODAL PREVIEW ==================== -->
-    <v-dialog v-model="modalView" width="600">
+    <!-- ================= MODAL VIEW / PREVIEW (WhatsApp-like bubble) ================= -->
+    <v-dialog v-model="modalView" max-width="720">
       <v-card class="pa-4">
-        <h3 class="text-h6 mb-4 font-weight-bold">Template Preview</h3>
-
-        <p><strong>Name:</strong> {{ selected?.name }}</p>
-        <p><strong>Category:</strong> {{ selected?.category }}</p>
-        <p><strong>Status:</strong>
-          <v-chip :color="statusColor(selected?.status)" size="small" dark>
-            {{ selected?.status }}
-          </v-chip>
-        </p>
-
-        <v-sheet elevation="1" class="pa-4" style="border-radius:12px; background:#f4f7fb;">
-          <div style="background:white; padding:12px 16px; border-radius:12px;">
-            <p v-html="selected?.body"></p>
+        <div class="d-flex justify-space-between align-center mb-3">
+          <div>
+            <h3 class="text-h6 mb-1">Template Preview</h3>
+            <div class="text-body-2 text-grey-darken-1">{{ selected?.name || '' }} — {{ selected?.category || '' }}</div>
           </div>
-        </v-sheet>
 
-        <!-- Workflow actions -->
-        <div class="d-flex justify-end mt-4 gap-2">
-          <v-btn
-            v-if="selected?.status === 'draft'"
-            color="blue"
-            @click="submitForApproval(selected.id)"
-          >
-            Submit for Approval
-          </v-btn>
+          <div>
+            <v-chip :color="statusColor(selected?.status)" class="text-white">{{ selected?.status }}</v-chip>
+          </div>
+        </div>
 
-          <v-btn
-            v-if="selected?.status === 'submitted'"
-            color="green"
-            @click="approveTemplate(selected.id)"
-          >
-            Approve
-          </v-btn>
+        <!-- Visual preview -->
+        <div class="preview-area pa-4">
+          <!-- optional header (small) -->
+          <div v-if="selected?.header" class="preview-header">{{ selected.header }}</div>
 
-          <v-btn
-            v-if="selected?.status === 'submitted'"
-            color="red"
-            @click="rejectTemplate(selected.id)"
-          >
-            Reject
-          </v-btn>
+          <!-- bubble body -->
+          <div class="wa-bubble">
+            <div class="wa-bubble-body" v-html="selected?.body"></div>
+
+            <!-- footer (small) -->
+            <div v-if="selected?.footer" class="wa-bubble-footer">{{ selected.footer }}</div>
+
+            <!-- buttons if any (simple preview) -->
+            <div v-if="selected?.buttons" class="wa-bubble-buttons">
+              <v-chip v-for="(b, idx) in (typeof selected.buttons === 'string' ? tryParseJSON(selected.buttons) || [] : (selected.buttons || []))"
+                      :key="idx"
+                      class="ma-1" small>
+                {{ b?.text || b?.title || JSON.stringify(b).slice(0,20) }}
+              </v-chip>
+            </div>
+          </div>
+        </div>
+
+        <!-- Approval notes + actions -->
+        <div class="d-flex justify-end gap-2 mt-4">
+          <v-btn v-if="selected?.status === 'draft'" color="blue" @click="submitForApproval(selected.id)">Submit for Approval</v-btn>
+
+          <v-btn v-if="selected?.status === 'submitted'" color="green" @click="approveTemplate(selected.id)">Approve</v-btn>
+          <v-btn v-if="selected?.status === 'submitted'" color="red" @click="rejectTemplate(selected.id)">Reject</v-btn>
 
           <v-btn variant="text" @click="modalView = false">Close</v-btn>
         </div>
       </v-card>
     </v-dialog>
 
-    <!-- ==================== MODAL SEND ==================== -->
-    <v-dialog v-model="modalSend" width="520">
+    <!-- ================= MODAL SEND ================= -->
+    <v-dialog v-model="modalSend" max-width="600">
       <v-card class="pa-4">
-        <h3 class="text-h6 mb-4 font-weight-bold">Send Template</h3>
+        <h3 class="text-h6 mb-2">Send Template</h3>
+        <div v-if="selected" class="mb-3 text-body-2">
+          <strong>Template:</strong> {{ selected.name }} — <small>{{ selected.language }}</small>
+        </div>
 
-        <p v-if="selected"><strong>Template:</strong> {{ selected.name }}</p>
+        <v-text-field v-model="sendForm.to" label="Phone number (e.g. 628123...)" class="mb-3" dense />
+        <v-select v-model="sendForm.language" :items="['id','en']" label="Language (override)" class="mb-3" dense />
 
-        <v-text-field v-model="sendForm.to" label="Phone number (e.g. 628123...)" class="mb-3" />
-        <v-select v-model="sendForm.language" :items="['id','en']" label="Language (override)" class="mb-3" />
+        <v-textarea v-model="sendForm.componentsJson" label="Optional components JSON (advanced)" rows="4" hint='Example: [{"type":"body","parameters":[{"type":"text","text":"Alice"}]}]' dense />
 
-        <v-textarea
-          v-model="sendForm.componentsJson"
-          label="Optional components JSON (advanced)"
-          hint='Example: [{"type":"body","parameters":[{"type":"text","text":"Alice"}]}]'
-          rows="4"
-          class="mb-3"
-        />
-
-        <div class="d-flex justify-end mt-4 gap-2">
+        <div class="d-flex justify-end gap-2 mt-4">
           <v-btn variant="text" @click="modalSend = false">Cancel</v-btn>
-          <v-btn color="primary" @click="sendTemplate">Send</v-btn>
+          <v-btn color="primary" :loading="actionLoading" @click="sendTemplate">Send</v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -415,7 +519,49 @@ onMounted(loadTemplates)
 </template>
 
 <style scoped>
-.hover-card:hover {
-  background-color: rgba(18, 131, 218, 0.07);
+.hover-row:hover {
+  background-color: rgba(18, 131, 218, 0.03);
+}
+
+/* WhatsApp-like bubble preview */
+.preview-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-header {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.wa-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wa-bubble-body {
+  max-width: 720px;
+  background: #e6f3ea; /* light green */
+  padding: 14px 16px;
+  border-radius: 14px;
+  color: #0b4a2a;
+  line-height: 1.45;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  font-size: 14px;
+}
+
+.wa-bubble-footer {
+  font-size: 12px;
+  color: #6b7280;
+  margin-left: 8px;
+}
+
+.wa-bubble-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
 }
 </style>

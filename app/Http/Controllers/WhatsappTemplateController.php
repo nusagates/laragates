@@ -3,40 +3,30 @@
 namespace App\Http\Controllers;
 
 use App\Models\WhatsappTemplate;
+use App\Models\TemplateVersion;
+use App\Models\TemplateApprovalNote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class WhatsappTemplateController extends Controller
 {
-    /**
-     * Display templates (Inertia) or JSON.
-     */
+    // UI page (Inertia)
     public function index()
     {
-        $templates = WhatsappTemplate::orderBy('updated_at', 'desc')->get();
-
-        if (request()->wantsJson()) {
-            return response()->json($templates);
-        }
-
-        return Inertia::render('Templates/Index', [
-            'templates' => $templates
-        ]);
+        // If AJAX return later via /templates-list
+        return Inertia::render('Templates/Index');
     }
 
-    /**
-     * API: list (JSON) for Vue (if you named /templates/list or /templates/all)
-     */
+    // API: return all templates as JSON for Vue
     public function list()
     {
-        return response()->json(WhatsappTemplate::orderBy('updated_at', 'desc')->get());
+        $templates = WhatsappTemplate::orderBy('updated_at','desc')->get();
+        return response()->json($templates);
     }
 
-    /**
-     * Store new template (local DB)
-     */
+    // Store
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -46,31 +36,39 @@ class WhatsappTemplateController extends Controller
             'header' => 'nullable|string',
             'body' => 'required|string',
             'footer' => 'nullable|string',
-            'buttons' => 'nullable|array',
+            'buttons' => 'nullable'
         ]);
 
-        $template = WhatsappTemplate::create($data);
+        // Normalize buttons if JSON string passed
+        if (is_string($data['buttons'] ?? null)) {
+            try { $data['buttons'] = json_decode($data['buttons'], true); } catch (\Throwable $e) { $data['buttons'] = null; }
+        }
 
-        return response()->json($template);
+        $t = WhatsappTemplate::create($data + ['status' => 'draft', 'created_by' => Auth::id()]);
+        return response()->json($t);
     }
 
-    /**
-     * Show template (Inertia or JSON)
-     */
+    // Show (return JSON for Vue)
     public function show(WhatsappTemplate $template)
     {
         if (request()->wantsJson()) {
-            return response()->json($template);
+            $versions = TemplateVersion::where('template_id',$template->id)->orderBy('created_at','desc')->get();
+            $notes = TemplateApprovalNote::where('template_id',$template->id)->orderBy('created_at','desc')->get();
+            return response()->json([
+                'template' => $template,
+                'versions' => $versions,
+                'notes' => $notes
+            ]);
         }
 
         return Inertia::render('Templates/Show', [
-            'template' => $template
+            'template' => $template,
+            'versions' => TemplateVersion::where('template_id',$template->id)->orderBy('created_at','desc')->get(),
+            'notes' => TemplateApprovalNote::where('template_id',$template->id)->orderBy('created_at','desc')->get()
         ]);
     }
 
-    /**
-     * Update
-     */
+    // Update
     public function update(Request $request, WhatsappTemplate $template)
     {
         $data = $request->validate([
@@ -80,40 +78,39 @@ class WhatsappTemplateController extends Controller
             'header' => 'nullable|string',
             'body' => 'required|string',
             'footer' => 'nullable|string',
-            'buttons' => 'nullable|array',
+            'buttons' => 'nullable'
         ]);
 
-        $template->update($data);
+        if (is_string($data['buttons'] ?? null)) {
+            try { $data['buttons'] = json_decode($data['buttons'], true); } catch (\Throwable $e) { $data['buttons'] = null; }
+        }
 
+        $template->update($data + ['created_by' => $template->created_by ?? Auth::id()]);
         return response()->json($template);
     }
 
-    /**
-     * Destroy
-     */
+    // Delete
     public function destroy(WhatsappTemplate $template)
     {
         $template->delete();
         return response()->json(['deleted' => true]);
     }
 
-    /**
-     * Sync (list from Meta) — keep existing behavior (reads templates metadata from Meta)
-     */
-    public function sync()
+    // SYNC: keep your previous implementation
+    public function sync(WhatsappTemplate $template)
     {
         $token = env('WABA_ACCESS_TOKEN');
         $phoneId = env('WABA_PHONE_NUMBER_ID');
         $version = env('WABA_API_VERSION', 'v21.0');
 
-        if (! $token || ! $phoneId) {
-            return response()->json(['error' => 'WABA credentials not configured'], 500);
+        if (!$token || !$phoneId) {
+            return response()->json(['error' => 'WABA credentials not configured'], 400);
         }
 
         $response = Http::withToken($token)->get("https://graph.facebook.com/{$version}/{$phoneId}/message_templates");
 
-        if (! $response->successful()) {
-            return response()->json(['error' => 'Failed to sync from Meta', 'details' => $response->body()], 500);
+        if (!$response->successful()) {
+            return response()->json(['error' => 'Failed to sync from Meta'], 500);
         }
 
         foreach ($response->json('data') ?? [] as $t) {
@@ -122,11 +119,11 @@ class WhatsappTemplateController extends Controller
                 [
                     'category' => $t['category'] ?? null,
                     'language' => $t['language'] ?? 'id',
-                    'status' => strtolower($t['status'] ?? 'approved'),
-                    'meta_id' => $t['id'] ?? null,
+                    'status' => strtolower($t['status']),
+                    'meta_id' => $t['id'],
                     'last_synced_at' => now(),
                     'header' => $t['components'][0]['text'] ?? null,
-                    'body' => $t['components'][1]['text'] ?? ($t['components'][0]['text'] ?? ''),
+                    'body' => $t['components'][1]['text'] ?? '',
                     'footer' => $t['components'][2]['text'] ?? null,
                     'buttons' => $t['components'][3]['buttons'] ?? null,
                 ]
@@ -136,147 +133,104 @@ class WhatsappTemplateController extends Controller
         return response()->json(['message' => 'Synced successfully']);
     }
 
-    /**
-     * SUBMIT for approval (local workflow)
-     */
+    // ---------------- workflow ----------------
+
+    // submit for approval (user)
     public function submit(WhatsappTemplate $template)
     {
         $template->update(['status' => 'submitted']);
+        TemplateApprovalNote::create([
+            'template_id' => $template->id,
+            'user_id' => Auth::id(),
+            'note' => 'Submitted for approval'
+        ]);
         return response()->json(['ok' => true]);
     }
 
-    /**
-     * Approve (local workflow)
-     */
-    public function approve(WhatsappTemplate $template)
+    // approve (superadmin)
+    public function approve(Request $request, WhatsappTemplate $template)
     {
-        $template->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => auth()->id()]);
+        $note = $request->input('note', 'Approved');
+        $template->update(['status' => 'approved', 'approved_at' => now(), 'approved_by' => Auth::id()]);
+        TemplateApprovalNote::create([
+            'template_id' => $template->id,
+            'user_id' => Auth::id(),
+            'note' => $note
+        ]);
         return response()->json(['ok' => true]);
     }
 
-    /**
-     * Reject (local workflow)
-     */
+    // reject (superadmin)
     public function reject(Request $request, WhatsappTemplate $template)
     {
-        $reason = $request->input('reason', null);
-        $template->update(['status' => 'rejected', 'workflow_notes' => $reason]);
+        $reason = $request->input('reason', 'Rejected');
+        $template->update(['status' => 'rejected']);
+        TemplateApprovalNote::create([
+            'template_id' => $template->id,
+            'user_id' => Auth::id(),
+            'note' => $reason
+        ]);
         return response()->json(['ok' => true]);
     }
 
-    /**
-     * SEND template to a phone number (via WhatsApp Cloud API).
-     *
-     * Request payload example:
-     * {
-     *   "to": "6281234567890",
-     *   "language": "id", // optional
-     *   "components": [
-     *       {"type":"header","parameters":[{"type":"text","text":"Header value"}]},
-     *       {"type":"body","parameters":[{"type":"text","text":"Alice"}]},
-     *       {"type":"button","sub_type":"quick_reply","index":0}
-     *   ]
-     * }
-     */
-    public function send(Request $request, WhatsappTemplate $template)
+    // ---------------- versions ----------------
+
+    // create version snapshot
+    public function createVersion(Request $request, WhatsappTemplate $template)
     {
-        $validator = Validator::make($request->all(), [
-            'to' => ['required','string'],
-            'language' => ['nullable','string'],
-            'components' => ['nullable','array'],
+        $data = $request->validate([
+            'header' => 'nullable|string',
+            'body' => 'required|string',
+            'footer' => 'nullable|string',
+            'buttons' => 'nullable'
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['error' => 'Validation failed','messages' => $validator->errors()], 422);
+        TemplateVersion::create([
+            'template_id' => $template->id,
+            'header' => $data['header'],
+            'body' => $data['body'],
+            'footer' => $data['footer'],
+            'buttons' => $data['buttons'] ?? null,
+            'user_id' => Auth::id(),
+            'version_label' => 'v' . (TemplateVersion::where('template_id',$template->id)->count() + 1)
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    // revert to version
+    public function revertVersion(WhatsappTemplate $template, TemplateVersion $version)
+    {
+        // only allow versions that belong to template
+        if ($version->template_id !== $template->id) {
+            return response()->json(['error' => 'Version mismatch'], 400);
         }
 
-        $to = $request->input('to');
-        $language = $request->input('language', $template->language ?? 'id');
-        $components = $request->input('components', null);
+        $template->update([
+            'header' => $version->header,
+            'body' => $version->body,
+            'footer' => $version->footer,
+            'buttons' => $version->buttons
+        ]);
 
-        // If template has meta_id, send as template message to WhatsApp Cloud API
-        $metaId = $template->meta_id;
+        TemplateApprovalNote::create([
+            'template_id' => $template->id,
+            'user_id' => Auth::id(),
+            'note' => 'Reverted to version ' . $version->id
+        ]);
 
-        $token = env('WABA_ACCESS_TOKEN');
-        $phoneId = env('WABA_PHONE_NUMBER_ID');
-        $version = env('WABA_API_VERSION', 'v21.0');
+        return response()->json(['ok' => true]);
+    }
 
-        if ($metaId && $token && $phoneId) {
-            // Build payload for template message
-            $payload = [
-                'messaging_product' => 'whatsapp',
-                'to' => $to,
-                'type' => 'template',
-                'template' => [
-                    'name' => $template->name, // If Meta expects name not metaId
-                    'language' => ['code' => $language],
-                ]
-            ];
-
-            // If components provided (overriding), attach
-            if ($components && is_array($components)) {
-                $payload['template']['components'] = $components;
-            } else {
-                // Try to prepare body parameters from placeholders {1}, {2}, ... (basic)
-                // This attempts to parse placeholders in body like {1} and send them as text params
-                preg_match_all('/\{(\d+)\}/', $template->body, $matches);
-                if (!empty($matches[1])) {
-                    $params = [];
-                    foreach ($matches[1] as $index) {
-                        $params[] = ['type' => 'text', 'text' => ""]; // placeholder empty, FE should send components ideally
-                    }
-                    if ($params) {
-                        $payload['template']['components'] = [
-                            ['type' => 'body', 'parameters' => $params]
-                        ];
-                    }
-                }
-            }
-
-            $response = Http::withToken($token)
-                ->post("https://graph.facebook.com/{$version}/{$phoneId}/messages", $payload);
-
-            if (! $response->successful()) {
-                return response()->json(['error' => 'Failed to send via WABA','details'=>$response->json()], 500);
-            }
-
-            // update last_sent_at
-            $template->update(['last_sent_at' => now()]);
-
-            return response()->json(['sent' => true, 'response' => $response->json()]);
-        }
-
-        // FALLBACK: if no meta_id / no WABA credentials -> send plain text (dev/testing)
-        try {
-            $text = $template->body;
-            // replace placeholders with nothing (since we don't have params)
-            $text = preg_replace('/\{\d+\}/', '', $text);
-
-            // If token/phoneId missing -> cannot call WABA, return fallback result
-            if (! $token || ! $phoneId) {
-                // log or simply return.
-                return response()->json(['warning' => 'WABA not configured, returning plain text payload', 'text' => $text]);
-            }
-
-            // If we have token+phoneId but meta_id missing, we send as text message using messages endpoint
-            $plainPayload = [
-                'messaging_product' => 'whatsapp',
-                'to' => $to,
-                'type' => 'text',
-                'text' => ['body' => $text],
-            ];
-
-            $response = Http::withToken($token)
-                ->post("https://graph.facebook.com/{$version}/{$phoneId}/messages", $plainPayload);
-
-            if (! $response->successful()) {
-                return response()->json(['error' => 'Failed to send plain text via WABA','details'=>$response->json()], 500);
-            }
-
-            $template->update(['last_sent_at' => now()]);
-            return response()->json(['sent' => true, 'response' => $response->json()]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'Send failed', 'message' => $e->getMessage()], 500);
-        }
+    // ---------------- notes ----------------
+    public function addNote(Request $request, WhatsappTemplate $template)
+    {
+        $data = $request->validate(['note' => 'required|string']);
+        $n = TemplateApprovalNote::create([
+            'template_id' => $template->id,
+            'user_id' => Auth::id(),
+            'note' => $data['note']
+        ]);
+        return response()->json($n);
     }
 }

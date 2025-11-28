@@ -125,6 +125,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // ⭐⭐⭐ NEW — SEND TEMPLATE ⭐⭐⭐
             Route::post('/{template}/send', [WhatsappTemplateController::class, 'send'])
                 ->name('templates.send');
+
+            // create version
+            Route::post('/{template}/versions', [WhatsappTemplateController::class, 'createVersion'])->name('templates.versions.create');
+            // revert
+            Route::post('/{template}/versions/{version}/revert', [WhatsappTemplateController::class, 'revertVersion'])->name('templates.versions.revert');
+            // notes
+            Route::post('/{template}/notes', [WhatsappTemplateController::class, 'addNote'])->name('templates.notes.add');
+            // workflow already: submit/approve/reject
+
         });
 
         /* Broadcast */
