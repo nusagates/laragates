@@ -37,16 +37,15 @@ Route::get('/', function () {
 */
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
-    Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
+    // =======================
+    //   ACCESS: ALL ROLES
+    // =======================
 
-    /*
-    |--------------------------------------------------------------------------
-    | 🔥 Heartbeat (Update Online Status)
-    |--------------------------------------------------------------------------
-    */
-    Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat'])->name('agent.heartbeat');
-    Route::post('/agent/offline', [AgentController::class, 'forceOffline'])->name('agent.forceOffline');
+    // Dashboard
+    Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
+
+    // Chat UI
+    Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
     /*
     |--------------------------------------------------------------------------
@@ -78,30 +77,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | Agents (Manage CS, Approval)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/agents', [AgentController::class, 'index'])->name('agents');
-    Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
-    Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
-    Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
-    Route::patch('/agents/{user}/status', [AgentController::class, 'updateStatus'])->name('agents.status');
-    Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-    
-    Route::middleware(['auth', 'role:admin,supervisor'])->group(function () {
-    Route::get('/agents', [AgentController::class, 'index'])->name('agents');
-    Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
-    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
-    Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings');
-});
-
-
 
     /*
     |--------------------------------------------------------------------------
-    | Tickets
+    | Ticket System (accessible by agent + superadmin)
     |--------------------------------------------------------------------------
     */
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
@@ -111,34 +90,56 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Templates UI & API
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
-    Route::prefix('templates')->group(function () {
-        Route::get('/{template}', [WhatsappTemplateController::class, 'show']);
-        Route::post('/', [WhatsappTemplateController::class, 'store']);
-        Route::put('/{template}', [WhatsappTemplateController::class, 'update']);
-        Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy']);
-        Route::post('/sync', [WhatsappTemplateController::class, 'sync']);
+
+    // ============================
+    //   ACCESS: SUPERADMIN ONLY
+    // ============================
+
+    Route::middleware(['role:superadmin'])->group(function () {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Agent Management
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/agents', [AgentController::class, 'index'])->name('agents');
+        Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+        Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
+        Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
+        Route::patch('/agents/{user}/status', [AgentController::class, 'updateStatus'])->name('agents.status');
+        Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Templates
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/templates', fn () => Inertia::render('Templates/Index'))->name('templates');
+
+        Route::prefix('templates')->group(function () {
+            Route::get('/{template}', [WhatsappTemplateController::class, 'show']);
+            Route::post('/', [WhatsappTemplateController::class, 'store']);
+            Route::put('/{template}', [WhatsappTemplateController::class, 'update']);
+            Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy']);
+            Route::post('/sync', [WhatsappTemplateController::class, 'sync']);
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Broadcast
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
+        Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Settings
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings');
+
     });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Broadcast
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
-    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Settings
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/settings', fn () => Inertia::render('Settings/Index'))->name('settings');
 });
 
 /*
