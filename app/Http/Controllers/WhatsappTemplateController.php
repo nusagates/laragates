@@ -233,4 +233,42 @@ class WhatsappTemplateController extends Controller
         ]);
         return response()->json($n);
     }
+
+    /**
+ * Sync single template from WABA into DB (by remote_id or name)
+ * POST /templates/{template}/sync
+ */
+public function sync(Request $request, \App\Models\WhatsappTemplate $template)
+{
+    $this->authorize('sync', $template); // optional, require admin
+
+    $remoteIdOrName = $template->remote_id ?? $template->name;
+
+    try {
+        $apiTpl = app(\App\Services\WabaService::class)->getTemplate($remoteIdOrName);
+
+        if (!$apiTpl) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found in WABA API for remote id/name: ' . $remoteIdOrName
+            ], 404);
+        }
+
+        $payload = app(\App\Services\WabaService::class)->normalizeTemplatePayload($apiTpl);
+
+        $template->update($payload);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Template synced.',
+            'template' => $template->fresh()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Sync error: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
 }

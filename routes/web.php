@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BroadcastController;
+use App\Http\Controllers\BroadcastApprovalController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WabaWebhookController;
 use App\Http\Controllers\AgentController;
@@ -45,7 +46,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))
         ->name('chat');
 
-    /* Chat Advanced API */
+    /*
+    |--------------------------------------------------------------------------
+    | Chat Advanced API
+    |--------------------------------------------------------------------------
+    */
     Route::prefix('chat')->group(function () {
 
         // Sessions
@@ -69,7 +74,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
     });
 
-    /* Ticketing System */
+    /*
+    |--------------------------------------------------------------------------
+    | Ticketing System
+    |--------------------------------------------------------------------------
+    */
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
     Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
     Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
@@ -84,7 +93,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     */
     Route::middleware(['role:superadmin'])->group(function () {
 
-        /* Agent Management */
+        /*
+        |--------------------------------------------------------------------------
+        | Agent Management
+        |--------------------------------------------------------------------------
+        */
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
         Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
         Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
@@ -119,30 +132,53 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/{template}/approve', [WhatsappTemplateController::class, 'approve'])->name('templates.approve');
             Route::post('/{template}/reject', [WhatsappTemplateController::class, 'reject'])->name('templates.reject');
 
-            // Sync ke Meta
+            // Sync ke META
             Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync'])->name('templates.sync');
 
-            // ⭐⭐⭐ NEW — SEND TEMPLATE ⭐⭐⭐
+            // Send Template
             Route::post('/{template}/send', [WhatsappTemplateController::class, 'send'])
                 ->name('templates.send');
 
-            // create version
+            // Versions
             Route::post('/{template}/versions', [WhatsappTemplateController::class, 'createVersion'])->name('templates.versions.create');
-            // revert
             Route::post('/{template}/versions/{version}/revert', [WhatsappTemplateController::class, 'revertVersion'])->name('templates.versions.revert');
-            // notes
             Route::post('/{template}/notes', [WhatsappTemplateController::class, 'addNote'])->name('templates.notes.add');
-            // workflow already: submit/approve/reject
 
         });
 
-        /* Broadcast */
-        Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
-        Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
+        /*
+        |--------------------------------------------------------------------------
+        | BROADCAST MODULE (Main Features + Workflow Approval)
+        |--------------------------------------------------------------------------
+        */
 
-        /* Settings */
-        Route::get('/settings', fn () => Inertia::render('Settings/Index'))
-            ->name('settings');
+        // MAIN PAGE
+        Route::get('/broadcast', [BroadcastController::class, 'index'])
+            ->name('broadcast');
+
+        // CREATE CAMPAIGN (draft)
+        Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])
+            ->name('broadcast.store');
+
+        // Upload CSV/Excel Targets
+        Route::post('/broadcast/campaigns/{campaign}/upload-targets',
+            [BroadcastController::class, 'uploadTargets']
+        )->name('broadcast.upload-targets');
+
+        // Request Approval (Agent)
+        Route::post('/broadcast/{campaign}/request-approval',
+            [BroadcastApprovalController::class, 'requestApproval']
+        )->name('broadcast.request-approval');
+
+        // Approve Campaign (Admin)
+        Route::post('/broadcast/{campaign}/approve',
+            [BroadcastApprovalController::class, 'approve']
+        )->name('broadcast.approve');
+
+        // Reject Campaign (Admin)
+        Route::post('/broadcast/{campaign}/reject',
+            [BroadcastApprovalController::class, 'reject']
+        )->name('broadcast.reject');
     });
 });
 
