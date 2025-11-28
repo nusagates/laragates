@@ -1,42 +1,144 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head, usePage, router } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import axios from 'axios'
 
 const page = usePage()
 
+// props from server
 const templates = computed(() => page.props.templates || [])
 const history   = computed(() => page.props.history || [])
 
-// form state
+// form state (keep your original names)
 const form = ref({
   name: '',
   template_id: null,
-  audience_type: 'csv',      // 'all' | 'csv' (sementara kita pakai csv dulu)
+  audience_type: 'csv',      // 'all' | 'csv'
   schedule_type: 'now',      // 'now' | 'later'
   send_at: null,
   csv_file: null,
 })
 
+// keep existing state variables
 const loading = ref(false)
 const errors  = ref({})
 
-// preview
+// premium UI state
+const csvFileName = ref('')
+const dragActive = ref(false)
+const csvPreview = ref({ count: null, sample: [], errors: [] })
+const uploadProgress = ref(0)
+const uploading = ref(false)
+const createdCampaignId = ref(null)
+
+// helper: selected template (kept)
 const selectedTemplate = computed(() =>
   templates.value.find(t => t.id === form.value.template_id) || null
 )
 
-function onCsvChange(e) {
-  const file = e.target.files[0]
-  form.value.csv_file = file ?? null
+function fieldError(name) {
+  return errors.value[name]?.[0] || ''
 }
 
+// ---------------- CSV handling (simple, no extra lib) ----------------
+function onCsvChange(e) {
+  const file = e.target.files?.[0] ?? null
+  if (!file) return
+  handleFile(file)
+}
+
+function onDrop(e) {
+  dragActive.value = false
+  const file = e.dataTransfer.files?.[0] ?? null
+  if (file) handleFile(file)
+}
+
+function onDragEnter() { dragActive.value = true }
+function onDragLeave() { dragActive.value = false }
+
+function handleFile(file) {
+  csvPreview.value = { count: null, sample: [], errors: [] }
+  form.value.csv_file = file
+  csvFileName.value = file.name
+
+  const name = (file.name || '').toLowerCase()
+  if (!name.endsWith('.csv') && !name.endsWith('.txt')) {
+    csvPreview.value.errors.push('File harus berekstensi .csv atau .txt')
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    const txt = String(ev.target.result || '')
+    // split lines, trim, remove empty
+    const lines = txt.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length)
+    // detect header if first line contains letters besides numbers and commas
+    let start = 0
+    if (lines.length && /[a-zA-Z]/.test(lines[0])) start = 1
+
+    const parsed = []
+    const errs = []
+    for (let i = start; i < Math.min(lines.length, 2000); i++) { // limit for preview/perf
+      const line = lines[i]
+      const cols = line.split(',').map(c => c.trim())
+      if (cols.length === 1) {
+        const phone = cols[0].replace(/\s+/g, '')
+        if (/^\d{6,15}$/.test(phone)) {
+          parsed.push({ phone })
+        } else {
+          errs.push(`baris ${i+1}: nomor tidak valid (${cols[0]})`)
+        }
+      } else {
+        // try name,phone,variables
+        const obj = { name: cols[0] || '', phone: (cols[1] || '').replace(/\s+/g, '') }
+        if (cols[2]) {
+          try {
+            obj.variables = JSON.parse(cols[2])
+          } catch (e) {
+            obj.variables = []
+            errs.push(`baris ${i+1}: kolom variables bukan JSON valid`)
+          }
+        } else obj.variables = []
+        if (/^\d{6,15}$/.test(obj.phone)) {
+          parsed.push(obj)
+        } else {
+          errs.push(`baris ${i+1}: nomor tidak valid (${cols[1] || ''})`)
+        }
+      }
+      if (parsed.length >= 6) { /* only keep sample */ }
+    }
+
+    csvPreview.value.count = Math.max(0, lines.length - start)
+    csvPreview.value.sample = parsed.slice(0, 6)
+    csvPreview.value.errors = errs
+  }
+  reader.onerror = () => {
+    csvPreview.value.errors.push('Tidak bisa membaca file CSV')
+  }
+  reader.readAsText(file)
+}
+
+// ---------------- highlight template variables ----------------
+function highlightVars(text) {
+  if (!text) return ''
+  // escape HTML basic
+  const esc = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return esc.replace(/\{\{(\d+)\}\}/g, (m, p1) =>
+    `<span style="display:inline-block;padding:2px 6px;background:#FFF7C6;color:#8A6D00;border-radius:6px;margin-right:4px">var${p1}</span>`
+  ).replace(/\n/g, '<br/>')
+}
+
+// ---------------- create campaign (preserve your original startBroadcast but enhance for CSV auto-upload) ----------------
 async function startBroadcast() {
   loading.value = true
-  errors.value  = {}
+  errors.value = {}
 
   try {
+    // 1) create campaign (same route)
     const data = new FormData()
     data.append('name', form.value.name)
     data.append('template_id', form.value.template_id || '')
@@ -45,13 +147,29 @@ async function startBroadcast() {
     if (form.value.schedule_type === 'later' && form.value.send_at) {
       data.append('send_at', form.value.send_at)
     }
+
+    const res = await axios.post(route('broadcast.store'), data)
+    // backend may return campaign object or id
+    const camp = res.data.campaign ?? res.data
+    const campaignId = camp.id ?? camp
+
+    createdCampaignId.value = campaignId
+
+    // 2) if audience csv provided -> upload targets
     if (form.value.audience_type === 'csv' && form.value.csv_file) {
-      data.append('csv_file', form.value.csv_file)
+      await uploadTargets(campaignId, form.value.csv_file)
     }
 
-    await axios.post(route('broadcast.store'), data)
+    // 3) after upload -> auto submit for approval (existing flow)
+    // call request-approval endpoint
+    try {
+      await axios.post(route('broadcast.request-approval', { campaign: campaignId }), { notes: 'Submitted from UI' })
+    } catch (e) {
+      // not fatal — just warn
+      console.warn('request approval failed', e?.response?.data || e.message)
+    }
 
-    // reload page inertia
+    // finally redirect / refresh
     router.visit(route('broadcast'), { preserveScroll: true })
 
   } catch (err) {
@@ -66,8 +184,34 @@ async function startBroadcast() {
   }
 }
 
-function fieldError(name) {
-  return errors.value[name]?.[0] || ''
+// ---------------- upload targets with progress ----------------
+async function uploadTargets(campaignId, file) {
+  uploading.value = true
+  uploadProgress.value = 0
+
+  const url = `/broadcast/campaigns/${campaignId}/upload-targets`
+  const fd = new FormData()
+  fd.append('file', file)
+
+  try {
+    const res = await axios.post(url, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress(progressEvent) {
+        if (progressEvent.lengthComputable) {
+          uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        }
+      }
+    })
+    // optionally show success
+    // res.data may contain 'added' count
+  } catch (e) {
+    console.error('uploadTargets error', e)
+    // bubble up a field error
+    errors.value.csv_file = [ (e.response?.data?.message ?? 'Upload targets failed') ]
+    throw e
+  } finally {
+    uploading.value = false
+  }
 }
 </script>
 
@@ -77,163 +221,159 @@ function fieldError(name) {
   <AdminLayout>
     <template #title>Broadcast</template>
 
-    <v-row>
+    <div class="pa-4">
+      <div class="d-flex">
+        <!-- LEFT: form -->
+        <div style="flex: 2; margin-right: 20px;">
+          <v-card elevation="2" class="pa-4" style="border-radius:12px;">
+            <h3 class="text-h6 font-weight-bold mb-1">Create Broadcast Campaign</h3>
+            <p class="text-body-2 text-grey-darken-1 mb-4">Kirim pesan template WhatsApp ke banyak pelanggan sekaligus.</p>
 
-      <!-- FORM KIRI -->
-      <v-col cols="12" md="8">
-        <v-card elevation="2" class="pa-4">
-
-          <h3 class="text-h6 font-weight-bold mb-1">Create Broadcast Campaign</h3>
-          <p class="text-body-2 text-grey-darken-1 mb-4">
-            Kirim pesan template WhatsApp ke banyak pelanggan sekaligus.
-          </p>
-
-          <!-- Campaign Name -->
-          <v-text-field
-            v-model="form.name"
-            label="Campaign Name"
-            density="comfortable"
-            :error-messages="fieldError('name')"
-            class="mb-4"
-          />
-
-          <!-- Template select -->
-          <v-select
-            v-model="form.template_id"
-            :items="templates"
-            item-title="name"
-            item-value="id"
-            label="Template Message"
-            density="comfortable"
-            :error-messages="fieldError('template_id')"
-            class="mb-4"
-          />
-
-          <!-- Audience -->
-          <h4 class="text-subtitle-2 mb-2">Audience</h4>
-
-          <v-radio-group
-            v-model="form.audience_type"
-            inline
-            :error-messages="fieldError('audience_type')"
-          >
-            <v-radio label="All Customers (TODO)" value="all" />
-            <v-radio label="Upload CSV" value="csv" />
-          </v-radio-group>
-
-          <div v-if="form.audience_type === 'csv'" class="mt-2 mb-4">
-            <p class="text-body-2 mb-1">
-              Upload file CSV berisi daftar nomor WhatsApp (1 kolom, tanpa header). Contoh:
-              <code>6281234567890</code>
-            </p>
-            <v-file-input
-              accept=".csv,text/csv"
-              label="CSV File"
-              density="comfortable"
-              prepend-icon="mdi-file-delimited"
-              @change="onCsvChange"
-              :error-messages="fieldError('csv_file')"
+            <!-- Campaign Name -->
+            <v-text-field
+              v-model="form.name"
+              label="Campaign Name"
+              dense
+              :error-messages="fieldError('name')"
+              class="mb-4"
             />
-          </div>
 
-          <!-- Schedule -->
-          <h4 class="text-subtitle-2 mt-4 mb-2">Schedule</h4>
+            <!-- Template select -->
+            <v-select
+              v-model="form.template_id"
+              :items="templates"
+              item-title="name"
+              item-value="id"
+              label="Template Message"
+              dense
+              :error-messages="fieldError('template_id')"
+              class="mb-4"
+            />
 
-          <v-radio-group
-            v-model="form.schedule_type"
-            inline
-            :error-messages="fieldError('schedule_type')"
-          >
-            <v-radio label="Send Now" value="now" />
-            <v-radio label="Schedule Later" value="later" />
-          </v-radio-group>
+            <!-- Audience -->
+            <h4 class="text-subtitle-2 mb-2">Audience</h4>
+            <v-radio-group v-model="form.audience_type" inline :error-messages="fieldError('audience_type')">
+              <v-radio label="All Customers (TODO)" value="all" />
+              <v-radio label="Upload CSV" value="csv" />
+            </v-radio-group>
 
-          <v-text-field
-            v-if="form.schedule_type === 'later'"
-            v-model="form.send_at"
-            type="datetime-local"
-            label="Send At"
-            density="comfortable"
-            class="mt-2"
-            :error-messages="fieldError('send_at')"
-          />
+            <!-- Drag & Drop CSV box -->
+            <div v-if="form.audience_type === 'csv'" class="mt-3 mb-4">
+              <p class="text-body-2 mb-1">Upload file CSV berisi daftar nomor WhatsApp (1 kolom, tanpa header). Contoh: <code>6281234567890</code></p>
 
-          <div class="d-flex justify-end mt-6 ga-2">
-            <v-btn variant="text" @click="router.visit(route('broadcast'))">
-              Cancel
-            </v-btn>
-            <v-btn
-              color="primary"
-              :loading="loading"
-              @click="startBroadcast"
-            >
-              START BROADCAST
-            </v-btn>
-          </div>
-        </v-card>
-      </v-col>
+              <div
+                class="dropzone-box"
+                :class="{ active: dragActive }"
+                @dragenter.prevent="onDragEnter"
+                @dragleave.prevent="onDragLeave"
+                @dragover.prevent
+                @drop.prevent="onDrop"
+              >
+                <div class="d-flex align-center" style="gap:12px; flex-direction:column;">
+                  <v-icon size="36">mdi-upload</v-icon>
+                  <div class="text-body-2">Drag & drop CSV here, or click to browse</div>
+                  <v-btn small variant="tonal" @click="$refs.csvInput.click()">Choose File</v-btn>
+                  <input ref="csvInput" type="file" accept=".csv,text/csv" class="d-none" @change="onCsvChange" />
+                  <div v-if="csvFileName" class="text-caption mt-2"><strong>Selected:</strong> {{ csvFileName }}</div>
+                  <div v-if="fieldError('csv_file')" class="text-caption red--text mt-2">{{ fieldError('csv_file') }}</div>
+                </div>
+              </div>
 
-      <!-- PANEL KANAN: Preview + History -->
-      <v-col cols="12" md="4">
-
-        <v-card elevation="2" class="pa-4 mb-4">
-          <h4 class="text-subtitle-1 font-weight-bold mb-2">
-            Selected Template Preview
-          </h4>
-
-          <v-sheet
-            class="pa-3 mt-2"
-            color="grey-lighten-4"
-            style="border-radius: 12px;"
-          >
-            <div v-if="selectedTemplate">
-              <strong>{{ selectedTemplate.name }}</strong>
-              <p class="text-body-2 mt-2">
-                {{ selectedTemplate.body || 'Template body preview.' }}
-              </p>
-            </div>
-            <div v-else class="text-body-2 text-grey-darken-1">
-              Pilih template untuk melihat preview.
-            </div>
-          </v-sheet>
-        </v-card>
-
-        <v-card elevation="2" class="pa-4">
-          <h4 class="text-subtitle-1 font-weight-bold mb-2">
-            History
-          </h4>
-
-          <v-table density="compact">
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Sent</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!history.length">
-                <td colspan="3" class="text-center text-body-2 py-4">
-                  Belum ada riwayat broadcast.
-                </td>
-              </tr>
-              <tr v-for="h in history" :key="h.id">
-                <td>
-                  <div class="text-body-2">{{ h.name }}</div>
-                  <div class="text-caption text-grey-darken-1">
-                    {{ h.template }}
+              <!-- Preview + errors -->
+              <div v-if="csvPreview.count !== null" class="mt-3">
+                <div class="text-caption">Rows parsed: <strong>{{ csvPreview.count }}</strong></div>
+                <div v-if="csvPreview.sample.length" class="mt-2" style="background:#fafafa;border:1px solid #eee;padding:8px;border-radius:8px;">
+                  <div v-for="(r, idx) in csvPreview.sample" :key="idx" style="font-size:13px;padding:2px 0;border-bottom:1px dashed #eee;">
+                    {{ idx+1 }}. {{ JSON.stringify(r) }}
                   </div>
-                </td>
-                <td class="text-body-2">
-                  {{ h.sent }} <span v-if="h.failed">/ {{ h.failed }} failed</span>
-                </td>
-                <td class="text-body-2">{{ h.date }}</td>
-              </tr>
-            </tbody>
-          </v-table>
-        </v-card>
+                </div>
+                <div v-if="csvPreview.errors.length" class="mt-2 red--text" style="font-size:13px;">
+                  <div v-for="(err, i) in csvPreview.errors" :key="i">{{ err }}</div>
+                </div>
+              </div>
+            </div>
 
-      </v-col>
-    </v-row>
+            <!-- Schedule -->
+            <h4 class="text-subtitle-2 mt-3 mb-2">Schedule</h4>
+            <v-radio-group v-model="form.schedule_type" inline :error-messages="fieldError('schedule_type')">
+              <v-radio label="Send Now" value="now" />
+              <v-radio label="Schedule Later" value="later" />
+            </v-radio-group>
+
+            <v-text-field
+              v-if="form.schedule_type === 'later'"
+              v-model="form.send_at"
+              type="datetime-local"
+              label="Send At"
+              dense
+              class="mt-2"
+              :error-messages="fieldError('send_at')"
+            />
+
+            <!-- Buttons -->
+            <div class="d-flex justify-end mt-6" style="gap:10px">
+              <v-btn variant="text" @click="router.visit(route('broadcast'))">Cancel</v-btn>
+              <v-btn color="primary" :loading="loading" @click="startBroadcast">START BROADCAST</v-btn>
+            </div>
+
+            <!-- Upload progress -->
+            <div v-if="uploading" class="mt-4">
+              <div style="height:8px;background:#eee;border-radius:6px;overflow:hidden">
+                <div :style="{ width: uploadProgress + '%', background: '#4caf50', height: '8px' }"></div>
+              </div>
+              <div class="text-caption mt-2">Uploading... {{ uploadProgress }}%</div>
+            </div>
+          </v-card>
+        </div>
+
+        <!-- RIGHT: preview + history -->
+        <div style="flex: 1;">
+          <v-card elevation="2" class="pa-4 mb-4" style="border-radius:12px;">
+            <h4 class="text-subtitle-1 font-weight-bold mb-2">Selected Template Preview</h4>
+            <v-sheet class="pa-3 mt-2" color="grey-lighten-4" style="border-radius:12px;">
+              <div v-if="selectedTemplate">
+                <div class="font-weight-medium">{{ selectedTemplate.name }}</div>
+                <div class="text-body-2 mt-2" v-html="highlightVars(selectedTemplate.body)"></div>
+                <div class="text-caption mt-2">Variables: {{ (selectedTemplate.body || '').match(/\{\{\d+\}\}/g)?.length ?? 0 }}</div>
+                <div class="text-caption mt-1">Last synced: {{ selectedTemplate.last_synced_at ?? '-' }}</div>
+              </div>
+              <div v-else class="text-body-2 text-grey-darken-1">Pilih template untuk melihat preview.</div>
+            </v-sheet>
+          </v-card>
+
+          <v-card elevation="2" class="pa-4" style="border-radius:12px;">
+            <h4 class="text-subtitle-1 font-weight-bold mb-2">History</h4>
+            <v-table density="compact">
+              <thead>
+                <tr><th>Campaign</th><th>Sent</th><th>Date</th></tr>
+              </thead>
+              <tbody>
+                <tr v-if="!history.length"><td colspan="3" class="text-center">Belum ada riwayat broadcast.</td></tr>
+                <tr v-for="h in history" :key="h.id">
+                  <td><strong>{{ h.name }}</strong><div class="text-caption">{{ h.template }}</div></td>
+                  <td>{{ h.sent }} <span v-if="h.failed">/ {{ h.failed }} failed</span></td>
+                  <td>{{ h.date }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-card>
+        </div>
+      </div>
+    </div>
   </AdminLayout>
 </template>
+
+<style scoped>
+.dropzone-box {
+  border: 2px dashed #9e9e9e;
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+  transition: all .15s;
+  background: #fff;
+}
+.dropzone-box.active {
+  border-color: #1976d2;
+  background: #e8f3ff;
+}
+</style>
