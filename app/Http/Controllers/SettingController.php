@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Setting;
+use App\Models\AppSetting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -10,55 +10,77 @@ class SettingController extends Controller
 {
     public function index()
     {
-        $setting = Setting::first();
-        
+        $setting = AppSetting::first();
+
         return Inertia::render('Settings/Index', [
             'settings' => $setting
         ]);
     }
 
+    /* ------------------- General Tab -------------------- */
     public function saveGeneral(Request $request)
     {
-        $request->validate([
-            'company_name' => 'required',
-            'timezone' => 'required'
+        $data = $request->validate([
+            'company_name' => 'required|string',
+            'timezone' => 'required|string',
         ]);
 
-        $setting = Setting::first();
-        $setting->update([
-            'company_name' => $request->company_name,
-            'timezone' => $request->timezone
-        ]);
+        $setting = AppSetting::first();
+        $setting->update($data);
 
         return back()->with('success', 'General settings updated');
     }
 
-    public function saveWhatsApp(Request $request)
+    /* ------------------- WABA API Tab -------------------- */
+    public function saveWaba(Request $request)
     {
-        $request->validate([
-            'wa_phone_number' => 'required',
-            'wa_webhook_url' => 'required',
-            'wa_api_key' => 'required',
+        $data = $request->validate([
+            'wa_phone' => 'nullable|string',
+            'wa_webhook' => 'nullable|string',
+            'wa_api_key' => 'nullable|string',
         ]);
 
-        $setting = Setting::first();
-        $setting->update([
-            'wa_phone_number' => $request->wa_phone_number,
-            'wa_webhook_url' => $request->wa_webhook_url,
-            'wa_api_key' => $request->wa_api_key
-        ]);
+        $setting = AppSetting::first();
+        $setting->update($data);
 
-        return back()->with('success', 'WhatsApp API updated');
+        return back()->with('success', 'WABA API settings updated');
     }
 
+    public function testWebhook()
+    {
+        $setting = AppSetting::first();
+        $url = $setting->wa_webhook;
+
+        if (!$url) {
+            return response()->json(['success' => false, 'message' => 'Webhook URL not set']);
+        }
+
+        try {
+            $res = @file_get_contents($url);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Webhook reachable'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Webhook unreachable: '.$e->getMessage()
+            ]);
+        }
+    }
+
+    /* ------------------- Preferences Tab -------------------- */
     public function savePreferences(Request $request)
     {
-        $setting = Setting::first();
-        $setting->update([
-            'notif_sound' => $request->notif_sound ?? false,
-            'notif_desktop' => $request->notif_desktop ?? false,
-            'auto_assign' => $request->auto_assign ?? false,
+        $data = $request->validate([
+            'notif_sound' => 'boolean',
+            'notif_desktop' => 'boolean',
+            'auto_assign_ticket' => 'boolean',
         ]);
+
+        $setting = AppSetting::first();
+        $setting->update($data);
 
         return back()->with('success', 'Preferences updated');
     }

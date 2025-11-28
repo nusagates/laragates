@@ -7,6 +7,7 @@ use App\Http\Controllers\WabaWebhookController;
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\WhatsappTemplateController;
+use App\Http\Controllers\SettingController;
 
 // Chat Advanced
 use App\Http\Controllers\Api\Chat\ChatSessionController;
@@ -100,6 +101,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::middleware(['role:superadmin'])->group(function () {
+        // Broadcast reports (Superadmin)
+    Route::get('/broadcast/report', [\App\Http\Controllers\BroadcastReportController::class, 'index'])
+           ->name('broadcast.report.index');
+
+    Route::get('/broadcast/report/{campaign}', [\App\Http\Controllers\BroadcastReportController::class, 'show'])
+           ->name('broadcast.report.show');
+
 
         /*
         |--------------------------------------------------------------------------
@@ -118,9 +126,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         | Settings Page (FIXED — sebelumnya menyebabkan 404)
         |--------------------------------------------------------------------------
         */
-        Route::get('/settings', function () {
-            return Inertia::render('Settings/Index');
-        })->name('settings');
+        Route::middleware(['role:superadmin'])->group(function () {
+
+        Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+
+        Route::post('/settings/general', [SettingController::class, 'saveGeneral'])->name('settings.general');
+        Route::post('/settings/waba', [SettingController::class, 'saveWaba'])->name('settings.waba');
+        Route::post('/settings/preferences', [SettingController::class, 'savePreferences'])->name('settings.preferences');
+
+        Route::get('/settings/test-webhook', [SettingController::class, 'testWebhook'])
+             ->name('settings.testWebhook');
+});
 
         /*
         |--------------------------------------------------------------------------
@@ -196,7 +212,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             [BroadcastApprovalController::class, 'reject']
         )->name('broadcast.reject');
     });
-});
+}); 
+
+    // BROADCAST REPORT
+    Route::get('/broadcast/report', [BroadcastController::class, 'report'])
+       ->name('broadcast.report');
+
 
 /*
 |--------------------------------------------------------------------------

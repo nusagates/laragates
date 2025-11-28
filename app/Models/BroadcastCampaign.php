@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
 class BroadcastCampaign extends Model
 {
@@ -82,4 +83,34 @@ class BroadcastCampaign extends Model
     {
         return $this->status === 'running';
     }
+
+    public function scopeForReport(Builder $q)
+    {
+        return $q->with('template')->withCount('targets');
+    }
+
+    // convenience accessor for summary (optional)
+    public function getSummaryAttribute()
+   {
+      return [
+         'id' => $this->id,
+         'name' => $this->name,
+         'template' => $this->template?->name,
+         'total_targets' => $this->total_targets,
+         'sent_count' => (int)$this->sent_count,
+         'failed_count' => (int)$this->failed_count,
+         'status' => $this->status,
+         'send_at' => $this->send_at,
+         'created_at' => $this->created_at,
+    ];
+    }
+
+    public function isScheduled()
+{
+    return $this->status === 'scheduled'
+        && $this->schedule_type === 'later'
+        && $this->send_now == 0
+        && $this->send_at <= now();
+}
+
 }

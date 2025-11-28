@@ -11,9 +11,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Jalankan Super Admin Seeder
         $this->call([
             SuperAdminSeeder::class,
+            BroadcastDemoSeeder::class, // <–– tambahkan di sini
         ]);
     }
 }

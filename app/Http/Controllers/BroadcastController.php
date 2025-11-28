@@ -6,6 +6,7 @@ use App\Models\BroadcastCampaign;
 use App\Models\BroadcastTarget;
 use App\Models\WhatsappTemplate;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
@@ -207,4 +208,27 @@ class BroadcastController extends Controller
 
         return null;
     }
+
+    public function report(Request $request)
+{
+    $query = BroadcastCampaign::with('template', 'creator')
+        ->orderBy('created_at', 'desc');
+
+    // Optional filters
+    if ($search = $request->input('search')) {
+        $query->where('name', 'like', "%{$search}%");
+    }
+
+    if ($status = $request->input('status')) {
+        $query->where('status', $status);
+    }
+
+    $campaigns = $query->paginate(10)->withQueryString();
+
+    return Inertia::render('Broadcast/Report', [
+        'campaigns' => $campaigns,
+        'filters'   => $request->only('search', 'status'),
+    ]);
+    }
+
 }

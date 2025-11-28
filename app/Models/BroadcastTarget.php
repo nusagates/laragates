@@ -9,22 +9,21 @@ class BroadcastTarget extends Model
 {
     use HasFactory;
 
+    protected $table = 'broadcast_targets';
+
     protected $fillable = [
         'broadcast_campaign_id',
         'phone',
-        'name',
         'variables',
         'status',
         'wa_message_id',
         'error_message',
         'sent_at',
-        'response_log',
     ];
 
     protected $casts = [
         'variables' => 'array',
         'sent_at' => 'datetime',
-        'response_log' => 'array',
     ];
 
     public function campaign()
