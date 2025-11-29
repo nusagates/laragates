@@ -18,6 +18,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\BroadcastApprovalController;
 use App\Http\Controllers\BroadcastReportController;
+use App\Http\Controllers\AnalyticsController;
 
 // Chat Advanced
 use App\Http\Controllers\Api\Chat\ChatSessionController;
@@ -52,12 +53,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
     | Dashboard + Chat UI
     |--------------------------------------------------------------------------
     */
-    Route::get('/dashboard', fn() => Inertia::render('Dashboard'))
-        ->name('dashboard');
+    Route::get('/dashboard', fn() => Inertia::render('Dashboard'))->name('dashboard');
+    Route::get('/chat', fn() => Inertia::render('Chat/Index'))->name('chat');
 
-    Route::get('/chat', fn() => Inertia::render('Chat/Index'))
-        ->name('chat');
 
+    /*
+    |--------------------------------------------------------------------------
+    | Analytics
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/analytics', function () {
+        return Inertia::render('Analytics/AnalyticsDashboard');
+    })->name('analytics');
+
+    Route::prefix('analytics')->group(function () {
+        Route::get('/metrics', [AnalyticsController::class, 'metrics']);
+        Route::get('/trends', [AnalyticsController::class, 'trends']);
+        Route::get('/agents', [AnalyticsController::class, 'agents']);
+        Route::get('/response-time', [AnalyticsController::class, 'responseTime']);
+        Route::get('/peakhours', [AnalyticsController::class, 'peakHours']);
+        Route::get('/sessions', [AnalyticsController::class, 'sessions']);
+    });
+
+    // OPTIONAL
+    Route::get('/analytics/sessions', function () {
+        return DB::table('sessions')->where('status', 'active')->get();
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -65,7 +86,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('chat')->group(function () {
-
         Route::get('/sessions', [ChatSessionController::class, 'index']);
         Route::get('/sessions/{session}', [ChatSessionController::class, 'show']);
         Route::post('/sessions/{session}/pin', [ChatSessionController::class, 'pin']);
@@ -99,30 +119,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | *** FIX HERE ***
+    | MAKE templates-list PUBLIC FOR BROADCAST
+    |--------------------------------------------------------------------------
+    */
+
+    // 🔥 DULUNYA hanya superadmin → sekarang semua user yang login bisa akses
+    Route::get('/templates-list', [WhatsappTemplateController::class, 'list'])
+        ->name('templates.list');
+
+
+    /*
+    |--------------------------------------------------------------------------
     | SUPERADMIN ONLY
     |--------------------------------------------------------------------------
     */
     Route::middleware(['role:superadmin'])->group(function () {
 
-        /*
-        |--------------------------------------------------------------------------
-        | Broadcast Report
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/broadcast/report',
-            [BroadcastReportController::class, 'index']
-        )->name('broadcast.report.index');
-
-        Route::get('/broadcast/report/{campaign}',
-            [BroadcastReportController::class, 'show']
-        )->name('broadcast.report.show');
+        // Broadcast Report
+        Route::get('/broadcast/report', [BroadcastReportController::class, 'index'])
+            ->name('broadcast.report.index');
+        Route::get('/broadcast/report/{campaign}', [BroadcastReportController::class, 'show'])
+            ->name('broadcast.report.show');
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Agent Management
-        |--------------------------------------------------------------------------
-        */
+        // Agent Management
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
         Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
         Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
@@ -130,23 +151,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/agents/{user}/status', [AgentController::class, 'updateStatus'])->name('agents.status');
         Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
 
+        Route::post('/templates/{template}/send', [WhatsappTemplateController::class, 'send'])
+    ->name('templates.send');
+
 
         /*
         |--------------------------------------------------------------------------
         | Broadcast Approvals
         |--------------------------------------------------------------------------
         */
-        Route::get('/broadcast/approvals',
-            [BroadcastApprovalController::class, 'index']
-        )->name('broadcast.approvals.index');
+        Route::get('/broadcast/approvals', [BroadcastApprovalController::class, 'index'])
+            ->name('broadcast.approvals.index');
 
         Route::post('/broadcast/approvals/{approval}/approve',
-            [BroadcastApprovalController::class, 'approve']
-        )->name('broadcast.approvals.approve');
+            [BroadcastApprovalController::class, 'approve'])
+            ->name('broadcast.approvals.approve');
 
         Route::post('/broadcast/approvals/{approval}/reject',
-            [BroadcastApprovalController::class, 'reject']
-        )->name('broadcast.approvals.reject');
+            [BroadcastApprovalController::class, 'reject'])
+            ->name('broadcast.approvals.reject');
 
 
         /*
@@ -167,7 +190,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         |--------------------------------------------------------------------------
         */
         Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index');
-        Route::get('/templates-list', [WhatsappTemplateController::class, 'list'])->name('templates.list');
 
         Route::prefix('templates')->group(function () {
 
@@ -180,28 +202,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/{template}/approve', [WhatsappTemplateController::class, 'approve'])->name('templates.approve');
             Route::post('/{template}/reject', [WhatsappTemplateController::class, 'reject'])->name('templates.reject');
 
-            // Single Sync
             Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync'])
                 ->name('templates.sync');
 
-            // Versions
             Route::post('/{template}/versions', [WhatsappTemplateController::class, 'createVersion'])
                 ->name('templates.versions.create');
             Route::post('/{template}/versions/{version}/revert', [WhatsappTemplateController::class, 'revertVersion'])
                 ->name('templates.versions.revert');
 
-            // Notes
             Route::post('/{template}/notes', [WhatsappTemplateController::class, 'addNote'])
                 ->name('templates.notes.add');
+                // routes/web.php
+Route::post('/templates/{template}/send', [WhatsappTemplateController::class, 'sendMessage']);
+
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | 🔥 ADD NEW — SYNC ALL TEMPLATES (META API)
-        |--------------------------------------------------------------------------
-        */
         Route::post('/templates-sync-all', [WhatsappTemplateController::class, 'syncAll'])
-            ->name('templates.sync-all');
+            ->name('templates.sync-all'); 
+
+            Route::post('/templates/{template}/send-preview',
+    [WhatsappTemplateController::class, 'sendPreview']
+)->name('templates.send-preview');
+
 
 
         /*
@@ -210,24 +232,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         |--------------------------------------------------------------------------
         */
         Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
-
         Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-
         Route::post('/broadcast/campaigns/{campaign}/upload-targets',
-            [BroadcastController::class, 'uploadTargets']
-        )->name('broadcast.upload-targets');
+            [BroadcastController::class, 'uploadTargets'])
+            ->name('broadcast.upload-targets');
 
         Route::post('/broadcast/{campaign}/request-approval',
-            [BroadcastApprovalController::class, 'requestApproval']
-        )->name('broadcast.request-approval');
+            [BroadcastApprovalController::class, 'requestApproval'])
+            ->name('broadcast.request-approval');
 
         Route::post('/broadcast/{campaign}/approve',
-            [BroadcastApprovalController::class, 'approve']
-        )->name('broadcast.approve');
+            [BroadcastApprovalController::class, 'approve'])
+            ->name('broadcast.approve');
 
         Route::post('/broadcast/{campaign}/reject',
-            [BroadcastApprovalController::class, 'reject']
-        )->name('broadcast.reject');
+            [BroadcastApprovalController::class, 'reject'])
+            ->name('broadcast.reject');
     });
 });
 

@@ -19,6 +19,9 @@ const vuetify = createVuetify({ components, directives });
 import Toast, { POSITION } from "vue-toastification";
 import "vue-toastification/dist/index.css";
 
+// === ApexCharts ===
+import VueApexCharts from "vue3-apexcharts";
+
 // === App Name ===
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -31,10 +34,12 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
+
         const app = createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)
             .use(vuetify)
+            .use(VueApexCharts)   // <-- 🚀 ApexCharts aktif
             .directive('to', navTo)
             .use(Toast, {
                 position: POSITION.TOP_RIGHT,
@@ -46,9 +51,6 @@ createInertiaApp({
                 showCloseButtonOnHover: true,
                 draggablePercent: 0.4,
             });
-
-        // ⛔🚫 (Dihapus) Heartbeat Server Spam
-        // ❌ setInterval(() => { axios.post('/agents/heartbeat') }, 60000);
 
         app.mount(el);
     },

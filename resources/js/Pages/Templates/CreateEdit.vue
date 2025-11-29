@@ -1,11 +1,9 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head, usePage } from '@inertiajs/vue3'
-import { ref, computed, watch, onMounted } from 'vue'
+import { Head, usePage, router } from '@inertiajs/vue3'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { useRouter } from '@inertiajs/vue3'
 
-const router = useRouter()
 const isEdit = ref(false)
 
 const page = usePage()
@@ -22,7 +20,7 @@ const form = ref({
   buttons: []
 })
 
-// Dynamic parameters for variables {1}, {2}, ...
+// Dynamic parameters {1}, {2}, ...
 const params = ref({})
 
 // ======================= LOAD IF EDIT =======================
@@ -45,7 +43,7 @@ onMounted(() => {
 function extractVars(text) {
   const match = text?.match(/\{(\d+)\}/g)
   if (!match) return []
-  return [...new Set(match.map(v => v.replace("{","").replace("}","")))]
+  return [...new Set(match.map(v => v.replace('{','').replace('}','')))]
 }
 
 const allVars = computed(() => {
@@ -61,10 +59,12 @@ const allVars = computed(() => {
 function replaceVars(text) {
   if (!text) return ""
   let out = text
+
   allVars.value.forEach(v => {
     const key = `{${v}}`
     out = out.replaceAll(key, params.value[v] || key)
   })
+
   return out
 }
 
@@ -82,6 +82,7 @@ async function save() {
       await axios.post(`/templates`, form.value)
       alert("Template created")
     }
+
     router.visit('/templates')
   } catch (e) {
     console.error(e)
@@ -107,10 +108,8 @@ async function save() {
             {{ isEdit ? 'Edit Template' : 'Create New Template' }}
           </h3>
 
-          <!-- NAME -->
           <v-text-field v-model="form.name" label="Template Name" class="mb-3" />
 
-          <!-- CATEGORY -->
           <v-select
             v-model="form.category"
             label="Category"
@@ -118,7 +117,6 @@ async function save() {
             class="mb-3"
           />
 
-          <!-- LANGUAGE -->
           <v-select
             v-model="form.language"
             label="Language"
@@ -126,30 +124,26 @@ async function save() {
             class="mb-3"
           />
 
-          <!-- HEADER -->
           <v-text-field
             v-model="form.header"
             label="Header (optional)"
             class="mb-3"
           />
 
-          <!-- BODY -->
           <v-textarea
             v-model="form.body"
             label="Body Message"
             rows="5"
-            class="mb-3"
             hint="Gunakan {1}, {2} sebagai variable"
+            class="mb-3"
           />
 
-          <!-- FOOTER -->
           <v-text-field
             v-model="form.footer"
             label="Footer (optional)"
             class="mb-3"
           />
 
-          <!-- BUTTONS (simple version) -->
           <v-textarea
             v-model="form.buttons"
             label="Buttons JSON (optional)"
@@ -158,13 +152,13 @@ async function save() {
             class="mb-3"
           />
 
-          <!-- SAVE BUTTON -->
           <div class="d-flex justify-end gap-2 mt-4">
             <v-btn variant="text" @click="router.visit('/templates')">Cancel</v-btn>
             <v-btn color="primary" @click="save">
               {{ isEdit ? 'Update' : 'Save' }}
             </v-btn>
           </div>
+
         </v-card>
       </v-col>
 
@@ -173,7 +167,6 @@ async function save() {
         <v-card class="pa-4" elevation="2">
           <h3 class="text-h6 font-weight-bold mb-4">Live Preview</h3>
 
-          <!-- VARIABLE INPUTS -->
           <div v-if="allVars.length">
             <h4 class="text-subtitle-2 mb-2">Variables</h4>
 
@@ -188,7 +181,6 @@ async function save() {
             </v-row>
           </div>
 
-          <!-- WA BUBBLE PREVIEW -->
           <v-sheet
             elevation="1"
             class="pa-4 mt-4"
@@ -208,7 +200,6 @@ async function save() {
                 {{ previewFooter }}
               </p>
 
-              <!-- Buttons -->
               <div v-if="form.buttons?.length" class="mt-2">
                 <v-chip
                   v-for="(btn,i) in form.buttons"
@@ -229,6 +220,3 @@ async function save() {
     </v-row>
   </AdminLayout>
 </template>
-
-<style scoped>
-</style>

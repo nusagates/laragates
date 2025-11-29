@@ -277,4 +277,115 @@ class WhatsappTemplateController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    public function sendPreview(Request $request, WhatsappTemplate $template)
+{
+    $request->validate([
+        'phone' => 'required|string',
+        'language' => 'nullable|string',
+        'components' => 'nullable'
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Preview sent (SIMULATION). No WhatsApp API credentials configured.',
+        'debug' => [
+            'to' => $request->phone,
+            'language' => $request->language,
+            'components' => $request->components,
+        ]
+    ]);
+}
+public function send(Request $request, WhatsappTemplate $template)
+{
+    // simple validation
+    $request->validate([
+        'to' => 'required',
+        'language' => 'nullable|string',
+        'components' => 'nullable|array',
+    ]);
+
+    // === MODE PLAIN ===
+    // Karena Meta API belum disetup, kita force success
+    return response()->json([
+        'success' => true,
+        'sent'    => true,
+        'preview' => [
+            'to' => $request->to,
+            'template' => $template->name,
+            'language' => $request->language,
+            'components' => $request->components ?? [],
+        ]
+    ]);
+}
+public function sendMessage(Request $request, WhatsappTemplate $template)
+{
+    $request->validate([
+        'to'        => 'required|string',
+        'language'  => 'required|string',
+        'components'=> 'nullable|array'
+    ]);
+
+    $phone = $this->normalizePhone($request->to);
+
+    // 🔥 Check env — kalau belum diisi → return dummy success
+    if (!env('WA_PHONE_NUMBER_ID') || !env('WA_BUSINESS_TOKEN')) {
+        return response()->json([
+            'sent' => true,
+            'warning' => 'No WA credentials in .env → dummy send mode'
+        ]);
+    }
+
+    $endpoint = "https://graph.facebook.com/"
+        . (env('WA_API_VERSION') ?? 'v20.0') . "/"
+        . env('WA_PHONE_NUMBER_ID') . "/messages";
+
+    $payload = [
+        "messaging_product" => "whatsapp",
+        "to"                => $phone,
+        "type"              => "template",
+        "template" => [
+            "name"      => $template->name,
+            "language"  => [ "code" => $request->language ],
+        ],
+    ];
+
+    // Insert components jika ada
+    if ($request->components) {
+        $payload["template"]["components"] = $request->components;
+    }
+
+    // Execute API
+    try {
+        $res = Http::withToken(env('WA_BUSINESS_TOKEN'))
+            ->post($endpoint, $payload);
+
+        if ($res->successful()) {
+            return response()->json([
+                'sent' => true,
+                'provider_response' => $res->json()
+            ]);
+        } else {
+            return response()->json([
+                'sent' => false,
+                'error' => $res->json()
+            ], 400);
+        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'sent' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+// helper internal
+private function normalizePhone($phone)
+{
+    $p = preg_replace('/[^0-9]/', '', $phone);
+    if (str_starts_with($p, '0')) return '62' . substr($p, 1);
+    if (str_starts_with($p, '62')) return $p;
+    return '62' . $p;
+}
+
 }

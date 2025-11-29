@@ -40,7 +40,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Detail messages of one chat (/api/chats/{session})
+     * Detail messages (/api/chats/{session})
      */
     public function show(ChatSession $session)
     {
@@ -70,7 +70,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Send message inside chat (/api/chats/{session}/send)
+     * Send message in chat (/api/chats/{session}/send)
      */
     public function send(Request $request, ChatSession $session)
     {
@@ -80,18 +80,44 @@ class ChatController extends Controller
 
         $agent = Auth::user();
         if (!$agent) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized user'
-            ], 401);
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        // auto assign if empty
+        // Auto-assign chat to this agent
         if (!$session->assigned_to) {
             $session->update(['assigned_to' => $agent->id]);
         }
 
-        // create message
+        // =======================================================
+        // DUMMY MODE (kalau token Meta tidak ada)
+        // =======================================================
+        if (!env('WA_BUSINESS_TOKEN')) {
+
+            $msg = ChatMessage::create([
+                'chat_session_id' => $session->id,
+                'sender'          => 'agent',
+                'user_id'         => $agent->id,
+                'message'         => $request->message,
+                'type'            => 'text',
+                'status'          => 'sent',
+                'is_outgoing'     => true,
+            ]);
+
+            $session->touch();
+
+            try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
+            catch (\Throwable $e) {}
+
+            return response()->json([
+                'success' => true,
+                'dummy'   => true,
+                'data'    => $msg
+            ]);
+        }
+        // =======================================================
+
+
+        // REAL MODE (kirim via WA API jika token ada)
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
@@ -100,34 +126,33 @@ class ChatController extends Controller
             'type'            => 'text',
             'status'          => 'sent',
             'is_outgoing'     => true,
-            'is_internal'     => false,
-            'is_bot'          => false,
         ]);
 
-        // touch session activity
         $session->touch();
 
-        // broadcast (ignore error if pusher off)
         try {
-            broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers();
+            app(WabaApiService::class)->sendText(
+                $session->customer->phone,
+                $request->message
+            );
         } catch (\Throwable $e) {}
 
-        return response()->json([
-            'success' => true,
-            'data'    => $msg
-        ], 200);
+        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
+        catch (\Throwable $e) {}
+
+        return response()->json(['success' => true, 'data' => $msg]);
     }
 
     /**
-     * NEW: Outbound chat (agent sends first) (/api/chats/outbound)
+     * Outbound (CS kirim chat pertama)
      */
     public function outbound(Request $request, WabaApiService $waba)
     {
         $data = $request->validate([
-            'phone'         => ['required', 'string', 'max:30'],
-            'name'          => ['nullable', 'string', 'max:150'],
-            'message'       => ['required', 'string', 'max:4000'],
-            'create_ticket' => ['sometimes', 'boolean'],
+            'phone'         => 'required|string|max:30',
+            'name'          => 'nullable|string|max:150',
+            'message'       => 'required|string|max:4000',
+            'create_ticket' => 'sometimes|boolean',
         ]);
 
         $phone = $this->normalizePhone($data['phone']);
@@ -137,69 +162,73 @@ class ChatController extends Controller
             ['name' => $data['name']]
         );
 
-        // always create new chat session
         $session = ChatSession::create([
             'customer_id' => $customer->id,
             'status'      => 'open',
+            'assigned_to' => Auth::id(),
         ]);
 
+        // =======================================================
+        // DUMMY MODE
+        // =======================================================
+        if (!env('WA_BUSINESS_TOKEN')) {
+
+            $msg = ChatMessage::create([
+                'chat_session_id' => $session->id,
+                'sender'          => 'agent',
+                'user_id'         => Auth::id(),
+                'message'         => $data['message'],
+                'type'            => 'text',
+                'status'          => 'sent',
+                'is_outgoing'     => true,
+            ]);
+
+            $session->touch();
+
+            try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
+            catch (\Throwable $e) {}
+
+            return response()->json([
+                'success'    => true,
+                'dummy'      => true,
+                'session_id' => $session->id,
+            ]);
+        }
+        // =======================================================
+
+
+        // REAL MODE
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
             'user_id'         => Auth::id(),
             'message'         => $data['message'],
             'type'            => 'text',
+            'status'          => 'sent',
+            'is_outgoing'     => true,
         ]);
 
         $session->touch();
 
-        try {
-            $waba->sendText($customer->phone, $data['message']);
-        } catch (\Throwable $e) {}
+        try { $waba->sendText($customer->phone, $data['message']); } 
+        catch (\Throwable $e) {}
 
-        $ticketId = null;
-        if ($request->boolean('create_ticket')) {
-            $subject = mb_strimwidth($data['message'], 0, 80, '...');
-
-            $ticket = Ticket::create([
-                'customer_name'   => $customer->name ?? $customer->phone,
-                'customer_phone'  => $customer->phone,
-                'subject'         => $subject,
-                'status'          => 'pending',
-                'priority'        => 'medium',
-                'channel'         => 'whatsapp',
-                'assigned_to'     => Auth::id(),
-                'last_message_at' => now(),
-            ]);
-
-            TicketMessage::create([
-                'ticket_id'   => $ticket->id,
-                'sender_type' => 'agent',
-                'sender_id'   => Auth::id(),
-                'message'     => $data['message'],
-            ]);
-
-            $ticketId = $ticket->id;
-        }
-
-        try {
-            broadcast(new \App\Events\MessageSent($msg))->toOthers();
-        } catch (\Throwable $e) {}
+        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
+        catch (\Throwable $e) {}
 
         return response()->json([
             'success'    => true,
             'session_id' => $session->id,
-            'ticket_id'  => $ticketId,
         ]);
     }
 
     /**
-     * Assign chat
+     * Assign chat to agent
      */
     public function assign(Request $request, ChatSession $session)
     {
         $data = $request->validate([
-            'assigned_to' => ['nullable', 'exists:users,id'],
+            'assigned_to' => 'nullable|exists:users,id',
         ]);
 
         $session->assigned_to = $data['assigned_to'];
@@ -220,7 +249,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Normalize phone to +62xxxx format
+     * Normalize phone
      */
     protected function normalizePhone(string $phone): string
     {

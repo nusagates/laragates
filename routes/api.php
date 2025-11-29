@@ -16,3 +16,5 @@ Route::get('/ping', fn() => response()->json(['message' => 'API is running']));
 
 // Broadcast channels
 Broadcast::routes();
+
+Route::post('/simulate-inbound', [\App\Http\Controllers\ChatSimulationController::class, 'simulate']);
