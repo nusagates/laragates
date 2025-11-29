@@ -33,6 +33,10 @@ class BroadcastCampaign extends Model
         'meta'         => 'array',
     ];
 
+    /* ============================================================
+     |  RELATIONS
+     * ============================================================ */
+
     public function template()
     {
         return $this->belongsTo(WhatsappTemplate::class, 'whatsapp_template_id');
@@ -58,7 +62,10 @@ class BroadcastCampaign extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
-    // Status helpers
+    /* ============================================================
+     |  STATUS HELPERS
+     * ============================================================ */
+
     public function isDraft(): bool
     {
         return $this->status === 'draft';
@@ -84,33 +91,65 @@ class BroadcastCampaign extends Model
         return $this->status === 'running';
     }
 
+    public function isScheduled(): bool
+    {
+        // Tanpa schedule_type, gunakan pola:
+        // Status = scheduled, send_now = 0, send_at <= now()
+        return $this->status === 'scheduled'
+            && !$this->send_now
+            && $this->send_at
+            && $this->send_at <= now();
+    }
+
+    /* ============================================================
+     |  SCOPES
+     * ============================================================ */
+
     public function scopeForReport(Builder $q)
     {
         return $q->with('template')->withCount('targets');
     }
 
-    // convenience accessor for summary (optional)
+    /* ============================================================
+     |  ACCESSORS
+     * ============================================================ */
     public function getSummaryAttribute()
-   {
-      return [
-         'id' => $this->id,
-         'name' => $this->name,
-         'template' => $this->template?->name,
-         'total_targets' => $this->total_targets,
-         'sent_count' => (int)$this->sent_count,
-         'failed_count' => (int)$this->failed_count,
-         'status' => $this->status,
-         'send_at' => $this->send_at,
-         'created_at' => $this->created_at,
-    ];
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'template' => $this->template?->name,
+            'total_targets' => $this->total_targets,
+            'sent_count' => (int) $this->sent_count,
+            'failed_count' => (int) $this->failed_count,
+            'status' => $this->status,
+            'send_at' => $this->send_at,
+            'created_at' => $this->created_at,
+        ];
     }
 
-    public function isScheduled()
-{
-    return $this->status === 'scheduled'
-        && $this->schedule_type === 'later'
-        && $this->send_now == 0
-        && $this->send_at <= now();
-}
+    /* ============================================================
+     |  APPROVAL LOGIC HELPERS
+     * ============================================================ */
 
+    public function markPendingApproval()
+    {
+        $this->update(['status' => 'pending_approval']);
+    }
+
+    public function markApproved($userId = null)
+    {
+        $this->update([
+            'status' => 'approved',
+            'approved_by' => $userId ?? auth()->id(),
+            'approved_at' => now(),
+        ]);
+    }
+
+    public function markRejected($userId = null, $notes = null)
+    {
+        $this->update([
+            'status' => 'rejected',
+        ]);
+    }
 }

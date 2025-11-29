@@ -16,28 +16,30 @@ class WhatsappTemplate extends Model
         'category',
         'language',
         'status',
+
+        // Template components
         'header',
         'body',
         'footer',
         'buttons',
 
-        // workflow (template approval)
+        // Workflow
         'created_by',
         'approved_by',
         'approved_at',
         'workflow_notes',
 
-        // Meta API related
+        // Meta API fields
         'meta_id',
         'remote_id',
         'header_type',
         'body_params_count',
 
-        // sync logs
+        // Sync logs
         'last_synced_at',
         'last_sent_at',
 
-        // JSON metadata
+        // JSON meta
         'meta',
     ];
 
@@ -50,8 +52,8 @@ class WhatsappTemplate extends Model
     ];
 
     /**
-     * Relationship to BroadcastCampaign
-     * A template can be used by many campaigns
+     * Template -> Campaigns
+     * Satu template bisa dipakai banyak campaign.
      */
     public function campaigns()
     {

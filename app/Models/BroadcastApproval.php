@@ -9,6 +9,8 @@ class BroadcastApproval extends Model
 {
     use HasFactory;
 
+    protected $table = 'broadcast_approvals';
+
     protected $fillable = [
         'broadcast_campaign_id',
         'requested_by',
@@ -25,6 +27,7 @@ class BroadcastApproval extends Model
         'snapshot' => 'array',
     ];
 
+    // relations
     public function campaign()
     {
         return $this->belongsTo(BroadcastCampaign::class, 'broadcast_campaign_id');
@@ -32,11 +35,11 @@ class BroadcastApproval extends Model
 
     public function requester()
     {
-        return $this->belongsTo(User::class, 'requested_by');
+        return $this->belongsTo(\App\Models\User::class, 'requested_by');
     }
 
     public function actor()
     {
-        return $this->belongsTo(User::class, 'acted_by');
+        return $this->belongsTo(\App\Models\User::class, 'acted_by');
     }
 }

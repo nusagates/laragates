@@ -2,145 +2,144 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BroadcastCampaign;
 use App\Models\BroadcastApproval;
-use App\Jobs\ProcessBroadcastJob;
+use App\Models\BroadcastCampaign;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class BroadcastApprovalController extends Controller
 {
     /**
-     * Agent Submit Approval
-     * Status: draft → pending_approval
+     * Agent: request approval for a campaign
+     * POST /broadcast/{campaign}/request-approval
      */
     public function requestApproval(Request $request, BroadcastCampaign $campaign)
     {
-        if ($campaign->status !== 'draft') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Campaign must be in DRAFT to request approval.'
-            ], 400);
+        // Allow if creator or agent (adjust this to your permission system)
+        if ($campaign->created_by && $campaign->created_by !== Auth::id() && !Auth::user()->hasRole('agent')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $request->validate([
-            'notes' => 'nullable|string|max:2000',
+        $data = $request->validate([
+            'notes' => 'nullable|string',
         ]);
 
-        DB::transaction(function () use ($request, $campaign) {
+        // Create approval entry with campaign snapshot
+        $snapshot = $campaign->toArray();
 
-            $campaign->status = 'pending_approval';
-            $campaign->save();
+        $approval = BroadcastApproval::create([
+            'broadcast_campaign_id' => $campaign->id,
+            'requested_by' => Auth::id(),
+            'request_notes' => $data['notes'] ?? null,
+            'action' => 'requested',
+            'snapshot' => $snapshot,
+        ]);
 
-            BroadcastApproval::create([
-                'broadcast_campaign_id' => $campaign->id,
-                'requested_by'          => auth()->id(),
-                'request_notes'         => $request->notes,
-                'action'                => 'requested',
-                'acted_by'              => null,
-                'action_notes'          => null,
-                'acted_at'              => now(),
-                'snapshot'              => $campaign->toArray(),
-            ]);
-        });
+        // Set campaign status to pending_approval
+        $campaign->markPendingApproval();
 
-        return response()->json([
-            'success' => true,
-            'status'  => 'pending_approval'
+        return response()->json(['ok' => true, 'approval' => $approval]);
+    }
+
+    /**
+     * Admin: list approvals (Inertia)
+     * GET /broadcast/approvals
+     */
+    public function index(Request $request)
+    {
+        $query = BroadcastApproval::with(['campaign.template', 'requester'])
+            ->orderBy('created_at', 'desc');
+
+        // optional filter by action
+        if ($request->filled('action')) {
+            $query->where('action', $request->input('action'));
+        }
+
+        $approvals = $query->paginate(20)->withQueryString();
+
+        return Inertia::render('Broadcast/Approvals/Index', [
+            'approvals' => $approvals,
+            'filters' => $request->only('action'),
         ]);
     }
 
     /**
-     * Admin Approves Campaign
-     * Status: pending_approval → approved → running/scheduled
+     * Admin: approve
+     * POST /broadcast/approvals/{approval}/approve
      */
-    public function approve(Request $request, BroadcastCampaign $campaign)
+    public function approve(Request $request, BroadcastApproval $approval)
     {
-        if ($campaign->status !== 'pending_approval') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Campaign not in pending approval state.'
-            ], 400);
+        $this->authorizeAdmin();
+
+        if ($approval->action === 'approved') {
+            return response()->json(['error' => 'Already approved'], 400);
         }
 
-        $request->validate([
-            'notes' => 'nullable|string|max:2000',
-        ]);
+        DB::transaction(function () use ($approval, $request) {
+            $notes = $request->input('note') ?? null;
 
-        DB::transaction(function () use ($request, $campaign) {
-
-            $campaign->status      = 'approved';
-            $campaign->approved_by = auth()->id();
-            $campaign->approved_at = now();
-            $campaign->save();
-
-            BroadcastApproval::create([
-                'broadcast_campaign_id' => $campaign->id,
-                'requested_by'          => $campaign->created_by,
-                'action'                => 'approved',
-                'acted_by'              => auth()->id(),
-                'action_notes'          => $request->notes,
-                'acted_at'              => now(),
-                'snapshot'              => $campaign->toArray(),
+            // mark approval
+            $approval->update([
+                'action' => 'approved',
+                'acted_by' => Auth::id(),
+                'action_notes' => $notes,
+                'acted_at' => now(),
             ]);
 
-            // RUN BROADCAST JOB
+            // update campaign status
+            $campaign = $approval->campaign;
+            $campaign->markApproved(Auth::id());
+
+            // if send_now true -> optionally dispatch sending job
             if ($campaign->send_now) {
-                dispatch(new ProcessBroadcastJob($campaign));
-                $campaign->status = 'running';
-            } else if ($campaign->send_at) {
-                $delaySeconds = max(0, Carbon::parse($campaign->send_at)->diffInSeconds());
-                dispatch((new ProcessBroadcastJob($campaign))->delay($delaySeconds));
-                $campaign->status = 'scheduled';
+                if (class_exists(\App\Jobs\ProcessBroadcastJob::class)) {
+                    \App\Jobs\ProcessBroadcastJob::dispatch($campaign->id);
+                } else {
+                    // fallback: if you use a different job (e.g. SendScheduledBroadcastJob),
+                    // you can dispatch it here or call existing send logic.
+                }
             }
-
-            $campaign->save();
         });
 
-        return response()->json([
-            'success' => true,
-            'status'  => $campaign->status,
-            'message' => 'Campaign approved.'
-        ]);
+        return response()->json(['ok' => true]);
     }
 
     /**
-     * Admin Rejects Campaign
-     * Status: pending_approval → rejected
+     * Admin: reject
+     * POST /broadcast/approvals/{approval}/reject
      */
-    public function reject(Request $request, BroadcastCampaign $campaign)
+    public function reject(Request $request, BroadcastApproval $approval)
     {
-        if ($campaign->status !== 'pending_approval') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Campaign not pending approval.'
-            ], 400);
+        $this->authorizeAdmin();
+
+        if ($approval->action === 'rejected') {
+            return response()->json(['error' => 'Already rejected'], 400);
         }
 
-        $request->validate([
-            'notes' => 'nullable|string|max:2000',
-        ]);
+        $notes = $request->input('note') ?? null;
 
-        DB::transaction(function () use ($request, $campaign) {
-
-            $campaign->status = 'rejected';
-            $campaign->save();
-
-            BroadcastApproval::create([
-                'broadcast_campaign_id' => $campaign->id,
-                'requested_by'          => $campaign->created_by,
-                'action'                => 'rejected',
-                'acted_by'              => auth()->id(),
-                'action_notes'          => $request->notes,
-                'acted_at'              => now(),
-                'snapshot'              => $campaign->toArray(),
+        DB::transaction(function () use ($approval, $notes) {
+            $approval->update([
+                'action' => 'rejected',
+                'acted_by' => Auth::id(),
+                'action_notes' => $notes,
+                'acted_at' => now(),
             ]);
+
+            $campaign = $approval->campaign;
+            $campaign->markRejected(Auth::id(), $notes);
         });
 
-        return response()->json([
-            'success' => true,
-            'status'  => 'rejected',
-        ]);
+        return response()->json(['ok' => true]);
+    }
+
+    protected function authorizeAdmin()
+    {
+        // adapt this to your roles/permissions implementation
+        if (!Auth::user()->hasRole('superadmin') && !Auth::user()->hasRole('admin')) {
+            abort(403);
+        }
     }
 }

@@ -20,6 +20,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Vite prefetch (Laravel 12)
         Vite::prefetch(concurrency: 3);
+
+        // Register console commands (ONLY when running in console)
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \App\Console\Commands\WabaSyncTemplates::class,
+            ]);
+        }
     }
 }

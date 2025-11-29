@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\WhatsappTemplate;
 use App\Models\TemplateVersion;
 use App\Models\TemplateApprovalNote;
+use App\Services\MetaTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -19,7 +20,7 @@ class WhatsappTemplateController extends Controller
         return Inertia::render('Templates/Index');
     }
 
-    // LIST (JSON)
+    // JSON list
     public function list()
     {
         return response()->json(
@@ -28,7 +29,7 @@ class WhatsappTemplateController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // CREATE TEMPLATE
+    // CREATE
     // ----------------------------------------------------------------------
     public function store(Request $request)
     {
@@ -42,6 +43,7 @@ class WhatsappTemplateController extends Controller
             'buttons'  => 'nullable'
         ]);
 
+        // decode buttons if needed
         if (is_string($data['buttons'] ?? null)) {
             $data['buttons'] = json_decode($data['buttons'], true) ?? null;
         }
@@ -55,15 +57,17 @@ class WhatsappTemplateController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // SHOW TEMPLATE
+    // SHOW
     // ----------------------------------------------------------------------
     public function show(WhatsappTemplate $template)
     {
         $versions = TemplateVersion::where('template_id', $template->id)
-            ->orderBy('created_at', 'desc')->get();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         $notes = TemplateApprovalNote::where('template_id', $template->id)
-            ->orderBy('created_at', 'desc')->get();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         if (request()->wantsJson()) {
             return response()->json([
@@ -81,12 +85,12 @@ class WhatsappTemplateController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // UPDATE TEMPLATE
+    // UPDATE
     // ----------------------------------------------------------------------
     public function update(Request $request, WhatsappTemplate $template)
     {
         $data = $request->validate([
-            'name'     => 'required|string|unique:whatsapp_templates,name,' . $template->id,
+            'name'     => "required|string|unique:whatsapp_templates,name,{$template->id}",
             'category' => 'required|string',
             'language' => 'required|string',
             'header'   => 'nullable|string',
@@ -105,7 +109,7 @@ class WhatsappTemplateController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // DELETE TEMPLATE
+    // DELETE
     // ----------------------------------------------------------------------
     public function destroy(WhatsappTemplate $template)
     {
@@ -114,7 +118,7 @@ class WhatsappTemplateController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // WORKFLOW: SUBMIT FOR APPROVAL
+    // WORKFLOW APPROVAL
     // ----------------------------------------------------------------------
     public function submit(WhatsappTemplate $template)
     {
@@ -123,43 +127,37 @@ class WhatsappTemplateController extends Controller
         TemplateApprovalNote::create([
             'template_id' => $template->id,
             'user_id'     => Auth::id(),
-            'note'        => 'Submitted for approval'
+            'note'        => 'Submitted for approval',
         ]);
 
         return response()->json(['ok' => true]);
     }
 
-    // APPROVE
     public function approve(Request $request, WhatsappTemplate $template)
     {
-        $note = $request->input('note', 'Approved');
-
         $template->update([
-            'status'       => 'approved',
-            'approved_at'  => now(),
-            'approved_by'  => Auth::id(),
+            'status'      => 'approved',
+            'approved_at' => now(),
+            'approved_by' => Auth::id(),
         ]);
 
         TemplateApprovalNote::create([
             'template_id' => $template->id,
             'user_id'     => Auth::id(),
-            'note'        => $note,
+            'note'        => $request->input('note', 'Approved'),
         ]);
 
         return response()->json(['ok' => true]);
     }
 
-    // REJECT
     public function reject(Request $request, WhatsappTemplate $template)
     {
-        $reason = $request->input('reason', 'Rejected');
-
         $template->update(['status' => 'rejected']);
 
         TemplateApprovalNote::create([
             'template_id' => $template->id,
             'user_id'     => Auth::id(),
-            'note'        => $reason,
+            'note'        => $request->input('reason', 'Rejected'),
         ]);
 
         return response()->json(['ok' => true]);
@@ -178,13 +176,13 @@ class WhatsappTemplateController extends Controller
         ]);
 
         TemplateVersion::create([
-            'template_id'   => $template->id,
-            'header'        => $data['header'],
-            'body'          => $data['body'],
-            'footer'        => $data['footer'],
-            'buttons'       => $data['buttons'] ?? null,
-            'user_id'       => Auth::id(),
-            'version_label' => 'v' . (TemplateVersion::where('template_id', $template->id)->count() + 1)
+            'template_id' => $template->id,
+            'header'      => $data['header'],
+            'body'        => $data['body'],
+            'footer'      => $data['footer'],
+            'buttons'     => $data['buttons'] ?? null,
+            'user_id'     => Auth::id(),
+            'version_label' => 'v' . (TemplateVersion::where('template_id', $template->id)->count() + 1),
         ]);
 
         return response()->json(['ok' => true]);
@@ -206,7 +204,7 @@ class WhatsappTemplateController extends Controller
         TemplateApprovalNote::create([
             'template_id' => $template->id,
             'user_id'     => Auth::id(),
-            'note'        => 'Reverted to version ' . $version->version_label,
+            'note'        => 'Reverted to ' . $version->version_label,
         ]);
 
         return response()->json(['ok' => true]);
@@ -217,7 +215,9 @@ class WhatsappTemplateController extends Controller
     // ----------------------------------------------------------------------
     public function addNote(Request $request, WhatsappTemplate $template)
     {
-        $data = $request->validate(['note' => 'required|string']);
+        $data = $request->validate([
+            'note' => 'required|string'
+        ]);
 
         $note = TemplateApprovalNote::create([
             'template_id' => $template->id,
@@ -229,37 +229,52 @@ class WhatsappTemplateController extends Controller
     }
 
     // ----------------------------------------------------------------------
-    // FINAL — SYNC USING WABASERVICE (SINGLE TEMPLATE)
+    // META SYNC (SINGLE)
     // ----------------------------------------------------------------------
-    public function syncSingle(WhatsappTemplate $template)
+    public function syncSingle(WhatsappTemplate $template, MetaTemplateService $meta)
     {
-        $remoteId = $template->remote_id ?? $template->name;
+        $templates = $meta->fetchTemplates();
+        $found = collect($templates)->firstWhere('name', $template->name);
 
-        try {
-            $apiTemplate = app(\App\Services\WabaService::class)->getTemplate($remoteId);
-
-            if (!$apiTemplate) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Template not found on Meta API'
-                ], 404);
-            }
-
-            $payload = app(\App\Services\WabaService::class)
-                ->normalizeTemplatePayload($apiTemplate);
-
-            $template->update($payload);
-
-            return response()->json([
-                'success'  => true,
-                'template' => $template->fresh()
-            ]);
-
-        } catch (\Exception $e) {
+        if (!$found) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
+                'message' => 'Template not found in Meta API.',
+            ], 404);
         }
+
+        $template->update([
+            'category'      => $found['category'],
+            'language'      => $found['language'],
+            'status'        => $found['status'],
+            'components'    => $found['components'],
+            'last_synced_at'=> now(),
+        ]);
+
+        return response()->json(['success' => true, 'template' => $template]);
+    }
+
+    // ----------------------------------------------------------------------
+    // META SYNC (ALL)
+    // ----------------------------------------------------------------------
+    public function syncAll(MetaTemplateService $meta)
+    {
+        $templates = $meta->fetchTemplates();
+
+        foreach ($templates as $t) {
+            WhatsappTemplate::updateOrCreate(
+                ['remote_id' => $t['remote_id']],
+                [
+                    'name'          => $t['name'],
+                    'category'      => $t['category'],
+                    'language'      => $t['language'],
+                    'status'        => $t['status'],
+                    'components'    => $t['components'],
+                    'last_synced_at'=> now(),
+                ]
+            );
+        }
+
+        return response()->json(['success' => true]);
     }
 }

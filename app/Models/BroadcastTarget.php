@@ -2,23 +2,21 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class BroadcastTarget extends Model
 {
-    use HasFactory;
-
     protected $table = 'broadcast_targets';
 
     protected $fillable = [
         'broadcast_campaign_id',
         'phone',
+        'name',
         'variables',
         'status',
-        'wa_message_id',
-        'error_message',
         'sent_at',
+        'error_message',
+        'attempts',
     ];
 
     protected $casts = [
@@ -29,5 +27,24 @@ class BroadcastTarget extends Model
     public function campaign()
     {
         return $this->belongsTo(BroadcastCampaign::class, 'broadcast_campaign_id');
+    }
+
+    // convenience helpers
+    public function markSent()
+    {
+        $this->update([
+            'status' => 'sent',
+            'sent_at' => now(),
+            'error_message' => null,
+        ]);
+    }
+
+    public function markFailed($error = null)
+    {
+        $this->increment('attempts');
+        $this->update([
+            'status' => 'failed',
+            'error_message' => $error ? (string)$error : null,
+        ]);
     }
 }
