@@ -1,19 +1,34 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head, usePage, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { Head, usePage, router, Link } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
 
-const props = usePage().props.value
-const campaigns = ref(props.campaigns || { data: [], last_page: 1 })
-const filters = ref(props.filters || { search: '', status: '' })
+const page = usePage()
+
+const campaigns = computed(() => page.props.campaigns ?? { 
+  data: [], last_page: 1, current_page: 1 
+})
+
+const filters = ref({
+  search: page.props.filters?.search ?? '',
+  status: page.props.filters?.status ?? ''
+})
 
 function applyFilter() {
-  router.get(route('broadcast.report'), { search: filters.value.search, status: filters.value.status }, { preserveState: true })
+  router.get(
+    route('broadcast.report'),
+    {
+      search: filters.value.search,
+      status: filters.value.status,
+    },
+    { preserveState: true, preserveScroll: true }
+  )
 }
 </script>
 
 <template>
   <Head title="Broadcast Report" />
+
   <AdminLayout>
     <template #title>Broadcast Report</template>
 
@@ -25,8 +40,23 @@ function applyFilter() {
         </div>
 
         <div class="d-flex" style="gap:8px;">
-          <v-text-field v-model="filters.search" dense placeholder="Search campaign..." @keyup.enter="applyFilter" />
-          <v-select dense v-model="filters.status" :items="['draft','pending_approval','approved','scheduled','running','done','failed']" clearable placeholder="Status" />
+          <v-text-field
+            v-model="filters.search"
+            dense placeholder="Search campaign..."
+            @keyup.enter="applyFilter"
+          />
+
+          <v-select
+            dense
+            v-model="filters.status"
+            :items="[
+              'draft','pending_approval','approved',
+              'scheduled','running','done','failed'
+            ]"
+            clearable
+            placeholder="Status"
+          />
+
           <v-btn color="primary" @click="applyFilter">Filter</v-btn>
         </div>
       </div>
@@ -46,14 +76,19 @@ function applyFilter() {
 
         <tbody>
           <tr v-for="c in campaigns.data" :key="c.id">
-            <td><strong>{{ c.name }}</strong><div class="text-caption">by {{ c.created_by }}</div></td>
+            <td>
+              <strong>{{ c.name }}</strong>
+              <div class="text-caption">by {{ c.created_by }}</div>
+            </td>
             <td>{{ c.template?.name || '-' }}</td>
-            <td>{{ c.targets_count ?? c.total_targets ?? '-' }}</td>
+            <td>{{ c.targets_count ?? '-' }}</td>
             <td>{{ c.sent_count }}</td>
             <td>{{ c.failed_count }}</td>
             <td>{{ new Date(c.created_at).toLocaleString() }}</td>
             <td>
-              <Link :href="route('broadcast.report.show', c.id)"><v-btn small>Detail</v-btn></Link>
+              <Link :href="route('broadcast.report.show', c.id)">
+                <v-btn small>Detail</v-btn>
+              </Link>
             </td>
           </tr>
 
@@ -64,7 +99,13 @@ function applyFilter() {
       </v-table>
 
       <div class="mt-4 d-flex justify-end">
-        <v-pagination :length="campaigns.last_page" v-model="campaigns.current_page" @update:modelValue="(p) => router.get(route('broadcast.report'), { page: p }, { preserveState: true })" />
+        <v-pagination
+          v-model="campaigns.current_page"
+          :length="campaigns.last_page"
+          @update:modelValue="p => 
+            router.get(route('broadcast.report'), { page: p }, { preserveState:true, preserveScroll:true })
+          "
+        />
       </div>
     </v-card>
   </AdminLayout>

@@ -24,6 +24,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\Api\Chat\ChatSessionController;
 use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\Api\Chat\TypingController;
+use App\Http\Controllers\ChatController;
 
 
 /*
@@ -101,6 +102,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/sessions/{session}/convert-ticket', [ChatSessionController::class, 'convertToTicket']);
 
         Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
+        Route::get('/chat/sessions/{session}/messages', [\App\Http\Controllers\ChatController::class, 'messages']);
+        Route::post('/chat/sessions/{session}/messages', [ChatController::class, 'sendMedia']);
+        Route::post('/chat/sessions/{session}/send', [ChatController::class, 'send']);
+Route::post('/chat/sessions/{session}/media', [ChatController::class, 'sendMedia']);
     });
 
 

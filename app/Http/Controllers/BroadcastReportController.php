@@ -64,4 +64,33 @@ class BroadcastReportController extends Controller
             'filters' => $request->only('q','status'),
         ]);
     }
+
+    public function analytics()
+{
+    $daily = BroadcastCampaign::selectRaw("
+            DATE(created_at) as date,
+            COUNT(*) as total_campaigns,
+            SUM(sent_count) as total_sent,
+            SUM(failed_count) as total_failed
+        ")
+        ->groupBy('date')
+        ->orderBy('date', 'asc')
+        ->get();
+
+    $summary = [
+        'total_sent'   => BroadcastCampaign::sum('sent_count'),
+        'total_failed' => BroadcastCampaign::sum('failed_count'),
+        'total_target' => BroadcastCampaign::sum('targets_count'),
+        'success_rate' => BroadcastCampaign::sum('sent_count') > 0
+            ? round((BroadcastCampaign::sum('sent_count') /
+                    BroadcastCampaign::sum('targets_count')) * 100, 2)
+            : 0,
+    ];
+
+    return Inertia::render('Broadcast/Analytics', [
+        'daily' => $daily,
+        'summary' => $summary,
+    ]);
+}
+
 }

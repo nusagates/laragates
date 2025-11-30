@@ -45,29 +45,31 @@ async function loadRooms() {
 onMounted(() => {
   loadRooms()
 
-  // ====== REALTIME LISTENER (Assigned to Agent) ======
-  const userId = window?.Laravel?.user?.id ?? document.querySelector('meta[name="user-id"]')?.content ?? null
+  const userId =
+    window?.Laravel?.user?.id ??
+    document.querySelector('meta[name="user-id"]')?.content ??
+    null
+
   if (!userId) return
 
-  window.Echo.private(`agent.${userId}`)
-    .listen(".session.assigned", (e) => {
-      loadRooms()
-
-      toast.success(`New chat assigned from ${e.session.customer?.name ?? e.session.customer?.phone ?? 'Unknown'}`, {
-        timeout: 3200,
-        icon: "💬",
-      })
+  // Listen when chat is assigned to agent
+  window.Echo.private(`agent.${userId}`).listen(".session.assigned", (e) => {
+    loadRooms()
+    toast.success(`New chat from ${e.session.customer?.name ?? e.session.customer?.phone}`, {
+      timeout: 3200,
+      icon: "💬",
     })
+  })
 })
 
 /* SEARCH FILTER */
 const filtered = computed(() => {
   if (!query.value) return rooms.value
   return rooms.value.filter(r => {
-    const name = r.customer_name ?? ''
-    const phone = r.phone ?? ''
-    return name.toLowerCase().includes(query.value.toLowerCase()) ||
-      phone.toLowerCase().includes(query.value.toLowerCase())
+    const name = (r.customer_name ?? '').toLowerCase()
+    const phone = (r.phone ?? '').toLowerCase()
+    return name.includes(query.value.toLowerCase()) ||
+      phone.includes(query.value.toLowerCase())
   })
 })
 
@@ -76,18 +78,19 @@ function openRoom(id) {
   activeRoomId.value = id
 }
 
-/* ========== PICK FILE ========== */
+/* PICK FILE */
 function pickFile(e) {
   selectedFile.value = e.target.files[0] || null
 }
 
-/* ========== SEND MESSAGE + MEDIA ========== */
+/* SEND TEXT + MEDIA */
 async function sendMessage() {
   if (!activeRoomId.value) return
   if (!tempMessage.value.trim() && !selectedFile.value) return
 
   let form = new FormData()
   form.append('message', tempMessage.value || '')
+
   if (selectedFile.value) {
     form.append('media', selectedFile.value)
   }
@@ -103,8 +106,9 @@ async function sendMessage() {
       { headers: { 'Content-Type': 'multipart/form-data' } }
     )
 
+    // Emit event ke Room.vue
     window.dispatchEvent(new CustomEvent('agent-message-sent', {
-      detail: res.data?.data ?? res.data,
+      detail: res.data?.data,
     }))
   } catch (e) {
     console.error(e)
@@ -116,10 +120,12 @@ async function sendMessage() {
 function formatPhone() {
   let v = newChatForm.value.phone || ''
   v = v.trim().replace(/[^0-9+]/g, '')
+
   if (!v) return (newChatForm.value.phone = '')
   if (v.startsWith('+')) return (newChatForm.value.phone = v)
   if (v.startsWith('0')) return (newChatForm.value.phone = '+62' + v.slice(1))
   if (v.startsWith('62')) return (newChatForm.value.phone = '+' + v)
+
   newChatForm.value.phone = '+' + v
 }
 
@@ -138,6 +144,7 @@ async function submitNewChat() {
   try {
     const res = await axios.post('/chat/sessions/outbound', newChatForm.value)
     newChatDialog.value = false
+
     await loadRooms()
     if (res.data?.session_id) activeRoomId.value = res.data.session_id
   } catch (e) {
@@ -153,7 +160,7 @@ async function convertToTicket() {
   if (!activeRoomId.value) return
   try {
     const res = await axios.post(`/chat/sessions/${activeRoomId.value}/convert-ticket`)
-    alert('Ticket berhasil dibuat/tersedia. ID: ' + res.data?.ticket_id)
+    alert('Ticket berhasil dibuat. ID: ' + res.data?.ticket_id)
     loadRooms()
   } catch (e) {
     console.error(e)
@@ -190,9 +197,11 @@ async function convertToTicket() {
 
           <v-list two-line density="comfortable">
             <v-list-item
-              v-for="room in filtered" :key="room.session_id"
+              v-for="room in filtered"
+              :key="room.session_id"
               @click="openRoom(room.session_id)"
-              :class="{ 'bg-highlight': room.session_id === activeRoomId }" style="cursor:pointer"
+              :class="{ 'bg-highlight': room.session_id === activeRoomId }"
+              style="cursor:pointer"
             >
               <v-list-item-avatar>
                 <v-avatar color="blue">
@@ -226,11 +235,14 @@ async function convertToTicket() {
       <!-- CHAT PANEL -->
       <div class="chat-room">
         <v-card class="chat-window" elevation="2">
-          <div class="chat-body"><ChatRoom :room-id="activeRoomId" /></div>
+          <div class="chat-body">
+            <ChatRoom :room-id="activeRoomId" />
+          </div>
 
           <div class="px-4 py-2 d-flex justify-end">
             <v-btn v-if="activeRoomId" color="green" variant="outlined" @click="convertToTicket">
-              <v-icon start>mdi-ticket-confirmation-outline</v-icon> Convert to Ticket
+              <v-icon start>mdi-ticket-confirmation-outline</v-icon>
+              Convert to Ticket
             </v-btn>
           </div>
 
@@ -238,14 +250,27 @@ async function convertToTicket() {
           <div class="chat-input">
             <v-row align="center" class="no-gutters">
               <v-col cols="auto">
-                <input type="file" ref="filePicker" style="display:none"
-                       @change="pickFile" accept="image/*,.pdf,.doc,.docx" />
-                <v-btn icon @click="filePicker?.click()"><v-icon>mdi-paperclip</v-icon></v-btn>
+                <input
+                  type="file"
+                  ref="filePicker"
+                  style="display:none"
+                  @change="pickFile"
+                  accept="image/*,.pdf,.doc,.docx"
+                />
+                <v-btn icon @click="filePicker?.click()">
+                  <v-icon>mdi-paperclip</v-icon>
+                </v-btn>
               </v-col>
 
               <v-col>
-                <v-textarea v-model="tempMessage" placeholder="Type a message"
-                  rows="1" auto-grow variant="outlined" class="me-2" />
+                <v-textarea
+                  v-model="tempMessage"
+                  placeholder="Type a message"
+                  rows="1"
+                  auto-grow
+                  variant="outlined"
+                  class="me-2"
+                />
               </v-col>
 
               <v-col cols="auto">
@@ -265,7 +290,7 @@ async function convertToTicket() {
 
         <v-text-field v-model="newChatForm.name" label="Customer Name (optional)" class="mb-3" />
         <v-text-field v-model="newChatForm.phone" label="WhatsApp Number"
-          placeholder="0812xxxx / +62812xxxx" class="mb-3" @blur="formatPhone" />
+                      placeholder="0812xxxx / +62812xxxx" class="mb-3" @blur="formatPhone" />
         <v-textarea v-model="newChatForm.message" label="First Message" rows="2" auto-grow class="mb-3" />
         <v-checkbox v-model="newChatForm.create_ticket" label="Create Ticket from this chat" class="mb-2" />
 

@@ -211,7 +211,7 @@ async function uploadTargets(id, file) {
         color="indigo-darken-3"
         variant="tonal"
         prepend-icon="mdi-chart-box-outline"
-        @click="router.visit(route('broadcast.report'))"
+        @click="router.visit(route('broadcast.report.index'))"
       >
         View Report
       </v-btn>

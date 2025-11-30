@@ -9,6 +9,9 @@ use Inertia\Inertia;
 
 class AgentController extends Controller
 {
+    /**
+     * Allow only superadmin or admin.
+     */
     private function ensureCanManageAgents(): void
     {
         $role = auth()->user()->role ?? null;
@@ -18,6 +21,9 @@ class AgentController extends Controller
         }
     }
 
+    /**
+     * List all agents.
+     */
     public function index(Request $request)
     {
         $this->ensureCanManageAgents();
@@ -58,31 +64,42 @@ class AgentController extends Controller
         ]);
     }
 
+    /**
+     * Create new agent – AUTO GENERATE PASSWORD.
+     */
     public function store(Request $request)
     {
         $this->ensureCanManageAgents();
 
         $data = $request->validate([
-            'name'              => 'required|string|max:100',
-            'email'             => 'required|email|max:150|unique:users,email',
-            'role'              => 'required|in:Admin,Supervisor,Agent',
-            'password'          => 'required|min:6',
-            'password_confirm'  => 'required|same:password',
+            'name'  => 'required|string|max:100',
+            'email' => 'required|email|max:150|unique:users,email',
+            'role'  => 'required|in:Admin,Supervisor,Agent',
         ]);
+
+        // 🚀 Auto generate secure password
+        $generatedPassword = str()->random(10);
 
         User::create([
             'name'        => $data['name'],
             'email'       => $data['email'],
             'role'        => strtolower($data['role']),
-            'password'    => Hash::make($data['password']),
+            'password'    => Hash::make($generatedPassword),
             'status'      => 'pending',
             'is_active'   => false,
             'approved_at' => null,
         ]);
 
-        return back()->with('success', 'Agent created successfully.');
+        // 🚀 Flash password untuk ditampilkan di UI
+        return back()->with('password_generated', [
+            'email'    => $data['email'],
+            'password' => $generatedPassword,
+        ]);
     }
 
+    /**
+     * Update existing agent.
+     */
     public function update(Request $request, User $user)
     {
         $this->ensureCanManageAgents();
@@ -91,8 +108,8 @@ class AgentController extends Controller
             'name'  => 'required|string|max:100',
             'email' => 'required|email|max:150|unique:users,email,' . $user->id,
             'role'  => 'required|in:Admin,Supervisor,Agent',
-            'password'          => 'nullable|min:6',
-            'password_confirm'  => 'nullable|same:password',
+            'password'         => 'nullable|min:6',
+            'password_confirm' => 'nullable|same:password',
         ]);
 
         $updateData = [
@@ -110,6 +127,9 @@ class AgentController extends Controller
         return back()->with('success', 'Agent updated.');
     }
 
+    /**
+     * Approve agent.
+     */
     public function approve(User $user)
     {
         $this->ensureCanManageAgents();
@@ -123,6 +143,9 @@ class AgentController extends Controller
         return back()->with('success', 'Agent approved successfully.');
     }
 
+    /**
+     * Delete agent.
+     */
     public function destroy(User $user)
     {
         $this->ensureCanManageAgents();

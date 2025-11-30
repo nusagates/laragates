@@ -1,72 +1,150 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 
-const props = defineProps({ roomId: Number })
+const props = defineProps({
+  roomId: Number
+})
 
 const loading = ref(false)
 const messages = ref([])
+const panel = ref(null)
 
+/* LOAD MESSAGES */
 async function loadMessages() {
   if (!props.roomId) return (messages.value = [])
+
   loading.value = true
   try {
     const res = await axios.get(`/chat/sessions/${props.roomId}/messages`)
     messages.value = res.data
+
+    await nextTick()
+    scrollBottom()
   } catch (e) { console.error(e) }
   finally { loading.value = false }
+}
+
+function scrollBottom() {
+  if (panel.value) {
+    panel.value.scrollTop = panel.value.scrollHeight
+  }
 }
 
 watch(() => props.roomId, () => loadMessages())
 onMounted(() => loadMessages())
 
-function bubbleClass(m) { return m.is_outgoing ? 'bubble-me' : 'bubble-you' }
+/* BUBBLE CLASS */
+function bubbleClass(m) {
+  return m.is_outgoing ? 'bubble-me' : 'bubble-you'
+}
 </script>
 
 <template>
-  <div class="room-wrapper">
-    <div v-if="!roomId" class="text-center mt-10 text-grey"><small>Select a chat...</small></div>
+  <div class="wrapper">
+    
+    <div v-if="!roomId" class="no-room">
+      <small>Select a chat...</small>
+    </div>
 
-    <div v-else class="messages-container">
-      <div v-if="loading" class="text-center mt-4"><small>Loading...</small></div>
+    <div v-else ref="panel" class="messages">
+      <div v-if="loading" class="loading">
+        <small>Loading...</small>
+      </div>
 
-      <div v-else>
-        <div v-for="m in messages" :key="m.id" :class="['bubble', bubbleClass(m)]">
-          
-          <!-- gambar -->
-          <template v-if="m.media_type && m.media_type.startsWith('image')">
-            <img :src="m.media_url" class="chat-img" />
-          </template>
+      <div v-for="m in messages" :key="m.id" :class="['bubble', bubbleClass(m)]">
 
-          <!-- file dokumen -->
-          <template v-else-if="m.media_type && !m.media_type.startsWith('image')">
-            <a :href="m.media_url" target="_blank" class="file-link">
-              📎 {{ m.message || 'File Attachment' }}
-            </a>
-          </template>
+        <!-- IMAGE -->
+        <template v-if="m.media_type && m.media_type.startsWith('image')">
+          <img :src="m.media_url" class="img" />
+        </template>
 
-          <!-- text -->
-          <template v-else>
-            <span>{{ m.message }}</span>
-          </template>
+        <!-- FILE -->
+        <template v-else-if="m.media_type">
+          <a :href="m.media_url" target="_blank" class="file">
+            📎 {{ m.message ?? 'Attachment' }}
+          </a>
+        </template>
 
-          <div class="time">{{ m.created_at }}</div>
-        </div>
+        <!-- TEXT -->
+        <template v-else>
+          <span>{{ m.message }}</span>
+        </template>
 
-        <div v-if="!messages.length" class="text-center mt-10 text-grey">
-          <small>No messages</small>
-        </div>
+        <div class="time">{{ m.created_at }}</div>
+      </div>
+
+      <div v-if="!messages.length && !loading" class="no-msg">
+        <small>No messages.</small>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.room-wrapper { height:100%; display:flex; flex-direction:column; }
-.messages-container { flex:1; overflow-y:auto; padding:10px 20px; display:flex; flex-direction:column; gap:8px; }
-.bubble { max-width:60%; padding:10px 14px; border-radius:12px; background:#fff; border:1px solid #e6e6e6; }
-.bubble-me { background:#d0f5c7; align-self:flex-end; }
-.time { font-size:11px; text-align:right; opacity:0.6; margin-top:3px; }
-.chat-img { max-width:200px; border-radius:10px; display:block; margin-bottom:6px; }
-.file-link { text-decoration:none; font-size:14px; }
+.wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* BUBBLE */
+.bubble {
+  max-width: 65%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+/* CUSTOMER (LEFT) */
+.bubble-you {
+  align-self: flex-start;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  color: #111;
+}
+
+/* AGENT (RIGHT) */
+.bubble-me {
+  align-self: flex-end;
+  background: #d0f5c7;
+  border: 1px solid #b6e8b3;
+  color: #0a3b21;
+}
+
+.time {
+  font-size: 11px;
+  margin-top: 6px;
+  opacity: 0.55;
+  text-align: right;
+}
+
+.img {
+  max-width: 220px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
+.file {
+  color: #2979ff;
+  text-decoration: none;
+}
+
+.no-room, .no-msg, .loading {
+  text-align: center;
+  margin-top: 25px;
+  color: #888;
+}
 </style>
