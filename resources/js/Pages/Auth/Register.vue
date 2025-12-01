@@ -7,6 +7,7 @@ const form = useForm({
   email: '',
   password: '',
   password_confirmation: '',
+  role: '', // ← tambah role
 });
 
 const showPassword = ref(false);
@@ -69,6 +70,25 @@ const submit = () => {
             density="comfortable"
             :error-messages="form.errors.email"
             class="mb-4"
+            required
+          />
+
+          <!-- ROLE -->
+          <v-select
+            v-model="form.role"
+            :items="[
+              { title: 'Super Admin', value: 'superadmin' },
+              { title: 'Admin', value: 'admin' },
+              { title: 'Supervisor', value: 'supervisor' },
+              { title: 'Agent', value: 'agent' },
+            ]"
+            label="Select Role"
+            item-title="title"
+            item-value="value"
+            variant="outlined"
+            density="comfortable"
+            class="mb-4"
+            :error-messages="form.errors.role"
             required
           />
 

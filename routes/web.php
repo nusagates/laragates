@@ -19,6 +19,7 @@ use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\BroadcastApprovalController;
 use App\Http\Controllers\BroadcastReportController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Middleware\RoleMiddleware;
 
 // Chat Advanced
 use App\Http\Controllers\Api\Chat\ChatSessionController;
@@ -44,28 +45,30 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
-| Protected Routes (Authenticated & Verified)
+| Protected (Authenticated + Verified)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Dashboard + Chat UI
-    |--------------------------------------------------------------------------
-    */
+    // Dashboard + Chat
     Route::get('/dashboard', fn() => Inertia::render('Dashboard'))->name('dashboard');
     Route::get('/chat', fn() => Inertia::render('Chat/Index'))->name('chat');
 
+    /*
+    |--------------------------------------------------------------------------
+    | Heartbeat (WAJIB untuk agent & supervisor)
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
+    Route::post('/agent/offline', [AgentController::class, 'offline']);
 
     /*
     |--------------------------------------------------------------------------
     | Analytics
     |--------------------------------------------------------------------------
     */
-    Route::get('/analytics', function () {
-        return Inertia::render('Analytics/AnalyticsDashboard');
-    })->name('analytics');
+    Route::get('/analytics', fn() => Inertia::render('Analytics/AnalyticsDashboard'))
+        ->name('analytics');
 
     Route::prefix('analytics')->group(function () {
         Route::get('/metrics', [AnalyticsController::class, 'metrics']);
@@ -76,14 +79,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/sessions', [AnalyticsController::class, 'sessions']);
     });
 
-    // OPTIONAL
-    Route::get('/analytics/sessions', function () {
-        return DB::table('sessions')->where('status', 'active')->get();
-    });
-
     /*
     |--------------------------------------------------------------------------
-    | Chat Advanced API
+    | Chat API
     |--------------------------------------------------------------------------
     */
     Route::prefix('chat')->group(function () {
@@ -97,21 +95,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
-
-        Route::post('/sessions/outbound', [ChatSessionController::class, 'outbound']);
-        Route::post('/sessions/{session}/convert-ticket', [ChatSessionController::class, 'convertToTicket']);
-
-        Route::post('/sessions/{session}/typing', [TypingController::class, 'typing']);
-        Route::get('/chat/sessions/{session}/messages', [\App\Http\Controllers\ChatController::class, 'messages']);
-        Route::post('/chat/sessions/{session}/messages', [ChatController::class, 'sendMedia']);
-        Route::post('/chat/sessions/{session}/send', [ChatController::class, 'send']);
-Route::post('/chat/sessions/{session}/media', [ChatController::class, 'sendMedia']);
     });
-
 
     /*
     |--------------------------------------------------------------------------
-    | Ticketing System
+    | Tickets
     |--------------------------------------------------------------------------
     */
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
@@ -121,32 +109,61 @@ Route::post('/chat/sessions/{session}/media', [ChatController::class, 'sendMedia
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
 
+    /*
+    |--------------------------------------------------------------------------
+    | Templates (Semua user authenticated bisa akses)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index');
+    Route::get('/templates-list', [WhatsappTemplateController::class, 'list'])->name('templates.list');
+
+    Route::prefix('templates')->group(function () {
+        Route::post('/', [WhatsappTemplateController::class, 'store'])->name('templates.store');
+        Route::get('/{template}', [WhatsappTemplateController::class, 'show'])->name('templates.show');
+        Route::put('/{template}', [WhatsappTemplateController::class, 'update'])->name('templates.update');
+        Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy');
+
+        Route::post('/{template}/submit', [WhatsappTemplateController::class, 'submit'])->name('templates.submit');
+        Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync'])->name('templates.sync');
+    });
 
     /*
     |--------------------------------------------------------------------------
-    | *** FIX HERE ***
-    | MAKE templates-list PUBLIC FOR BROADCAST
+    | Broadcast (Supervisor & Superadmin boleh)
     |--------------------------------------------------------------------------
     */
-
-    // 🔥 DULUNYA hanya superadmin → sekarang semua user yang login bisa akses
-    Route::get('/templates-list', [WhatsappTemplateController::class, 'list'])
-        ->name('templates.list');
+    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
+    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
+    Route::post('/broadcast/campaigns/{campaign}/upload-targets',
+        [BroadcastController::class, 'uploadTargets']
+    )->name('broadcast.upload-targets');
 
 
     /*
     |--------------------------------------------------------------------------
-    | SUPERADMIN ONLY
+    | Only Superadmin Block
     |--------------------------------------------------------------------------
     */
-    Route::middleware(['role:superadmin'])->group(function () {
+    Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
 
-        // Broadcast Report
+        // Settings
+        Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings/general', [SettingController::class, 'saveGeneral']);
+        Route::post('/settings/waba', [SettingController::class, 'saveWaba']);
+        Route::post('/settings/preferences', [SettingController::class, 'savePreferences']);
+
+        // Approvals
+        Route::get('/broadcast/approvals', [BroadcastApprovalController::class, 'index'])
+            ->name('broadcast.approvals.index');
+        Route::post('/broadcast/{campaign}/request-approval',
+            [BroadcastApprovalController::class, 'requestApproval']
+        )->name('broadcast.request-approval');
+
+        // Broadcast Reports
         Route::get('/broadcast/report', [BroadcastReportController::class, 'index'])
             ->name('broadcast.report.index');
         Route::get('/broadcast/report/{campaign}', [BroadcastReportController::class, 'show'])
             ->name('broadcast.report.show');
-
 
         // Agent Management
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
@@ -155,105 +172,8 @@ Route::post('/chat/sessions/{session}/media', [ChatController::class, 'sendMedia
         Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
         Route::patch('/agents/{user}/status', [AgentController::class, 'updateStatus'])->name('agents.status');
         Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-
-        Route::post('/templates/{template}/send', [WhatsappTemplateController::class, 'send'])
-    ->name('templates.send');
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Broadcast Approvals
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/broadcast/approvals', [BroadcastApprovalController::class, 'index'])
-            ->name('broadcast.approvals.index');
-
-        Route::post('/broadcast/approvals/{approval}/approve',
-            [BroadcastApprovalController::class, 'approve'])
-            ->name('broadcast.approvals.approve');
-
-        Route::post('/broadcast/approvals/{approval}/reject',
-            [BroadcastApprovalController::class, 'reject'])
-            ->name('broadcast.approvals.reject');
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Settings
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
-        Route::post('/settings/general', [SettingController::class, 'saveGeneral'])->name('settings.general');
-        Route::post('/settings/waba', [SettingController::class, 'saveWaba'])->name('settings.waba');
-        Route::post('/settings/preferences', [SettingController::class, 'savePreferences'])->name('settings.preferences');
-        Route::get('/settings/test-webhook', [SettingController::class, 'testWebhook'])->name('settings.testWebhook');
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | TEMPLATE MODULE
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index');
-
-        Route::prefix('templates')->group(function () {
-
-            Route::post('/', [WhatsappTemplateController::class, 'store'])->name('templates.store');
-            Route::get('/{template}', [WhatsappTemplateController::class, 'show'])->name('templates.show');
-            Route::put('/{template}', [WhatsappTemplateController::class, 'update'])->name('templates.update');
-            Route::delete('/{template}', [WhatsappTemplateController::class, 'destroy'])->name('templates.destroy');
-
-            Route::post('/{template}/submit', [WhatsappTemplateController::class, 'submit'])->name('templates.submit');
-            Route::post('/{template}/approve', [WhatsappTemplateController::class, 'approve'])->name('templates.approve');
-            Route::post('/{template}/reject', [WhatsappTemplateController::class, 'reject'])->name('templates.reject');
-
-            Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync'])
-                ->name('templates.sync');
-
-            Route::post('/{template}/versions', [WhatsappTemplateController::class, 'createVersion'])
-                ->name('templates.versions.create');
-            Route::post('/{template}/versions/{version}/revert', [WhatsappTemplateController::class, 'revertVersion'])
-                ->name('templates.versions.revert');
-
-            Route::post('/{template}/notes', [WhatsappTemplateController::class, 'addNote'])
-                ->name('templates.notes.add');
-                // routes/web.php
-Route::post('/templates/{template}/send', [WhatsappTemplateController::class, 'sendMessage']);
-
-        });
-
-        Route::post('/templates-sync-all', [WhatsappTemplateController::class, 'syncAll'])
-            ->name('templates.sync-all'); 
-
-            Route::post('/templates/{template}/send-preview',
-    [WhatsappTemplateController::class, 'sendPreview']
-)->name('templates.send-preview');
-
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | BROADCAST MODULE
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
-        Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-        Route::post('/broadcast/campaigns/{campaign}/upload-targets',
-            [BroadcastController::class, 'uploadTargets'])
-            ->name('broadcast.upload-targets');
-
-        Route::post('/broadcast/{campaign}/request-approval',
-            [BroadcastApprovalController::class, 'requestApproval'])
-            ->name('broadcast.request-approval');
-
-        Route::post('/broadcast/{campaign}/approve',
-            [BroadcastApprovalController::class, 'approve'])
-            ->name('broadcast.approve');
-
-        Route::post('/broadcast/{campaign}/reject',
-            [BroadcastApprovalController::class, 'reject'])
-            ->name('broadcast.reject');
     });
+
 });
 
 
