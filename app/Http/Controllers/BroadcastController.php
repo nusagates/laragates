@@ -2,116 +2,248 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SendBroadcastCampaignJob;
 use App\Models\BroadcastCampaign;
 use App\Models\BroadcastTarget;
 use App\Models\WhatsappTemplate;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
 
 class BroadcastController extends Controller
 {
+    /**
+     * MAIN PAGE (Broadcast Create)
+     */
     public function index()
     {
-        $templates = WhatsappTemplate::orderBy('name')->get();
+        // 🔥 FIX: AMBIL TEMPLATE AGAR MUNCUL DI DROPDOWN
+        $templates = WhatsappTemplate::where('status', 'approved')
+            ->orderBy('updated_at', 'desc')
+            ->get();
 
-        $history = BroadcastCampaign::with('template')
-            ->latest()
-            ->take(10)
+        // Riwayat broadcast
+        $history = BroadcastCampaign::orderBy('created_at', 'desc')
+            ->limit(10)
             ->get()
-            ->map(function (BroadcastCampaign $c) {
+            ->map(function ($c) {
                 return [
-                    'id'        => $c->id,
-                    'name'      => $c->name,
-                    'template'  => $c->template?->name,
-                    'status'    => $c->status,
-                    'sent'      => $c->sent_count,
-                    'failed'    => $c->failed_count,
-                    'date'      => optional($c->created_at)->format('Y-m-d'),
+                    'id'     => $c->id,
+                    'name'   => $c->name,
+                    'sent'   => $c->sent_count ?? 0,
+                    'failed' => $c->failed_count ?? 0,
+                    'date'   => $c->created_at->format('Y-m-d H:i'),
                 ];
             });
 
         return Inertia::render('Broadcast/Index', [
-            'templates' => $templates,
-            'history'   => $history,
+            'templates' => $templates,   // ✔ WAJIB untuk dropdown
+            'history'   => $history,     // ✔ History panel
         ]);
     }
 
+
+    /**
+     * CREATE CAMPAIGN (DRAFT)
+     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'name'            => 'required|string|max:255',
-            'template_id'     => 'required|exists:whatsapp_templates,id',
-            'audience_type'   => 'required|in:all,csv',
-            'schedule_type'   => 'required|in:now,later',
-            'send_at'         => 'nullable|date',
-            'csv_file'        => 'nullable|file|mimes:csv,txt',
+        $request->validate([
+            'name'                  => 'required|string|max:255',
+            'template_id'           => 'required|exists:whatsapp_templates,id',
+            'audience_type'         => 'required|in:all,csv',
+            'schedule_type'         => 'required|in:now,later',
+            'send_at'               => 'nullable|date',
         ]);
 
-        // Untuk saat ini kita implement dulu tipe CSV.
-        if ($data['audience_type'] === 'csv' && ! $request->hasFile('csv_file')) {
-            return back()->withErrors(['csv_file' => 'CSV file is required for CSV audience.']);
-        }
+        $template = WhatsappTemplate::findOrFail($request->template_id);
 
-        return DB::transaction(function () use ($request, $data) {
+        return DB::transaction(function () use ($request, $template) {
 
             $campaign = BroadcastCampaign::create([
-                'name'                 => $data['name'],
-                'whatsapp_template_id' => $data['template_id'],
-                'audience_type'        => $data['audience_type'],
-                'status'               => $data['schedule_type'] === 'now' ? 'pending' : 'scheduled',
-                'send_now'             => $data['schedule_type'] === 'now',
-                'send_at'              => $data['schedule_type'] === 'later'
-                    ? Carbon::parse($data['send_at'])
-                    : null,
+                'name'                  => $request->name,
+                'whatsapp_template_id'  => $template->id,
+                'audience_type'         => $request->audience_type,
+                'send_now'              => $request->schedule_type === 'now',
+                'send_at'               => $request->schedule_type === 'later'
+                                            ? Carbon::parse($request->send_at)
+                                            : null,
+                'status'                => 'draft',
+                'created_by'            => auth()->id(),
+                'total_targets'         => 0,
             ]);
 
-            $targets = [];
+            return response()->json([
+                'success'   => true,
+                'campaign'  => $campaign,
+            ]);
+        });
+    }
 
-            if ($data['audience_type'] === 'csv') {
-                $file = $request->file('csv_file');
-                $handle = fopen($file->getRealPath(), 'r');
 
-                while (($row = fgetcsv($handle, 1000, ',')) !== false) {
-                    if (!isset($row[0])) {
-                        continue;
-                    }
-                    $phone = trim($row[0]);
-                    if ($phone === '' || !preg_match('/^\d+$/', $phone)) {
-                        continue;
-                    }
+    /**
+     * UPLOAD TARGETS (CSV/XLSX)
+     */
+    public function uploadTargets(Request $request, BroadcastCampaign $campaign)
+    {
+        if ($campaign->status !== 'draft') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Targets can only be uploaded while campaign is in DRAFT status.'
+            ], 400);
+        }
 
-                    $targets[] = [
-                        'broadcast_campaign_id' => $campaign->id,
-                        'phone'                 => $phone,
-                        'status'                => 'pending',
-                        'created_at'            => now(),
-                        'updated_at'            => now(),
-                    ];
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx'
+        ]);
+
+        $rows = $this->parseFile($request->file('file'));
+
+        if (empty($rows)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Uploaded file is empty.'
+            ], 422);
+        }
+
+        $template = $campaign->template;
+        $requiredVars = $template->body_params_count ?? $this->detectVariables($template->body);
+
+        $insertData = [];
+        $count = 0;
+
+        foreach ($rows as $row) {
+
+            $name   = $row['name']  ?? $row[0] ?? null;
+            $phone  = $row['phone'] ?? $row[1] ?? null;
+
+            $phone = $this->normalizePhone($phone);
+            if (!$phone) continue;
+
+            $variables = $row['variables'] ?? [];
+            if (!is_array($variables)) {
+                $variables = [];
+            }
+
+            if ($requiredVars > 0 && count($variables) < $requiredVars) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Row has invalid variable count for template. Required: {$requiredVars}"
+                ], 422);
+            }
+
+            $insertData[] = [
+                'broadcast_campaign_id' => $campaign->id,
+                'name'      => $name,
+                'phone'     => $phone,
+                'variables' => json_encode($variables),
+                'status'    => 'pending',
+                'created_at'=> now(),
+                'updated_at'=> now(),
+            ];
+
+            $count++;
+        }
+
+        if ($count > 0) {
+            BroadcastTarget::insert($insertData);
+            $campaign->total_targets += $count;
+            $campaign->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'added'   => $count,
+            'message' => "Successfully added {$count} recipients."
+        ]);
+    }
+
+
+    /**
+     * DETECT TEMPLATE VARIABLES ({{1}}, {{2}} ...)
+     */
+    private function detectVariables($text)
+    {
+        preg_match_all('/\{\{\d+\}\}/', $text, $matches);
+        return count($matches[0]);
+    }
+
+
+    /**
+     * PARSE CSV / XLSX
+     */
+    private function parseFile($file)
+    {
+        $ext = strtolower($file->getClientOriginalExtension());
+        $rows = [];
+
+        if ($ext === 'xlsx') {
+            $data = Excel::toArray([], $file)[0];
+            foreach ($data as $i => $row) {
+                if ($i === 0) continue;
+                $rows[] = $row;
+            }
+        } else {
+            if (($handle = fopen($file->getRealPath(), 'r')) !== false) {
+                $i = 0;
+                while (($data = fgetcsv($handle, 0, ",")) !== false) {
+                    if ($i === 0) { $i++; continue; }
+                    $rows[] = $data;
                 }
-
                 fclose($handle);
             }
+        }
 
-            // TODO: audience_type 'all' -> load semua customer dari tabel customers
+        return $rows;
+    }
 
-            if (!empty($targets)) {
-                BroadcastTarget::insert($targets);
-                $campaign->update(['total_targets' => count($targets)]);
-            }
 
-            // Dispatch job
-            if ($campaign->send_now) {
-                SendBroadcastCampaignJob::dispatch($campaign);
-            } elseif ($campaign->send_at) {
-                SendBroadcastCampaignJob::dispatch($campaign)->delay($campaign->send_at);
-            }
+    /**
+     * NORMALIZE PHONE NUMBER
+     * 0812 → 62812
+     */
+    private function normalizePhone($phone)
+    {
+        if (!$phone) return null;
 
-            return redirect()
-                ->route('broadcast')
-                ->with('success', 'Broadcast campaign created!');
-        });
+        $phone = preg_replace('/[^0-9]/', '', $phone);
+
+        if (str_starts_with($phone, "0")) {
+            return "62" . substr($phone, 1);
+        }
+
+        if (str_starts_with($phone, "62")) {
+            return $phone;
+        }
+
+        if (strlen($phone) > 6) {
+            return "62" . $phone;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * REPORT PAGE
+     */
+    public function report(Request $request)
+    {
+        $query = BroadcastCampaign::with('template', 'creator')
+            ->orderBy('created_at', 'desc');
+
+        if ($search = $request->input('search')) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        return Inertia::render('Broadcast/Report', [
+            'campaigns' => $query->paginate(10)->withQueryString(),
+            'filters'   => $request->only('search', 'status'),
+        ]);
     }
 }

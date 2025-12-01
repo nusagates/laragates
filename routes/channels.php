@@ -2,6 +2,12 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
-Broadcast::channel('chat.{sessionId}', function ($user, $sessionId) {
-    return $user !== null; // sementara bebas untuk user login
+/*
+|--------------------------------------------------------------------------
+| Broadcast Channels
+|--------------------------------------------------------------------------
+*/
+
+Broadcast::channel('agent.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
 });

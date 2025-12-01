@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\ChatSession;
 
 class Ticket extends Model
 {
@@ -32,5 +34,10 @@ class Ticket extends Model
     public function agent()
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function chatSession(): BelongsTo
+    {
+        return $this->belongsTo(ChatSession::class, 'chat_session_id');
     }
 }

@@ -1,55 +1,117 @@
 <script setup>
-import { ref } from "vue";
-import { Link } from "@inertiajs/vue3";
+import { ref, onMounted, onUnmounted } from "vue";
+import { Link, usePage } from "@inertiajs/vue3";
+import axios from "axios";
+
+// === GET USER ROLE ===
+const page = usePage();
+const userRole = page.props.auth.user.role;
 
 const drawer = ref(true);
 
+// ===============================
+// 📌 SIDEBAR MENU (Role Based)
+// ===============================
 const menu = [
-  { label: "Dashboard", icon: "mdi-view-dashboard", href: "/dashboard" },
-  { label: "Chat", icon: "mdi-whatsapp", href: "/chat" },
-  { label: "Agents", icon: "mdi-account-group", href: "/agents" },
-  { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets" },
-  { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates" },
-  { label: "Broadcast", icon: "mdi-send", href: "/broadcast" },
-  { label: "Settings", icon: "mdi-cog", href: "/settings" },
+  { label: "Dashboard", icon: "mdi-view-dashboard", href: "/dashboard", roles: ["admin", "superadmin", "supervisor", "agent"] },
+  { label: "Chat", icon: "mdi-whatsapp", href: "/chat", roles: ["admin", "superadmin", "supervisor", "agent"] },
+  { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets", roles: ["admin", "superadmin", "supervisor", "agent"] },
+
+  // — Restricted (Agent tidak bisa lihat)
+  { label: "Agents", icon: "mdi-account-group", href: "/agents", roles: ["admin", "superadmin", "supervisor"] },
+  { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates", roles: ["admin", "superadmin", "supervisor"] },
+  { label: "Broadcast", icon: "mdi-send", href: "/broadcast", roles: ["admin", "superadmin", "supervisor"] },
+
+  // 🔥 NEW: Analytics
+  { label: "Analytics", icon: "mdi-finance", href: "/analytics", roles: ["admin", "superadmin", "supervisor"] },
+
+  { label: "Settings", icon: "mdi-cog", href: "/settings", roles: ["admin", "superadmin", "supervisor"] },
 ];
+
+// ===============================
+// 👇 HEARTBEAT REALTIME OPTIMIZED
+// ===============================
+let heartbeatInterval = null;
+let offlineTimer = null;
+
+// Kirim heartbeat → set agent online
+const sendHeartbeat = () => {
+  axios.post("/agent/heartbeat").catch(() => {});
+};
+
+// Detect idle (tab tidak aktif / user AFK)
+const startIdleTimer = () => {
+  clearTimeout(offlineTimer);
+  offlineTimer = setTimeout(() => {
+    axios.post("/agent/offline").catch(() => {});
+  }, 15000);
+};
+
+// Event visibility
+const handleVisibility = () => {
+  if (document.hidden) {
+    startIdleTimer();
+  } else {
+    sendHeartbeat();
+    clearTimeout(offlineTimer);
+  }
+};
+
+// === THROTTLE MOUSEMOVE ===
+let lastMove = 0;
+const sendMoveHeartbeat = () => {
+  const now = Date.now();
+  if (now - lastMove > 3000) {
+    sendHeartbeat();
+    lastMove = now;
+  }
+};
+
+onMounted(() => {
+  heartbeatInterval = setInterval(sendHeartbeat, 5000);
+
+  document.addEventListener("visibilitychange", handleVisibility);
+  window.addEventListener("focus", sendHeartbeat);
+  window.addEventListener("mousemove", sendMoveHeartbeat);
+  window.addEventListener("keydown", sendHeartbeat);
+});
+
+onUnmounted(() => {
+  clearInterval(heartbeatInterval);
+  clearTimeout(offlineTimer);
+  document.removeEventListener("visibilitychange", handleVisibility);
+  window.removeEventListener("focus", sendHeartbeat);
+  window.removeEventListener("mousemove", sendMoveHeartbeat);
+  window.removeEventListener("keydown", sendHeartbeat);
+});
 </script>
 
 <template>
   <v-app>
 
-    <!-- SIDEBAR -->
-    <v-navigation-drawer
-      v-model="drawer"
-      elevation="10"
-      class="pt-4"
-      width="250"
-    >
+    <!-- ============= SIDEBAR ============= -->
+    <v-navigation-drawer v-model="drawer" elevation="10" width="250" class="pt-4">
       <div class="text-center mb-6">
-        <h2 class="font-weight-bold text-h6">WABA CS Panel</h2>
+        <h2 class="font-weight-bold text-h6">WABA</h2>
       </div>
 
-      <v-list density="compact">
+      <v-list density="compact" nav>
         <v-list-item
-          v-for="item in menu"
+          v-for="item in menu.filter(m => m.roles.includes(userRole))"
           :key="item.href"
           link
           :class="[$page.url.startsWith(item.href) ? 'active-menu' : '']"
         >
-          <Link :href="item.href" class="w-100 d-flex align-center" style="text-decoration:none; color:inherit;">
-            <v-list-item-avatar size="32" class="mr-3">
-              <v-icon>{{ item.icon }}</v-icon>
-            </v-list-item-avatar>
-
-            <v-list-item-title>
-              {{ item.label }}
-            </v-list-item-title>
+          <Link :href="item.href" style="color:inherit; text-decoration:none;" class="w-100 d-flex align-center">
+            <v-icon class="mr-4">{{ item.icon }}</v-icon>
+            <v-list-item-title>{{ item.label }}</v-list-item-title>
           </Link>
         </v-list-item>
       </v-list>
     </v-navigation-drawer>
 
-    <!-- NAVBAR -->
+
+    <!-- ============= TOP NAVBAR ============= -->
     <v-app-bar flat elevation="2">
       <v-btn icon @click="drawer = !drawer">
         <v-icon>mdi-menu</v-icon>
@@ -64,7 +126,7 @@ const menu = [
       <!-- USER DROPDOWN -->
       <v-menu>
         <template #activator="{ props }">
-          <v-btn v-bind="props" variant="text" class="text-capitalize">
+          <v-btn variant="text" v-bind="props" class="text-capitalize">
             <v-icon left>mdi-account-circle</v-icon>
             {{ $page.props.auth.user.name }}
             <v-icon right>mdi-chevron-down</v-icon>
@@ -79,20 +141,14 @@ const menu = [
           <v-divider />
 
           <v-list-item>
-            <Link
-              href="/logout"
-              method="post"
-              as="button"
-              class="text-red"
-            >
-              Logout
-            </Link>
+            <Link href="/logout" method="post" as="button" class="text-red">Logout</Link>
           </v-list-item>
         </v-list>
       </v-menu>
     </v-app-bar>
 
-    <!-- MAIN CONTENT -->
+
+    <!-- ============= CONTENT WRAPPER ============= -->
     <v-main>
       <v-container class="pt-8">
         <slot />
@@ -114,7 +170,7 @@ const menu = [
 }
 
 a {
-  text-decoration: none;
   color: inherit;
+  text-decoration: none;
 }
 </style>

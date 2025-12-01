@@ -1,80 +1,150 @@
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, watch, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({
   roomId: Number
 })
 
+const loading = ref(false)
 const messages = ref([])
-const typing = ref(false)
-const messageBox = ref(null)
+const panel = ref(null)
 
-/* ======================= LOAD CHAT ======================= */
+/* LOAD MESSAGES */
 async function loadMessages() {
-  if (!props.roomId) return
-  const res = await axios.get(`/api/chats/${props.roomId}`)
-  messages.value = res.data.messages
-  autoScroll()
+  if (!props.roomId) return (messages.value = [])
+
+  loading.value = true
+  try {
+    const res = await axios.get(`/chat/sessions/${props.roomId}/messages`)
+    messages.value = res.data
+
+    await nextTick()
+    scrollBottom()
+  } catch (e) { console.error(e) }
+  finally { loading.value = false }
 }
 
-/* ======================= REALTIME LISTEN ======================= */
-function listenRealtime() {
-  if (!props.roomId) return
-
-  window.Echo.private(`chat.${props.roomId}`)
-    .listen('MessageSent', (e) => {
-      messages.value.push({
-        id: e.id,
-        sender: e.sender,
-        text: e.text,
-        time: e.time,
-        is_me: e.is_me
-      })
-      autoScroll()
-    })
+function scrollBottom() {
+  if (panel.value) {
+    panel.value.scrollTop = panel.value.scrollHeight
+  }
 }
 
-/* ======================= AUTO SCROLL ======================= */
-function autoScroll() {
-  nextTick(() => {
-    if (!messageBox.value) return
-    messageBox.value.scrollTop = messageBox.value.scrollHeight
-  })
+watch(() => props.roomId, () => loadMessages())
+onMounted(() => loadMessages())
+
+/* BUBBLE CLASS */
+function bubbleClass(m) {
+  return m.is_outgoing ? 'bubble-me' : 'bubble-you'
 }
-
-watch(() => props.roomId, () => {
-  loadMessages()
-  listenRealtime()
-})
-
-onMounted(() => {
-  loadMessages()
-  listenRealtime()
-})
 </script>
 
 <template>
-  <div ref="messageBox" style="max-height: calc(100vh - 230px); overflow-y:auto;">
-    <div v-for="m in messages" :key="m.id" class="mb-2">
+  <div class="wrapper">
+    
+    <div v-if="!roomId" class="no-room">
+      <small>Select a chat...</small>
+    </div>
 
-      <!-- Customer -->
-      <div v-if="m.sender === 'customer'" class="d-flex">
-        <v-avatar color="blue" size="26" class="me-2"><span class="white--text">C</span></v-avatar>
-        <v-sheet class="pa-2 px-3" color="#e9f1ff" rounded style="max-width: 70%;">
-          <div class="text-body-2">{{ m.text }}</div>
-          <small class="text-grey text-caption">{{ m.time }}</small>
-        </v-sheet>
+    <div v-else ref="panel" class="messages">
+      <div v-if="loading" class="loading">
+        <small>Loading...</small>
       </div>
 
-      <!-- Agent -->
-      <div v-else class="d-flex justify-end">
-        <v-sheet class="pa-2 px-3 d-flex flex-column" color="#dcf8c6" rounded style="max-width: 70%;">
-          <div class="text-body-2">{{ m.text }}</div>
-          <small class="text-grey text-caption">{{ m.time }}</small>
-        </v-sheet>
+      <div v-for="m in messages" :key="m.id" :class="['bubble', bubbleClass(m)]">
+
+        <!-- IMAGE -->
+        <template v-if="m.media_type && m.media_type.startsWith('image')">
+          <img :src="m.media_url" class="img" />
+        </template>
+
+        <!-- FILE -->
+        <template v-else-if="m.media_type">
+          <a :href="m.media_url" target="_blank" class="file">
+            📎 {{ m.message ?? 'Attachment' }}
+          </a>
+        </template>
+
+        <!-- TEXT -->
+        <template v-else>
+          <span>{{ m.message }}</span>
+        </template>
+
+        <div class="time">{{ m.created_at }}</div>
       </div>
 
+      <div v-if="!messages.length && !loading" class="no-msg">
+        <small>No messages.</small>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.wrapper {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* BUBBLE */
+.bubble {
+  max-width: 65%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+/* CUSTOMER (LEFT) */
+.bubble-you {
+  align-self: flex-start;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  color: #111;
+}
+
+/* AGENT (RIGHT) */
+.bubble-me {
+  align-self: flex-end;
+  background: #d0f5c7;
+  border: 1px solid #b6e8b3;
+  color: #0a3b21;
+}
+
+.time {
+  font-size: 11px;
+  margin-top: 6px;
+  opacity: 0.55;
+  text-align: right;
+}
+
+.img {
+  max-width: 220px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
+.file {
+  color: #2979ff;
+  text-decoration: none;
+}
+
+.no-room, .no-msg, .loading {
+  text-align: center;
+  margin-top: 25px;
+  color: #888;
+}
+</style>

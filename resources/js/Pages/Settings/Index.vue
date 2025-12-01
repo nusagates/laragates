@@ -1,62 +1,55 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head, useForm, usePage } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { Head, usePage, router } from '@inertiajs/vue3'
+import { ref, watch } from 'vue'
 
-/* ===================== LOAD DATA DARI BACKEND ===================== */
-const page = usePage()
-const s = page.props.settings // shortcut biar rapi
+const props = usePage().props
 
-/* ===================== TAB CONTROL ===================== */
-const tab = ref('general')
+// data dari backend
+const settings = ref({
+  company_name: props.settings?.company_name ?? '',
+  timezone: props.settings?.timezone ?? 'Asia/Jakarta',
 
-/* ===================== GENERAL ===================== */
-const general = useForm({
-  company_name: s?.company_name ?? 'CS WABA Demo',
-  timezone: s?.timezone ?? 'Asia/Jakarta',
+  wa_phone: props.settings?.wa_phone ?? '',
+  wa_webhook: props.settings?.wa_webhook ?? '',
+  wa_api_key: props.settings?.wa_api_key ?? '',
+
+  notif_sound: props.settings?.notif_sound ?? false,
+  notif_desktop: props.settings?.notif_desktop ?? false,
+  auto_assign_ticket: props.settings?.auto_assign_ticket ?? false,
 })
+
+// TAB STATE
+const tab = ref(0)
 
 function saveGeneral() {
-  general.post('/settings/general')
+  router.post(route('settings.general'), {
+    company_name: settings.value.company_name,
+    timezone: settings.value.timezone,
+  })
 }
 
-/* ===================== WHATSAPP ===================== */
-const whatsapp = useForm({
-  phone_number: s?.wa_phone_number ?? '',
-  webhook_url: s?.wa_webhook_url ?? '',
-  api_key: s?.wa_api_key ?? '',
-  status: s?.wa_phone_number ? 'connected' : 'disconnected',
-  show_key: false,
-})
-
-function saveWhatsApp() {
-  whatsapp.post('/settings/whatsapp')
+function saveWaba() {
+  router.post(route('settings.waba'), {
+    wa_phone: settings.value.wa_phone,
+    wa_webhook: settings.value.wa_webhook,
+    wa_api_key: settings.value.wa_api_key,
+  })
 }
-
-/* ===================== PREFERENCES ===================== */
-const preferences = useForm({
-  sound_notification: s?.notif_sound ?? true,
-  desktop_notification: s?.notif_desktop ?? true,
-  auto_assign_ticket: s?.auto_assign ?? false,
-})
-
-function savePreferences() {
-  preferences.post('/settings/preferences')
-}
-
-/* ===================== TEST WEBHOOK MODAL ===================== */
-const showTest = ref(false)
-const testResponse = ref(null)
 
 function testWebhook() {
-  testResponse.value = null
-  setTimeout(() => {
-    testResponse.value = {
-      success: true,
-      message: 'Webhook received successfully!',
-      timestamp: new Date().toLocaleString()
-    }
-  }, 800)
+  router.get(route('settings.testWebhook'), {}, {
+    onSuccess: () => alert("Webhook reachable!"),
+    onError: () => alert("Webhook NOT reachable."),
+  })
+}
+
+function savePreferences() {
+  router.post(route('settings.preferences'), {
+    notif_sound: settings.value.notif_sound,
+    notif_desktop: settings.value.notif_desktop,
+    auto_assign_ticket: settings.value.auto_assign_ticket,
+  })
 }
 </script>
 
@@ -66,140 +59,121 @@ function testWebhook() {
   <AdminLayout>
     <template #title>Settings</template>
 
-    <v-card elevation="2" class="pa-0">
+    <v-card elevation="2" class="pa-4">
 
-      <!-- ===================== TABS ===================== -->
-      <v-tabs v-model="tab" bg-color="#f5f6fa" grow>
-        <v-tab value="general" prepend-icon="mdi-cog">General</v-tab>
-        <v-tab value="whatsapp" prepend-icon="mdi-whatsapp">WhatsApp API</v-tab>
-        <v-tab value="preferences" prepend-icon="mdi-tune">Preferences</v-tab>
+      <!-- Tabs -->
+      <v-tabs v-model="tab" bg-color="transparent" color="primary">
+        <v-tab>
+          <v-icon class="mr-2">mdi-cog</v-icon>
+          GENERAL
+        </v-tab>
+        <v-tab>
+          <v-icon class="mr-2">mdi-whatsapp</v-icon>
+          WHATSAPP API
+        </v-tab>
+        <v-tab>
+          <v-icon class="mr-2">mdi-tune</v-icon>
+          PREFERENCES
+        </v-tab>
       </v-tabs>
 
-      <v-divider></v-divider>
+      <v-divider class="mb-6" />
 
-      <v-card-text class="pa-6">
-        
-        <!-- ===================== GENERAL ===================== -->
-        <div v-if="tab === 'general'">
-          <h3 class="text-h6 mb-4 font-weight-bold">General Settings</h3>
+      <!-- --------------------------- GENERAL TAB --------------------------- -->
+      <v-window v-model="tab">
+        <v-window-item :value="0">
+          <h3 class="text-h6 font-weight-bold mb-4">General Settings</h3>
 
           <v-text-field
-            v-model="general.company_name"
             label="Company Name"
-            class="mb-3"
+            v-model="settings.company_name"
+            class="mb-4"
+            density="comfortable"
           />
 
           <v-text-field
-            v-model="general.timezone"
             label="Timezone"
-            placeholder="Asia/Jakarta"
-            class="mb-3"
+            v-model="settings.timezone"
+            class="mb-4"
+            density="comfortable"
           />
 
-          <v-btn color="primary" class="mt-4" :loading="general.processing" @click="saveGeneral">
-            Save Changes
+          <v-btn color="primary" @click="saveGeneral">
+            SAVE CHANGES
           </v-btn>
-        </div>
+        </v-window-item>
 
-        <!-- ===================== WHATSAPP ===================== -->
-        <div v-if="tab === 'whatsapp'">
-          <h3 class="text-h6 mb-4 font-weight-bold">WhatsApp Business API</h3>
-
-          <v-text-field
-            v-model="whatsapp.phone_number"
-            label="Connected Phone Number"
-            class="mb-3"
-          />
+        <!-- --------------------------- WABA API TAB --------------------------- -->
+        <v-window-item :value="1">
+          <h3 class="text-h6 font-weight-bold mb-4">WhatsApp Business API</h3>
 
           <v-text-field
-            v-model="whatsapp.webhook_url"
-            label="Webhook URL"
-            class="mb-3"
             readonly
+            label="Connected Phone Number"
+            v-model="settings.wa_phone"
+            class="mb-4"
           />
 
           <v-text-field
-            v-model="whatsapp.api_key"
-            :type="whatsapp.show_key ? 'text' : 'password'"
-            label="API Key"
-            class="mb-3"
-            prepend-inner-icon="mdi-key-outline"
-            :append-inner-icon="whatsapp.show_key ? 'mdi-eye-off' : 'mdi-eye'"
-            @click:append-inner="whatsapp.show_key = !whatsapp.show_key"
+            label="Webhook URL"
+            v-model="settings.wa_webhook"
+            class="mb-4"
           />
 
-          <div class="d-flex align-center mb-4">
-            <v-chip
-              :color="whatsapp.status === 'connected' ? 'green' : 'red'"
-              dark
-              size="small"
-            >
-              {{ whatsapp.status === 'connected' ? 'Connected' : 'Disconnected' }}
+          <v-text-field
+            label="API Key"
+            v-model="settings.wa_api_key"
+            type="password"
+            class="mb-4"
+            append-inner-icon="mdi-eye"
+          />
+
+          <div class="d-flex align-center ga-4 mb-4">
+            <v-chip color="red" text-color="white">
+              Disconnected
             </v-chip>
 
-            <v-btn class="ms-3" variant="outlined" size="small">Reconnect</v-btn>
+            <v-btn size="small" variant="outlined">
+              RECONNECT
+            </v-btn>
 
-            <v-btn class="ms-3" variant="text" size="small" color="primary" @click="showTest = true">
-              Test Webhook
+            <v-btn size="small" variant="text" @click="testWebhook">
+              TEST WEBHOOK
             </v-btn>
           </div>
 
-          <p class="text-caption text-grey-darken-1">
-            Pastikan webhook URL di atas sudah dipasang di provider WhatsApp Anda.
-          </p>
-
-          <v-btn color="primary" class="mt-4" :loading="whatsapp.processing" @click="saveWhatsApp">
-            Save Changes
+          <v-btn color="primary" @click="saveWaba">
+            SAVE CHANGES
           </v-btn>
-        </div>
+        </v-window-item>
 
-        <!-- ===================== PREFERENCES ===================== -->
-        <div v-if="tab === 'preferences'">
-          <h3 class="text-h6 mb-4 font-weight-bold">Preferences</h3>
+        <!-- --------------------------- PREFERENCES TAB --------------------------- -->
+        <v-window-item :value="2">
+          <h3 class="text-h6 font-weight-bold mb-4">Preferences</h3>
 
-          <v-switch v-model="preferences.sound_notification" label="Enable sound notification for new messages" />
-          <v-switch v-model="preferences.desktop_notification" label="Show desktop notification for new chats" />
-          <v-switch v-model="preferences.auto_assign_ticket" label="Auto-assign new tickets to available agents" />
+          <v-switch
+            v-model="settings.notif_sound"
+            label="Enable sound notification for new messages"
+            class="mb-2"
+          />
 
-          <v-btn color="primary" class="mt-4" :loading="preferences.processing" @click="savePreferences">
-            Save Changes
+          <v-switch
+            v-model="settings.notif_desktop"
+            label="Show desktop notification for new chats"
+            class="mb-2"
+          />
+
+          <v-switch
+            v-model="settings.auto_assign_ticket"
+            label="Auto-assign new tickets to available agents"
+            class="mb-4"
+          />
+
+          <v-btn color="primary" @click="savePreferences">
+            SAVE CHANGES
           </v-btn>
-        </div>
-
-      </v-card-text>
+        </v-window-item>
+      </v-window>
     </v-card>
-
-    <!-- ===================== TEST WEBHOOK MODAL ===================== -->
-    <v-dialog v-model="showTest" width="450">
-      <v-card class="pa-4">
-        <h3 class="text-h6 mb-3 font-weight-bold">Test Webhook</h3>
-
-        <p class="text-body-2 text-grey-darken-1 mb-3">
-          Klik tombol di bawah untuk mengirim simulasi payload webhook.
-        </p>
-
-        <v-btn color="primary" @click="testWebhook" class="mb-3">Send Test Request</v-btn>
-
-        <v-alert
-          v-if="testResponse"
-          type="success"
-          class="mt-3"
-          border="start"
-          prominent
-        >
-          {{ testResponse.message }}  
-          <br />
-          <small>{{ testResponse.timestamp }}</small>
-        </v-alert>
-
-        <div class="d-flex justify-end mt-4">
-          <v-btn variant="text" @click="showTest = false">Close</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
-
   </AdminLayout>
 </template>
-
-<style scoped>
-</style>

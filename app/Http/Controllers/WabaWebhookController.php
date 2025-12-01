@@ -2,78 +2,84 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
-use App\Models\Ticket;
-use App\Models\TicketMessage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use App\Models\Customer;
+use App\Models\ChatSession;
+use App\Models\ChatMessage;
+use App\Services\ChatAgentRouter;
 
 class WabaWebhookController extends Controller
 {
-    // GET: verifikasi webhook dari Meta
-    public function verify(Request $request)
+    protected ChatAgentRouter $router;
+
+    public function __construct(ChatAgentRouter $router)
     {
-        $verifyToken = env('WABA_VERIFY_TOKEN');
-
-        $mode      = $request->get('hub_mode');
-        $token     = $request->get('hub_verify_token');
-        $challenge = $request->get('hub_challenge');
-
-        if ($mode === 'subscribe' && $token === $verifyToken) {
-            return response($challenge, 200);
-        }
-
-        return response('Forbidden', 403);
+        $this->router = $router;
     }
 
-    // POST: pesan masuk dari WhatsApp
+    /**
+     * WhatsApp verify webhook challenge (GET)
+     */
+    public function verify(Request $request)
+    {
+        $hub_challenge = $request->get('hub_challenge');
+        return $hub_challenge ? response($hub_challenge, 200) : response('ok', 200);
+    }
+
+    /**
+     * Receive inbound message (POST)
+     */
     public function receive(Request $request)
     {
-        $data = $request->all();
-        Log::info('WABA Webhook received', $data);
+        // Ambil data inbound dari gateway WhatsApp
+        // ❗❗ Sesuaikan field jika berbeda (sementara buat standard)
+        $phone = $request->input('phone');
+        $text  = $request->input('text');
+        $intent = $request->input('intent'); // opsional (buat NLP nanti)
 
-        if (!isset($data['entry'][0]['changes'][0]['value']['messages'][0])) {
-            return response()->json(['status' => 'ignored']);
+        if (!$phone || !$text) {
+            return response()->json(['error' => 'Invalid WhatsApp payload'], 422);
         }
 
-        $value   = $data['entry'][0]['changes'][0]['value'];
-        $message = $value['messages'][0];
-        $contact = $value['contacts'][0];
-
-        $phone = $message['from'];
-        $waMessageId = $message['id'];
-        $text = $message['text']['body'] ?? null;
-
-        // 1) Find/create customer
+        // 1️⃣ Cari / buat customer
         $customer = Customer::firstOrCreate(
             ['phone' => $phone],
-            ['name' => $contact['profile']['name'] ?? $phone]
+            ['name' => $phone]
         );
 
-        // 2) Find/create open ticket (pending or ongoing)
-        $ticket = Ticket::firstOrCreate(
-            [
+        // 2️⃣ Cari session yang masih open
+        $session = ChatSession::where('customer_id', $customer->id)
+                              ->where('status', 'open')
+                              ->first();
+
+        // 3️⃣ Jika belum ada → buat session baru
+        if (!$session) {
+            $session = ChatSession::create([
                 'customer_id' => $customer->id,
-                'status'      => 'pending'
-            ],
-            [
-                'subject' => 'New WhatsApp Conversation'
-            ]
-        );
+                'status'      => 'pending', // akan diubah router jadi open/assigned
+                'priority'    => 'normal',
+                'pinned'      => false,
+            ]);
 
-        // 3) Save message into TICKET_MESSAGES
-        TicketMessage::create([
-            'ticket_id'   => $ticket->id,
-            'sender_type' => 'customer',
-            'sender_id'   => null,
-            'message'     => $text,
+            // Auto route ke agent terbaik
+            $this->router->assignSession($session, $intent);
+        }
+
+        // 4️⃣ Simpan pesan
+        ChatMessage::create([
+            'chat_session_id' => $session->id,
+            'sender'          => 'customer',
+            'message'         => $text,
+            'type'            => 'text',
+            'status'          => 'received'
         ]);
 
-        // 4) Update last activity
-        $ticket->update(['last_message_at' => now()]);
-        $customer->update(['last_message_at' => now()]);
-
-        // TODO (next step): broadcast realtime
-        return response()->json(['status' => 'ok']);
+        // 5️⃣ Response ke gateway (WA API)
+        return response()->json([
+            'status'       => 'success',
+            'session_id'   => $session->id,
+            'assigned_to'  => $session->assigned_to,
+            'session_status' => $session->status,
+        ]);
     }
 }
