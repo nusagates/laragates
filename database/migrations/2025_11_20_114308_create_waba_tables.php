@@ -31,21 +31,10 @@ return new class extends Migration
             $table->text('message');
             $table->timestamps();
         });
-
-        Schema::create('broadcast_logs', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('broadcast_id')->constrained()->onDelete('cascade');
-            $table->string('phone');
-            $table->enum('status', ['sent', 'failed'])->default('sent');
-            $table->timestamps();
-        });
-
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('broadcast_logs');
-        Schema::dropIfExists('broadcasts');
         Schema::dropIfExists('chat_messages');
         Schema::dropIfExists('chat_sessions');
         Schema::dropIfExists('customers');

@@ -10,56 +10,94 @@ const userRole = page.props.auth.user.role;
 const drawer = ref(true);
 
 // ===============================
-// 📌 SIDEBAR MENU (Role Based)
+// 📌 SIDEBAR MENU (Role-Based)
 // ===============================
 const menu = [
-  { label: "Dashboard", icon: "mdi-view-dashboard", href: "/dashboard", roles: ["admin", "superadmin", "supervisor", "agent"] },
-  { label: "Chat", icon: "mdi-whatsapp", href: "/chat", roles: ["admin", "superadmin", "supervisor", "agent"] },
-  { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets", roles: ["admin", "superadmin", "supervisor", "agent"] },
+  // Universal
+  {
+    label: "Dashboard",
+    icon: "mdi-view-dashboard",
+    href: "/dashboard",
+    roles: ["admin", "superadmin", "supervisor", "agent"],
+  },
+  {
+    label: "Chat",
+    icon: "mdi-whatsapp",
+    href: "/chat",
+    roles: ["admin", "superadmin", "supervisor", "agent"],
+  },
+  {
+    label: "Tickets",
+    icon: "mdi-ticket-confirmation-outline",
+    href: "/tickets",
+    roles: ["admin", "superadmin", "supervisor", "agent"],
+  },
 
-  // — Restricted (Agent tidak bisa lihat)
-  { label: "Agents", icon: "mdi-account-group", href: "/agents", roles: ["admin", "superadmin", "supervisor"] },
-  { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates", roles: ["admin", "superadmin", "supervisor"] },
-  { label: "Broadcast", icon: "mdi-send", href: "/broadcast", roles: ["admin", "superadmin", "supervisor"] },
+  // Limited
+  {
+    label: "Agents",
+    icon: "mdi-account-group",
+    href: "/agents",
+    roles: ["admin", "superadmin"], // supervisor TIDAK BOLEH
+  },
 
-  // 🔥 NEW: Analytics
-  { label: "Analytics", icon: "mdi-finance", href: "/analytics", roles: ["admin", "superadmin", "supervisor"] },
+  {
+    label: "Templates",
+    icon: "mdi-file-document-multiple",
+    href: "/templates",
+    roles: ["admin", "superadmin", "supervisor"],
+  },
 
-  { label: "Settings", icon: "mdi-cog", href: "/settings", roles: ["admin", "superadmin", "supervisor"] },
+  {
+    label: "Broadcast",
+    icon: "mdi-send",
+    href: "/broadcast",
+    roles: ["admin", "superadmin", "supervisor"],
+  },
+
+  {
+    label: "Analytics",
+    icon: "mdi-finance",
+    href: "/analytics",
+    roles: ["admin", "superadmin"], // supervisor TIDAK BOLEH
+  },
+
+  // Settings → hanya superadmin
+  {
+    label: "Settings",
+    icon: "mdi-cog",
+    href: "/settings",
+    roles: ["superadmin"],
+  },
 ];
 
 // ===============================
-// 👇 HEARTBEAT REALTIME OPTIMIZED
+// ❤️ HEARTBEAT (Online Checking)
 // ===============================
 let heartbeatInterval = null;
-let offlineTimer = null;
+let idleTimer = null;
 
-// Kirim heartbeat → set agent online
 const sendHeartbeat = () => {
   axios.post("/agent/heartbeat").catch(() => {});
 };
 
-// Detect idle (tab tidak aktif / user AFK)
 const startIdleTimer = () => {
-  clearTimeout(offlineTimer);
-  offlineTimer = setTimeout(() => {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
     axios.post("/agent/offline").catch(() => {});
   }, 15000);
 };
 
-// Event visibility
 const handleVisibility = () => {
-  if (document.hidden) {
-    startIdleTimer();
-  } else {
+  if (document.hidden) startIdleTimer();
+  else {
     sendHeartbeat();
-    clearTimeout(offlineTimer);
+    clearTimeout(idleTimer);
   }
 };
 
-// === THROTTLE MOUSEMOVE ===
 let lastMove = 0;
-const sendMoveHeartbeat = () => {
+const throttledMove = () => {
   const now = Date.now();
   if (now - lastMove > 3000) {
     sendHeartbeat();
@@ -72,25 +110,30 @@ onMounted(() => {
 
   document.addEventListener("visibilitychange", handleVisibility);
   window.addEventListener("focus", sendHeartbeat);
-  window.addEventListener("mousemove", sendMoveHeartbeat);
+  window.addEventListener("mousemove", throttledMove);
   window.addEventListener("keydown", sendHeartbeat);
 });
 
 onUnmounted(() => {
   clearInterval(heartbeatInterval);
-  clearTimeout(offlineTimer);
+  clearTimeout(idleTimer);
+
   document.removeEventListener("visibilitychange", handleVisibility);
   window.removeEventListener("focus", sendHeartbeat);
-  window.removeEventListener("mousemove", sendMoveHeartbeat);
+  window.removeEventListener("mousemove", throttledMove);
   window.removeEventListener("keydown", sendHeartbeat);
 });
 </script>
 
 <template>
   <v-app>
-
     <!-- ============= SIDEBAR ============= -->
-    <v-navigation-drawer v-model="drawer" elevation="10" width="250" class="pt-4">
+    <v-navigation-drawer
+      v-model="drawer"
+      elevation="10"
+      width="250"
+      class="pt-4"
+    >
       <div class="text-center mb-6">
         <h2 class="font-weight-bold text-h6">WABA</h2>
       </div>
@@ -102,7 +145,11 @@ onUnmounted(() => {
           link
           :class="[$page.url.startsWith(item.href) ? 'active-menu' : '']"
         >
-          <Link :href="item.href" style="color:inherit; text-decoration:none;" class="w-100 d-flex align-center">
+          <Link
+            :href="item.href"
+            style="color: inherit; text-decoration: none"
+            class="w-100 d-flex align-center"
+          >
             <v-icon class="mr-4">{{ item.icon }}</v-icon>
             <v-list-item-title>{{ item.label }}</v-list-item-title>
           </Link>
@@ -110,8 +157,7 @@ onUnmounted(() => {
       </v-list>
     </v-navigation-drawer>
 
-
-    <!-- ============= TOP NAVBAR ============= -->
+    <!-- ============= NAVBAR ============= -->
     <v-app-bar flat elevation="2">
       <v-btn icon @click="drawer = !drawer">
         <v-icon>mdi-menu</v-icon>
@@ -123,7 +169,6 @@ onUnmounted(() => {
 
       <v-spacer />
 
-      <!-- USER DROPDOWN -->
       <v-menu>
         <template #activator="{ props }">
           <v-btn variant="text" v-bind="props" class="text-capitalize">
@@ -137,24 +182,22 @@ onUnmounted(() => {
           <v-list-item>
             <Link href="/profile">Profile</Link>
           </v-list-item>
-
           <v-divider />
-
           <v-list-item>
-            <Link href="/logout" method="post" as="button" class="text-red">Logout</Link>
+            <Link href="/logout" method="post" as="button" class="text-red">
+              Logout
+            </Link>
           </v-list-item>
         </v-list>
       </v-menu>
     </v-app-bar>
 
-
-    <!-- ============= CONTENT WRAPPER ============= -->
+    <!-- ============= CONTENT ============= -->
     <v-main>
       <v-container class="pt-8">
         <slot />
       </v-container>
     </v-main>
-
   </v-app>
 </template>
 

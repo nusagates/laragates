@@ -14,8 +14,19 @@ class TemplateController extends Controller
     {
         $role = auth()->user()->role ?? null;
 
+        // supervisor boleh create/edit/delete/submit
         if (! in_array($role, ['superadmin','admin','supervisor'])) {
             abort(403, 'Unauthorized');
+        }
+    }
+
+    private function ensureCanApproveTemplates()
+    {
+        $role = auth()->user()->role ?? null;
+
+        // Supervisor TIDAK BOLEH approve / reject / sync
+        if (! in_array($role, ['superadmin','admin'])) {
+            abort(403, 'You are not allowed to approve templates.');
         }
     }
 
@@ -27,10 +38,13 @@ class TemplateController extends Controller
         $q = Template::query();
 
         if ($request->status) $q->where('status',$request->status);
+
         if ($request->search) {
             $s = $request->search;
-            $q->where('name','like',"%$s%")
-              ->orWhere('body','like',"%$s%");
+            $q->where(function($x) use($s) {
+                $x->where('name','like',"%$s%")
+                  ->orWhere('body','like',"%$s%");
+            });
         }
 
         $templates = $q->orderBy('created_at','desc')
@@ -61,7 +75,7 @@ class TemplateController extends Controller
 
         Template::create(array_merge($data, [
             'created_by' => Auth::id(),
-            'status' => 'draft',
+            'status'     => 'draft',
         ]));
 
         return back()->with('success','Template created.');
@@ -120,13 +134,13 @@ class TemplateController extends Controller
             'status' => 'pending'
         ]);
 
-        return back()->with('success','Template submitted.');
+        return back()->with('success','Template submitted for approval.');
     }
 
-    // APPROVE
+    // APPROVE (Only Admin / Superadmin)
     public function approve(Template $template)
     {
-        $this->ensureCanManageTemplates();
+        $this->ensureCanApproveTemplates();
 
         $template->update([
             'status' => 'approved',
@@ -137,10 +151,10 @@ class TemplateController extends Controller
         return back()->with('success','Approved.');
     }
 
-    // REJECT
+    // REJECT (Only Admin / Superadmin)
     public function reject(Template $template, Request $request)
     {
-        $this->ensureCanManageTemplates();
+        $this->ensureCanApproveTemplates();
 
         $reason = $request->input('reason');
 
@@ -155,10 +169,10 @@ class TemplateController extends Controller
         return back()->with('success','Rejected.');
     }
 
-    // SYNC TO PROVIDER
+    // SYNC (Only Admin / Superadmin)
     public function sync(Template $template)
     {
-        $this->ensureCanManageTemplates();
+        $this->ensureCanApproveTemplates();
 
         if ($template->status !== 'approved') {
             return back()->with('error','Only approved template can sync.');
@@ -225,6 +239,7 @@ class TemplateController extends Controller
     private function validateTemplateRules($data)
     {
         preg_match_all('/\{\{\s*(\d+)\s*\}\}/', $data['body'], $matches);
+
         if (count(array_unique($matches[1] ?? [])) > 10) {
             abort(422,'Max 10 variables allowed.');
         }
