@@ -15,15 +15,18 @@ class WabaApiService
 
     public function __construct()
     {
-        $this->baseUrl       = rtrim(config('services.waba.base_url', env('WABA_BASE_URL', 'https://graph.facebook.com')), '/');
-        $this->version       = config('services.waba.version', env('WABA_API_VERSION', 'v21.0'));
-        $this->phoneNumberId = env('WABA_PHONE_NUMBER_ID');
-        $this->accessToken   = env('WABA_ACCESS_TOKEN');
+        // Semua baca dari config/services.php
+        $this->baseUrl       = rtrim(config('services.waba.base_url'), '/');
+        $this->version       = config('services.waba.version', 'v22.0');
+        $this->phoneNumberId = config('services.waba.phone_id');   // FIXED
+        $this->accessToken   = config('services.waba.token');      // FIXED
     }
 
     protected function client()
     {
-        return Http::withToken($this->accessToken)->acceptJson()->asJson();
+        return Http::withToken($this->accessToken)
+            ->acceptJson()
+            ->asJson();
     }
 
     protected function url(string $endpoint): string
@@ -33,11 +36,10 @@ class WabaApiService
 
     /**
      * Send simple text message
-     * Auto-uses MOCK if not configured
      */
     public function sendText(string $to, string $message): array
     {
-        // 💡 MOCK mode (no credentials)
+        // MOCK MODE jika credential kosong
         if (!$this->accessToken || !$this->phoneNumberId) {
             $fakeId = 'MOCK-' . Str::uuid()->toString();
 
@@ -55,18 +57,21 @@ class WabaApiService
             ];
         }
 
-        // 📌 REAL API MODE
-        $response = $this->client()->post($this->url('messages'), [
+        // REAL WA CLOUD API
+        $payload = [
             'messaging_product' => 'whatsapp',
             'to'                => $to,
             'type'              => 'text',
             'text'              => [
                 'body' => $message,
             ],
-        ]);
+        ];
 
+        $response = $this->client()->post($this->url('messages'), $payload);
+
+        // Log jika error
         if (!$response->successful()) {
-            Log::error('[WABA ERROR]', [
+            Log::error('[WABA ERROR SEND TEXT]', [
                 'status' => $response->status(),
                 'body'   => $response->json(),
             ]);

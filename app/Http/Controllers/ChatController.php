@@ -5,9 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
 use App\Models\Customer;
-use App\Models\Ticket;
-use App\Models\TicketMessage;
-use App\Services\WabaApiService;
+use App\Services\FonnteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -40,7 +38,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Detail messages (/api/chats/{session})
+     * Get chat detail & messages
      */
     public function show(ChatSession $session)
     {
@@ -70,12 +68,13 @@ class ChatController extends Controller
     }
 
     /**
-     * Send message in chat (/api/chats/{session}/send)
+     * Send message (text or media)
      */
     public function send(Request $request, ChatSession $session)
     {
         $request->validate([
-            'message' => 'required|string',
+            'message' => 'nullable|string',
+            'media'   => 'nullable|file|max:10240',
         ]);
 
         $agent = Auth::user();
@@ -83,70 +82,62 @@ class ChatController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        // Auto-assign chat to this agent
         if (!$session->assigned_to) {
             $session->update(['assigned_to' => $agent->id]);
         }
 
-        // =======================================================
-        // DUMMY MODE (kalau token Meta tidak ada)
-        // =======================================================
-        if (!env('WA_BUSINESS_TOKEN')) {
+        // SAVE LOCAL MESSAGE FIRST
+        $mediaUrl = null;
+        $mediaType = null;
+        $isMedia = false;
 
-            $msg = ChatMessage::create([
-                'chat_session_id' => $session->id,
-                'sender'          => 'agent',
-                'user_id'         => $agent->id,
-                'message'         => $request->message,
-                'type'            => 'text',
-                'status'          => 'sent',
-                'is_outgoing'     => true,
-            ]);
+        if ($request->hasFile('media')) {
+            $file = $request->file('media');
+            $path = $file->store('chat_media', 'public');
 
-            $session->touch();
-
-            try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
-            catch (\Throwable $e) {}
-
-            return response()->json([
-                'success' => true,
-                'dummy'   => true,
-                'data'    => $msg
-            ]);
+            $mediaUrl = asset('storage/' . $path);
+            $mediaType = $file->getMimeType();
+            $isMedia = true;
         }
-        // =======================================================
 
-
-        // REAL MODE (kirim via WA API jika token ada)
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
             'user_id'         => $agent->id,
-            'message'         => $request->message,
-            'type'            => 'text',
+            'message'         => $request->message ?? '',
+            'media_url'       => $mediaUrl,
+            'media_type'      => $mediaType,
+            'type'            => $isMedia ? 'media' : 'text',
             'status'          => 'sent',
             'is_outgoing'     => true,
         ]);
 
         $session->touch();
 
+        /** ===========================
+         *  SEND VIA FONNTE
+         *  =========================== */
         try {
-            app(WabaApiService::class)->sendText(
-                $session->customer->phone,
-                $request->message
-            );
-        } catch (\Throwable $e) {}
+            $service = app(FonnteService::class);
 
-        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
-        catch (\Throwable $e) {}
+            if ($isMedia) {
+                $service->sendMedia($session->customer->phone, $request->message ?? '', $mediaUrl);
+            } else {
+                $service->sendText($session->customer->phone, $request->message);
+            }
+        } catch (\Throwable $e) {
+            // log kalau mau
+        }
+
+        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } catch (\Throwable $e) {}
 
         return response()->json(['success' => true, 'data' => $msg]);
     }
 
     /**
-     * Outbound (CS kirim chat pertama)
+     * Outbound (start new chat)
      */
-    public function outbound(Request $request, WabaApiService $waba)
+    public function outbound(Request $request, FonnteService $fonnte)
     {
         $data = $request->validate([
             'phone'         => 'required|string|max:30',
@@ -168,36 +159,7 @@ class ChatController extends Controller
             'assigned_to' => Auth::id(),
         ]);
 
-        // =======================================================
-        // DUMMY MODE
-        // =======================================================
-        if (!env('WA_BUSINESS_TOKEN')) {
-
-            $msg = ChatMessage::create([
-                'chat_session_id' => $session->id,
-                'sender'          => 'agent',
-                'user_id'         => Auth::id(),
-                'message'         => $data['message'],
-                'type'            => 'text',
-                'status'          => 'sent',
-                'is_outgoing'     => true,
-            ]);
-
-            $session->touch();
-
-            try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
-            catch (\Throwable $e) {}
-
-            return response()->json([
-                'success'    => true,
-                'dummy'      => true,
-                'session_id' => $session->id,
-            ]);
-        }
-        // =======================================================
-
-
-        // REAL MODE
+        // save chat locally
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
@@ -210,11 +172,8 @@ class ChatController extends Controller
 
         $session->touch();
 
-        try { $waba->sendText($customer->phone, $data['message']); } 
-        catch (\Throwable $e) {}
-
-        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
-        catch (\Throwable $e) {}
+        // send to fonnte
+        try { $fonnte->sendText($customer->phone, $data['message']); } catch (\Throwable $e) {}
 
         return response()->json([
             'success'    => true,
@@ -223,7 +182,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Assign chat to agent
+     * Assign chat
      */
     public function assign(Request $request, ChatSession $session)
     {
@@ -264,103 +223,25 @@ class ChatController extends Controller
         return '+' . $clean;
     }
 
-    public function updateStatus(Request $request, ChatMessage $message)
-{
-    $request->validate([
-        'status' => 'required|string|in:sent,delivered,read'
-    ]);
-
-    $message->status = $request->status;
-    $message->save();
-
-    try {
-        broadcast(new \App\Events\Chat\MessageUpdated($message))->toOthers();
-    } catch (\Throwable $e) {}
-
-    return response()->json(['success' => true]);
-}
-public function messages(ChatSession $session)
-{
-    $session->load([
-        'messages' => fn ($q) => $q->orderBy('created_at', 'asc'),
-    ]);
-
-    return $session->messages->map(function ($m) {
-        return [
-            'id'          => $m->id,
-            'message'     => $m->message,
-            'media_url'   => $m->media_url,
-            'media_type'  => $m->media_type,
-            'created_at'  => $m->created_at->format('H:i'),
-            'sender'      => $m->sender,
-            'is_outgoing' => $m->sender === 'agent', // 🔥 ini yg penting
-        ];
-    });
-}
-
-public function sendMedia(Request $request, ChatSession $session)
-{
-    $agent = Auth::user();
-
-    if (!$agent) {
-        return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
-    }
-
-    $request->validate([
-        'message' => 'nullable|string',
-        'media'   => 'nullable|file|max:10240', // 10MB
-    ]);
-
-    /* ===========================
-       DUMMY MODE (TANPA TOKEN)
-    ============================ */
-    if (!env('WA_BUSINESS_TOKEN')) {
-
-        $mediaUrl = null;
-        $mediaType = null;
-
-        if ($request->hasFile('media')) {
-            $file = $request->file('media');
-            $path = $file->store('chat_media', 'public');
-
-            $mediaUrl = asset('storage/' . $path);
-            $mediaType = $file->getMimeType();
-        }
-
-        $msg = ChatMessage::create([
-            'chat_session_id' => $session->id,
-            'sender'          => 'agent',
-            'user_id'         => $agent->id,
-            'message'         => $request->message ?? '',
-            'media_url'       => $mediaUrl,
-            'media_type'      => $mediaType,
-            'type'            => $mediaType ? 'media' : 'text',
-            'is_outgoing'     => true,
-            'status'          => 'sent',
+    /**
+     * Get all messages
+     */
+    public function messages(ChatSession $session)
+    {
+        $session->load([
+            'messages' => fn ($q) => $q->orderBy('created_at', 'asc'),
         ]);
 
-        $session->touch();
-
-        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } 
-        catch (\Throwable $e) {}
-
-        return response()->json([
-            'success' => true,
-            'dummy'   => true,
-            'data'    => $msg
-        ]);
+        return $session->messages->map(function ($m) {
+            return [
+                'id'          => $m->id,
+                'message'     => $m->message,
+                'media_url'   => $m->media_url,
+                'media_type'  => $m->media_type,
+                'created_at'  => $m->created_at->format('H:i'),
+                'sender'      => $m->sender,
+                'is_outgoing' => $m->sender === 'agent',
+            ];
+        });
     }
-
-    /* ===========================
-       REAL MODE API KALAU ADA
-    ============================ */
-    // tempatkan kode WA API asli di sini
-
-    return response()->json(['success' => true]);
 }
-
-
-
-
-}
-

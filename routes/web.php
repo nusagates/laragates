@@ -23,6 +23,9 @@ use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\Api\Chat\TypingController;
 use App\Http\Controllers\ChatController;
 
+// ⭐ IMPORT BARU UNTUK FONNTE
+use App\Http\Controllers\FonnteWebhookController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -71,26 +74,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/sessions', [AnalyticsController::class, 'sessions']);
     });
 
-
     /*
     |--------------------------------------------------------------------------
     | Chat Advanced
     |--------------------------------------------------------------------------
     */
     Route::prefix('chat')->group(function () {
+
+        // CHAT SESSION LIST & DETAIL
         Route::get('/sessions', [ChatSessionController::class, 'index']);
         Route::get('/sessions/{session}', [ChatSessionController::class, 'show']);
+
+        // PIN / UNPIN
         Route::post('/sessions/{session}/pin', [ChatSessionController::class, 'pin']);
         Route::post('/sessions/{session}/unpin', [ChatSessionController::class, 'unpin']);
         Route::post('/sessions/{session}/mark-read', [ChatSessionController::class, 'markRead']);
 
+        // MESSAGES
         Route::get('/sessions/{session}/messages', [ChatMessageController::class, 'index']);
         Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
 
+        // RETRY & READ STATUS
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
-    });
 
+        // ⭐⭐ FIX UTAMA — ROUTE OUTBOUND ⭐⭐
+        Route::post('/sessions/outbound', [ChatController::class, 'outbound'])
+            ->name('chat.outbound');
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -104,10 +115,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
 
-
     /*
     |--------------------------------------------------------------------------
-    | Templates — semua role akses (kecuali approve alias admin only)
+    | Templates
     |--------------------------------------------------------------------------
     */
     Route::get('/templates', [WhatsappTemplateController::class, 'index'])->name('templates.index');
@@ -123,18 +133,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{template}/sync',   [WhatsappTemplateController::class, 'sync'])->name('templates.sync');
     });
 
-
     /*
     |--------------------------------------------------------------------------
-    | Broadcast (Supervisor & Superadmin)
+    | Broadcast
     |--------------------------------------------------------------------------
     */
     Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
     Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-    Route::post('/broadcast/campaigns/{campaign}/upload-targets',
-        [BroadcastController::class, 'uploadTargets']
-    )->name('broadcast.upload-targets');
-
+    Route::post('/broadcast/campaigns/{campaign}/upload-targets', [BroadcastController::class, 'uploadTargets'])
+        ->name('broadcast.upload-targets');
 
     /*
     |--------------------------------------------------------------------------
@@ -153,13 +160,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/broadcast/approvals', [BroadcastApprovalController::class, 'index'])
             ->name('broadcast.approvals.index');
 
-        Route::post('/broadcast/{approval}/approve',
-            [BroadcastApprovalController::class, 'approve']
-        );
-
-        Route::post('/broadcast/{approval}/reject',
-            [BroadcastApprovalController::class, 'reject']
-        );
+        Route::post('/broadcast/{approval}/approve', [BroadcastApprovalController::class, 'approve']);
+        Route::post('/broadcast/{approval}/reject', [BroadcastApprovalController::class, 'reject']);
 
         // Broadcast Reports
         Route::get('/broadcast/report', [BroadcastReportController::class, 'index'])
@@ -193,10 +195,20 @@ Route::middleware('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| WEBHOOK WA
+| WEBHOOK WA (META)
 |--------------------------------------------------------------------------
 */
 Route::get('/webhook/whatsapp', [WabaWebhookController::class, 'verify']);
 Route::post('/webhook/whatsapp', [WabaWebhookController::class, 'receive']);
+
+
+/*
+|--------------------------------------------------------------------------
+| ⭐ WEBHOOK FONNTE (BARU DITAMBAHKAN)
+|--------------------------------------------------------------------------
+*/
+Route::match(['GET', 'POST'], '/webhook/fonnte', [FonnteWebhookController::class, 'handle']);
+Route::post('/webhook/fonnte', [WabaWebhookController::class, 'receiveFonnte']);
+
 
 require __DIR__.'/auth.php';

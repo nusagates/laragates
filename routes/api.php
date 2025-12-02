@@ -15,3 +15,8 @@ Route::post('/simulate-inbound', [\App\Http\Controllers\ChatSimulationController
 
 // Update message status (sent/delivered/read)
 Route::post('/chat-messages/{message}/status', [ChatController::class, 'updateStatus']);
+
+Route::middleware('auth:sanctum')->prefix('templates')->group(function () {
+    Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync']);
+});
+

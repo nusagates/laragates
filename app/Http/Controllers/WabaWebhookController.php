@@ -3,83 +3,71 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
-use App\Services\ChatAgentRouter;
 
 class WabaWebhookController extends Controller
 {
-    protected ChatAgentRouter $router;
-
-    public function __construct(ChatAgentRouter $router)
+    public function receiveFonnte(Request $request)
     {
-        $this->router = $router;
-    }
+        Log::info('[FONNTE WEBHOOK]', $request->all());
 
-    /**
-     * WhatsApp verify webhook challenge (GET)
-     */
-    public function verify(Request $request)
-    {
-        $hub_challenge = $request->get('hub_challenge');
-        return $hub_challenge ? response($hub_challenge, 200) : response('ok', 200);
-    }
-
-    /**
-     * Receive inbound message (POST)
-     */
-    public function receive(Request $request)
-    {
-        // Ambil data inbound dari gateway WhatsApp
-        // ❗❗ Sesuaikan field jika berbeda (sementara buat standard)
-        $phone = $request->input('phone');
-        $text  = $request->input('text');
-        $intent = $request->input('intent'); // opsional (buat NLP nanti)
-
-        if (!$phone || !$text) {
-            return response()->json(['error' => 'Invalid WhatsApp payload'], 422);
+        // Validate secret
+        $sentSecret = $request->header('X-Fonnte-Secret') ?? $request->input('secret');
+        if ($sentSecret !== env('FONNTE_WEBHOOK_SECRET')) {
+            return response()->json(['error' => 'invalid secret'], 401);
         }
 
-        // 1️⃣ Cari / buat customer
+        // Payload Fonnte
+        $from    = $request->input('from');
+        $message = $request->input('message');
+        $msgId   = $request->input('id');
+
+        if (!$from || !$message) {
+            return response()->json(['status' => false, 'reason' => 'invalid payload'], 400);
+        }
+
+        // Normalize phone
+        $phone = $this->normalizePhone($from);
+
+        // Customer
         $customer = Customer::firstOrCreate(
             ['phone' => $phone],
             ['name' => $phone]
         );
 
-        // 2️⃣ Cari session yang masih open
-        $session = ChatSession::where('customer_id', $customer->id)
-                              ->where('status', 'open')
-                              ->first();
+        // Session
+        $session = ChatSession::firstOrCreate(
+            ['customer_id' => $customer->id, 'status' => 'open']
+        );
 
-        // 3️⃣ Jika belum ada → buat session baru
-        if (!$session) {
-            $session = ChatSession::create([
-                'customer_id' => $customer->id,
-                'status'      => 'pending', // akan diubah router jadi open/assigned
-                'priority'    => 'normal',
-                'pinned'      => false,
-            ]);
-
-            // Auto route ke agent terbaik
-            $this->router->assignSession($session, $intent);
-        }
-
-        // 4️⃣ Simpan pesan
-        ChatMessage::create([
+        // Save chat message
+        $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'customer',
-            'message'         => $text,
+            'message'         => $message,
             'type'            => 'text',
-            'status'          => 'received'
+            'is_outgoing'     => false,
+            'external_id'     => $msgId,
         ]);
 
-        // 5️⃣ Response ke gateway (WA API)
-        return response()->json([
-            'status'       => 'success',
-            'session_id'   => $session->id,
-            'assigned_to'  => $session->assigned_to,
-            'session_status' => $session->status,
-        ]);
+        // Update session timestamp
+        $session->touch();
+
+        // Realtime broadcast (jika kamu pakai)
+        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } catch (\Throwable $e){}
+
+        return response()->json(['success' => true]);
+    }
+
+    private function normalizePhone($phone)
+    {
+        $n = preg_replace('/[^0-9]/', '', $phone);
+
+        if (str_starts_with($n, '0')) return '62' . substr($n, 1);
+        if (str_starts_with($n, '62')) return $n;
+        return '62' . $n;
     }
 }
