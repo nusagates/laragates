@@ -9,10 +9,27 @@ class Template extends Model
 {
     use HasFactory;
 
+    // PAKAI TABEL LAMA
+    protected $table = 'whatsapp_templates';
+
     protected $fillable = [
-        'name','category','language','status','remote_id',
-        'header','body','footer','buttons','version',
-        'created_by','approved_by','approved_at','meta',
+        'name',
+        'category',
+        'language',
+        'status',
+        'remote_id',
+        'header',
+        'body',
+        'footer',
+        'buttons',
+        'version',
+        'created_by',
+        'approved_by',
+        'approved_at',
+        'meta',
+        'workflow_notes',
+        'last_synced_at',
+        'last_sent_at',
     ];
 
     protected $casts = [
@@ -30,5 +47,17 @@ class Template extends Model
     public function approver()
     {
         return $this->belongsTo(User::class,'approved_by');
+    }
+
+    public function versions()
+    {
+        // pakai template_id sebagai FK
+        return $this->hasMany(TemplateVersion::class, 'template_id');
+    }
+
+    public function notes()
+    {
+        // pakai template_id sebagai FK
+        return $this->hasMany(TemplateNote::class, 'template_id');
     }
 }
