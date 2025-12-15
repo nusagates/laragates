@@ -1,22 +1,19 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
-import { Link, usePage } from "@inertiajs/vue3";
-import axios from "axios";
+import { ref, onMounted, onUnmounted } from "vue"
+import { Link, usePage } from "@inertiajs/vue3"
+import axios from "axios"
 
 // === GET USER ROLE ===
-const page = usePage();
-const userRole = page.props.auth.user.role;
+const page = usePage()
+const userRole = page.props.auth.user.role
 
-const drawer = ref(true);
+const drawer = ref(true)
 
 // ===============================
 // 📌 SIDEBAR MENU (Role-Based)
 // ===============================
 const menu = [
-<<<<<<< HEAD
-=======
   // Universal
->>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Dashboard",
     icon: "mdi-view-dashboard",
@@ -29,9 +26,8 @@ const menu = [
     href: "/chat",
     roles: ["admin", "superadmin", "supervisor", "agent"],
   },
-<<<<<<< HEAD
 
-  // 🔥 WHATSAPP MENU (BARU)
+  // 🔥 WhatsApp Menu
   {
     label: "WhatsApp Menu",
     icon: "mdi-format-list-bulleted",
@@ -39,8 +35,6 @@ const menu = [
     roles: ["admin", "superadmin"],
   },
 
-=======
->>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Tickets",
     icon: "mdi-ticket-confirmation-outline",
@@ -48,19 +42,12 @@ const menu = [
     roles: ["admin", "superadmin", "supervisor", "agent"],
   },
 
-<<<<<<< HEAD
-=======
   // Limited
->>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Agents",
     icon: "mdi-account-group",
     href: "/agents",
-<<<<<<< HEAD
     roles: ["admin", "superadmin"],
-=======
-    roles: ["admin", "superadmin"], // supervisor TIDAK BOLEH
->>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   },
 
   {
@@ -81,76 +68,70 @@ const menu = [
     label: "Analytics",
     icon: "mdi-finance",
     href: "/analytics",
-<<<<<<< HEAD
     roles: ["admin", "superadmin"],
   },
 
-=======
-    roles: ["admin", "superadmin"], // supervisor TIDAK BOLEH
-  },
-
-  // Settings → hanya superadmin
->>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
+  // Settings → superadmin only
   {
     label: "Settings",
     icon: "mdi-cog",
     href: "/settings",
     roles: ["superadmin"],
   },
-];
+]
 
 // ===============================
 // ❤️ HEARTBEAT (Online Checking)
 // ===============================
-let heartbeatInterval = null;
-let idleTimer = null;
+let heartbeatInterval = null
+let idleTimer = null
 
 const sendHeartbeat = () => {
-  axios.post("/agent/heartbeat").catch(() => {});
-};
+  axios.post("/agent/heartbeat").catch(() => {})
+}
 
 const startIdleTimer = () => {
-  clearTimeout(idleTimer);
+  clearTimeout(idleTimer)
   idleTimer = setTimeout(() => {
-    axios.post("/agent/offline").catch(() => {});
-  }, 15000);
-};
+    axios.post("/agent/offline").catch(() => {})
+  }, 15000)
+}
 
 const handleVisibility = () => {
-  if (document.hidden) startIdleTimer();
+  if (document.hidden) startIdleTimer()
   else {
-    sendHeartbeat();
-    clearTimeout(idleTimer);
+    sendHeartbeat()
+    clearTimeout(idleTimer)
   }
-};
+}
 
-let lastMove = 0;
+let lastMove = 0
 const throttledMove = () => {
-  const now = Date.now();
+  const now = Date.now()
   if (now - lastMove > 3000) {
-    sendHeartbeat();
-    lastMove = now;
+    sendHeartbeat()
+    lastMove = now
   }
-};
+}
 
 onMounted(() => {
-  heartbeatInterval = setInterval(sendHeartbeat, 5000);
+  heartbeatInterval = setInterval(sendHeartbeat, 5000)
 
-  document.addEventListener("visibilitychange", handleVisibility);
-  window.addEventListener("focus", sendHeartbeat);
-  window.addEventListener("mousemove", throttledMove);
-  window.addEventListener("keydown", sendHeartbeat);
-});
+  document.addEventListener("visibilitychange", handleVisibility)
+  window.addEventListener("focus", sendHeartbeat)
+  window.addEventListener("mousemove", throttledMove)
+  window.addEventListener("keydown", sendHeartbeat)
+})
 
 onUnmounted(() => {
-  clearInterval(heartbeatInterval);
-  clearTimeout(idleTimer);
+  clearInterval(heartbeatInterval)
+  clearTimeout(idleTimer)
 
-  document.removeEventListener("visibilitychange", handleVisibility);
-  window.removeEventListener("focus", sendHeartbeat);
-  window.removeEventListener("mousemove", throttledMove);
-  window.removeEventListener("keydown", sendHeartbeat);
-});
+  document.removeEventListener("visibilitychange", handleVisibility)
+  window.removeEventListener("focus", sendHeartbeat)
+  window.removeEventListener("mousemove", throttledMove)
+  window.removeEventListener("keydown", sendHeartbeat)
+})
 </script>
 
 <template>
@@ -175,8 +156,8 @@ onUnmounted(() => {
         >
           <Link
             :href="item.href"
-            style="color: inherit; text-decoration: none"
             class="w-100 d-flex align-center"
+            style="color: inherit; text-decoration: none"
           >
             <v-icon class="mr-4">{{ item.icon }}</v-icon>
             <v-list-item-title>{{ item.label }}</v-list-item-title>
