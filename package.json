@@ -36,7 +36,10 @@
         "vue-chartjs": "^5.3.3",
         "vue-toastification": "^2.0.0-rc.5",
         "vue3-apexcharts": "^1.10.0",
+<<<<<<< HEAD
         "vuedraggable": "^4.1.0",
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         "xlsx": "^0.18.5"
     }
 }

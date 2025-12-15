@@ -11,6 +11,7 @@ const menus = [
     color: "blue"
   },
   {
+<<<<<<< HEAD
     title: "WhatsApp Menu",
     desc: "Kelola menu otomatis & bot WhatsApp.",
     icon: "mdi-format-list-bulleted",
@@ -18,6 +19,8 @@ const menus = [
     color: "indigo"
   },
   {
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
     title: "Agents",
     desc: "Atur dan monitor agen customer service.",
     icon: "mdi-account-group-outline",
@@ -50,7 +53,11 @@ const menus = [
     desc: "Pengaturan sistem & WhatsApp API.",
     icon: "mdi-cog-outline",
     to: "/settings",
+<<<<<<< HEAD
     color: "grey"
+=======
+    color: "gray"
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   }
 ]
 </script>
@@ -84,6 +91,7 @@ const menus = [
             height="200"
             elevation="3"
           >
+<<<<<<< HEAD
             <v-icon
               :color="item.color"
               size="48"
@@ -99,6 +107,11 @@ const menus = [
             <p class="text-caption text-grey-darken-1 text-center">
               {{ item.desc }}
             </p>
+=======
+            <v-icon :color="item.color" size="48" class="mb-3">{{ item.icon }}</v-icon>
+            <h3 class="text-subtitle-1 font-weight-bold mb-1">{{ item.title }}</h3>
+            <p class="text-caption text-grey-darken-1 text-center">{{ item.desc }}</p>
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
           </v-card>
         </Link>
 

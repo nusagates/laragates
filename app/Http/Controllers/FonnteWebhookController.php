@@ -7,13 +7,17 @@ use App\Models\ChatSession;
 use App\Models\ChatMessage;
 use App\Models\Customer;
 
+<<<<<<< HEAD
 use App\Services\MenuEngine;
 use App\Services\FonnteService;
 
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
 class FonnteWebhookController extends Controller
 {
     public function handle(Request $request)
     {
+<<<<<<< HEAD
         // ===============================
         // LOG RAW PAYLOAD
         // ===============================
@@ -23,13 +27,29 @@ class FonnteWebhookController extends Controller
         $message = $request->input('message');
         $name    = $request->input('name');
 
+=======
+        // Log raw payload (UNTUK DEBUG)
+        \Log::info('Fonnte inbound:', $request->all());
+
+        // Fonnte payload langsung di root, bukan dalam "data"
+        $sender  = $request->input('sender');    // nomor pengirim
+        $message = $request->input('message');   // isi pesan
+        $name    = $request->input('name');      // optional
+        $type    = $request->input('type');      // text / image / dsb
+
+        // Validasi minimal
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         if (!$sender || !$message) {
             return response()->json(['ignored' => true]);
         }
 
+<<<<<<< HEAD
         // ===============================
         // NORMALISASI NOMOR
         // ===============================
+=======
+        // NORMALISASI NOMOR
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         $phone = preg_replace('/[^0-9]/', '', $sender);
 
         if (str_starts_with($phone, '0')) {
@@ -39,25 +59,37 @@ class FonnteWebhookController extends Controller
             $phone = '62' . $phone;
         }
 
+<<<<<<< HEAD
         // ===============================
         // CUSTOMER
         // ===============================
+=======
+        // CUSTOMER
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         $customer = Customer::firstOrCreate(
             ['phone' => $phone],
             ['name' => $name ?: $phone]
         );
 
+<<<<<<< HEAD
         // ===============================
         // SESSION
         // ===============================
+=======
+        // SESSION
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         $session = ChatSession::firstOrCreate(
             ['customer_id' => $customer->id, 'status' => 'open'],
             ['assigned_to' => null]
         );
 
+<<<<<<< HEAD
         // ===============================
         // SIMPAN PESAN MASUK
         // ===============================
+=======
+        // SIMPAN PESAN
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'customer',
@@ -69,13 +101,18 @@ class FonnteWebhookController extends Controller
 
         $session->touch();
 
+<<<<<<< HEAD
         // ===============================
         // REALTIME KE UI
         // ===============================
+=======
+        // REALTIME KE UI
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         try {
             broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers();
         } catch (\Throwable $e) {}
 
+<<<<<<< HEAD
         // ===============================
         // NORMALISASI TEXT
         // ===============================
@@ -224,6 +261,8 @@ class FonnteWebhookController extends Controller
             }
         }
 
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
         return response()->json(['success' => true]);
     }
 }

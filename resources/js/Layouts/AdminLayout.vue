@@ -13,6 +13,10 @@ const drawer = ref(true);
 // 📌 SIDEBAR MENU (Role-Based)
 // ===============================
 const menu = [
+<<<<<<< HEAD
+=======
+  // Universal
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Dashboard",
     icon: "mdi-view-dashboard",
@@ -25,6 +29,7 @@ const menu = [
     href: "/chat",
     roles: ["admin", "superadmin", "supervisor", "agent"],
   },
+<<<<<<< HEAD
 
   // 🔥 WHATSAPP MENU (BARU)
   {
@@ -34,6 +39,8 @@ const menu = [
     roles: ["admin", "superadmin"],
   },
 
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Tickets",
     icon: "mdi-ticket-confirmation-outline",
@@ -41,11 +48,19 @@ const menu = [
     roles: ["admin", "superadmin", "supervisor", "agent"],
   },
 
+<<<<<<< HEAD
+=======
+  // Limited
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Agents",
     icon: "mdi-account-group",
     href: "/agents",
+<<<<<<< HEAD
     roles: ["admin", "superadmin"],
+=======
+    roles: ["admin", "superadmin"], // supervisor TIDAK BOLEH
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   },
 
   {
@@ -66,9 +81,16 @@ const menu = [
     label: "Analytics",
     icon: "mdi-finance",
     href: "/analytics",
+<<<<<<< HEAD
     roles: ["admin", "superadmin"],
   },
 
+=======
+    roles: ["admin", "superadmin"], // supervisor TIDAK BOLEH
+  },
+
+  // Settings → hanya superadmin
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
   {
     label: "Settings",
     icon: "mdi-cog",

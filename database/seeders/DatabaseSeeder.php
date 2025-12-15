@@ -15,6 +15,9 @@ class DatabaseSeeder extends Seeder
             SuperAdminSeeder::class,
             BroadcastDemoSeeder::class, // <–– tambahkan di sini
         ]);
+<<<<<<< HEAD
         $this->call(WaMenuSeeder::class);
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
     }
 }

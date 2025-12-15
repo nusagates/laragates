@@ -5,7 +5,11 @@ use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FonnteWebhookController;
 use App\Http\Controllers\WhatsappTemplateController;
+<<<<<<< HEAD
 use App\Http\Controllers\WabaMenuController; // ⭐ ADDED BY WABA MENU
+=======
+
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
 
 // Health check
 Route::get('/ping', fn() => response()->json(['message' => 'API is running']));
@@ -26,6 +30,7 @@ Route::post('/chat-messages/{message}/status', [ChatController::class, 'updateSt
 Route::middleware('auth:sanctum')->prefix('templates')->group(function () {
     Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync']);
 });
+<<<<<<< HEAD
 
 /*
 |--------------------------------------------------------------------------
@@ -34,3 +39,5 @@ Route::middleware('auth:sanctum')->prefix('templates')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::post('/waba/send-main-menu', [WabaMenuController::class, 'sendMainMenu']);
+=======
+>>>>>>> 7761fb9027cea6c368ca3c824f9926b5a719e247
