@@ -3,20 +3,27 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ChatSessionController;
 use App\Http\Controllers\FonnteWebhookController;
 use App\Http\Controllers\WhatsappTemplateController;
 use App\Http\Controllers\WabaMenuController;
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | API Routes
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 
+// ===============================
 // Health check
-Route::get('/ping', fn () => response()->json(['message' => 'API is running']));
+// ===============================
+Route::get('/ping', fn () => response()->json([
+    'message' => 'API is running'
+]));
 
+// ===============================
 // Broadcast channels
+// ===============================
 Broadcast::routes();
 
 // ===============================
@@ -27,13 +34,17 @@ Route::match(['GET', 'POST'], '/webhook/fonnte', [
     'handle'
 ]);
 
-// Simulate inbound WhatsApp (DEV ONLY)
+// ===============================
+// Simulate inbound WhatsApp (DEV)
+// ===============================
 Route::post('/simulate-inbound', [
     \App\Http\Controllers\ChatSimulationController::class,
     'simulate'
 ]);
 
-// Update message status (sent / delivered / read)
+// ===============================
+// Update message status
+// ===============================
 Route::post('/chat-messages/{message}/status', [
     ChatController::class,
     'updateStatus'
@@ -44,7 +55,9 @@ Route::post('/chat-messages/{message}/status', [
 // ===============================
 Route::middleware('auth:sanctum')->group(function () {
 
+    // ===============================
     // Template sync
+    // ===============================
     Route::prefix('templates')->group(function () {
         Route::post('/{template}/sync', [
             WhatsappTemplateController::class,
@@ -58,5 +71,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/waba/send-main-menu', [
         WabaMenuController::class,
         'sendMainMenu'
+    ]);
+
+    // ===============================
+    // ⭐ CHAT SESSION (STEP 6)
+    // ===============================
+    Route::post('/chat-sessions/{session}/take', [
+        ChatSessionController::class,
+        'take'
+    ]);
+
+    Route::post('/chat-sessions/{session}/close', [
+        ChatSessionController::class,
+        'close'
     ]);
 });
