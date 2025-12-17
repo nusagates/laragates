@@ -1,49 +1,50 @@
 <script setup>
-import { ref } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 
 const form = useForm({
   name: '',
   email: '',
   password: '',
   password_confirmation: '',
-  role: '', // ← tambah role
-});
+  role: '',
+})
 
-const showPassword = ref(false);
-const showPasswordConfirmation = ref(false);
+const showPassword = ref(false)
+const showPasswordConfirmation = ref(false)
 
 const submit = () => {
   form.post(route('register'), {
     onFinish: () => form.reset('password', 'password_confirmation'),
-  });
-};
+  })
+}
 </script>
 
 <template>
+  <Head title="Register – WABA" />
+
   <v-app
-    class="register-bg"
     style="
-      background: linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)),
-      url('/images/landing-bg.jpg');
-      background-size: cover;
-      background-position: center;
+      background: linear-gradient(135deg, #eaf1fb, #f8fbff);
       min-height: 100vh;
     "
   >
-    <v-container class="d-flex justify-center align-center" style="min-height: 100vh;">
-      <Head title="Register" />
-
+    <v-container
+      class="d-flex justify-center align-center"
+      style="min-height:100vh;"
+    >
       <v-card
-        width="430"
+        width="460"
         elevation="12"
-        class="rounded-lg pa-8"
-        style="background-color: rgba(255,255,255,0.92);"
+        class="pa-10 rounded-xl"
       >
-        <div class="text-center mb-6">
-          <h2 class="text-h5 font-weight-bold" style="color:#333">Create Account</h2>
-          <p class="text-body-2" style="color:#666">
-            Fill the form to register your new account
+        <!-- HEADER -->
+        <div class="text-center mb-8">
+          <h2 class="text-h5 font-weight-bold mb-1">
+            Create your account
+          </h2>
+          <p class="text-body-2 text-grey-darken-1">
+            Start managing WhatsApp customer service professionally
           </p>
         </div>
 
@@ -55,7 +56,6 @@ const submit = () => {
             label="Full Name"
             variant="outlined"
             density="comfortable"
-            autofocus
             :error-messages="form.errors.name"
             class="mb-4"
             required
@@ -82,13 +82,13 @@ const submit = () => {
               { title: 'Supervisor', value: 'supervisor' },
               { title: 'Agent', value: 'agent' },
             ]"
-            label="Select Role"
+            label="Role"
             item-title="title"
             item-value="value"
             variant="outlined"
             density="comfortable"
-            class="mb-4"
             :error-messages="form.errors.role"
+            class="mb-4"
             required
           />
 
@@ -120,23 +120,29 @@ const submit = () => {
             required
           />
 
-          <!-- Footer buttons -->
-          <div class="d-flex justify-space-between align-center mt-2">
+          <!-- ACTIONS -->
+          <v-btn
+            block
+            size="large"
+            color="primary"
+            type="submit"
+            :loading="form.processing"
+            :disabled="form.processing"
+            class="mb-4"
+          >
+            Create Account
+          </v-btn>
+
+          <div class="text-center">
+            <span class="text-body-2 text-grey-darken-1">
+              Already have an account?
+            </span>
             <Link
               :href="route('login')"
-              class="text-blue text-decoration-underline"
+              class="ml-1 text-primary text-decoration-none font-weight-medium"
             >
-              Already registered?
+              Sign in
             </Link>
-
-            <v-btn
-              :loading="form.processing"
-              :disabled="form.processing"
-              color="primary"
-              type="submit"
-            >
-              Register
-            </v-btn>
           </div>
 
         </form>

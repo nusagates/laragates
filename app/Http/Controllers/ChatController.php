@@ -5,14 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
 use App\Models\Customer;
-use App\Services\FonnteService;
+use App\Services\MessageDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ChatController extends Controller
 {
     /**
-     * Sidebar list chats (/api/chats)
+     * Sidebar list chats
      */
     public function index()
     {
@@ -27,7 +27,7 @@ class ChatController extends Controller
             return [
                 'session_id'    => $session->id,
                 'customer_name' => $session->customer->name ?? $session->customer->phone,
-                'last_message'  => $last?->message 
+                'last_message'  => $last?->message
                     ? mb_strimwidth($last->message, 0, 35, '...')
                     : '',
                 'time'          => $last?->created_at?->format('H:i'),
@@ -38,7 +38,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Get chat detail & messages
+     * Get chat detail
      */
     public function show(ChatSession $session)
     {
@@ -68,7 +68,7 @@ class ChatController extends Controller
     }
 
     /**
-     * Send message (text or media)
+     * SEND MESSAGE (AGENT → CUSTOMER)
      */
     public function send(Request $request, ChatSession $session)
     {
@@ -86,7 +86,9 @@ class ChatController extends Controller
             $session->update(['assigned_to' => $agent->id]);
         }
 
-        // SAVE LOCAL MESSAGE FIRST
+        // ============================
+        // HANDLE MEDIA
+        // ============================
         $mediaUrl = null;
         $mediaType = null;
         $isMedia = false;
@@ -95,55 +97,54 @@ class ChatController extends Controller
             $file = $request->file('media');
             $path = $file->store('chat_media', 'public');
 
-            $mediaUrl = asset('storage/' . $path);
+            $mediaUrl  = asset('storage/' . $path);
             $mediaType = $file->getMimeType();
-            $isMedia = true;
+            $isMedia   = true;
         }
 
+        // ============================
+        // SAVE MESSAGE (QUEUED)
+        // ============================
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
             'user_id'         => $agent->id,
+
             'message'         => $request->message ?? '',
             'media_url'       => $mediaUrl,
             'media_type'      => $mediaType,
             'type'            => $isMedia ? 'media' : 'text',
-            'status'          => 'sent',
+
+            'status'          => 'pending',
+            'delivery_status' => 'queued',
+
             'is_outgoing'     => true,
+            'is_bot'          => false,
         ]);
 
         $session->touch();
 
-        /** ===========================
-         *  SEND VIA FONNTE
-         *  =========================== */
+        // ============================
+        // SEND VIA DELIVERY ENGINE
+        // ============================
+        MessageDeliveryService::send($msg);
+
         try {
-            $service = app(FonnteService::class);
-
-            if ($isMedia) {
-                $service->sendMedia($session->customer->phone, $request->message ?? '', $mediaUrl);
-            } else {
-                $service->sendText($session->customer->phone, $request->message);
-            }
-        } catch (\Throwable $e) {
-            // log kalau mau
-        }
-
-        try { broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers(); } catch (\Throwable $e) {}
+            broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers();
+        } catch (\Throwable $e) {}
 
         return response()->json(['success' => true, 'data' => $msg]);
     }
 
     /**
-     * Outbound (start new chat)
+     * OUTBOUND (START NEW CHAT)
      */
-    public function outbound(Request $request, FonnteService $fonnte)
+    public function outbound(Request $request)
     {
         $data = $request->validate([
-            'phone'         => 'required|string|max:30',
-            'name'          => 'nullable|string|max:150',
-            'message'       => 'required|string|max:4000',
-            'create_ticket' => 'sometimes|boolean',
+            'phone'   => 'required|string|max:30',
+            'name'    => 'nullable|string|max:150',
+            'message' => 'required|string|max:4000',
         ]);
 
         $phone = $this->normalizePhone($data['phone']);
@@ -159,41 +160,28 @@ class ChatController extends Controller
             'assigned_to' => Auth::id(),
         ]);
 
-        // save chat locally
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
             'user_id'         => Auth::id(),
             'message'         => $data['message'],
             'type'            => 'text',
-            'status'          => 'sent',
+
+            'status'          => 'pending',
+            'delivery_status' => 'queued',
+
             'is_outgoing'     => true,
+            'is_bot'          => false,
         ]);
 
         $session->touch();
 
-        // send to fonnte
-        try { $fonnte->sendText($customer->phone, $data['message']); } catch (\Throwable $e) {}
+        MessageDeliveryService::send($msg);
 
         return response()->json([
             'success'    => true,
             'session_id' => $session->id,
         ]);
-    }
-
-    /**
-     * Assign chat
-     */
-    public function assign(Request $request, ChatSession $session)
-    {
-        $data = $request->validate([
-            'assigned_to' => 'nullable|exists:users,id',
-        ]);
-
-        $session->assigned_to = $data['assigned_to'];
-        $session->save();
-
-        return response()->json(['success' => true]);
     }
 
     /**
@@ -221,27 +209,5 @@ class ChatController extends Controller
         if (str_starts_with($clean, '62')) return '+' . $clean;
 
         return '+' . $clean;
-    }
-
-    /**
-     * Get all messages
-     */
-    public function messages(ChatSession $session)
-    {
-        $session->load([
-            'messages' => fn ($q) => $q->orderBy('created_at', 'asc'),
-        ]);
-
-        return $session->messages->map(function ($m) {
-            return [
-                'id'          => $m->id,
-                'message'     => $m->message,
-                'media_url'   => $m->media_url,
-                'media_type'  => $m->media_type,
-                'created_at'  => $m->created_at->format('H:i'),
-                'sender'      => $m->sender,
-                'is_outgoing' => $m->sender === 'agent',
-            ];
-        });
     }
 }

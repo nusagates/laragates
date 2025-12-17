@@ -11,24 +11,50 @@ class ChatMessage extends Model
 
     protected $fillable = [
         'chat_session_id',
+
+        // sender info
         'sender',          // customer | agent | system
-        'user_id',         // null jika customer
+        'user_id',         // agent id (null jika customer/system)
+
+        // content
         'message',
         'type',
+
+        // whatsapp
         'wa_message_id',
-        'status',
+
+        // delivery & status
+        'status',          // pending | sent | delivered | read | failed
+        'delivery_status', // queued | sending | sent | delivered | read | failed | failed_final
+        'retry_count',
+        'last_retry_at',
+        'last_error',
+
+        // flags
         'is_outgoing',
         'is_internal',
         'is_bot',
+
+        // media
         'media_url',
         'media_type',
+        'file_name',
+        'file_size',
+        'mime_type',
     ];
 
     protected $casts = [
-        'is_outgoing' => 'boolean',
-        'is_internal' => 'boolean',
-        'is_bot'      => 'boolean',
+        'is_outgoing'   => 'boolean',
+        'is_internal'   => 'boolean',
+        'is_bot'        => 'boolean',
+        'last_retry_at' => 'datetime',
     ];
+
+    /**
+     * =========================
+     * RELATIONS
+     * =========================
+     */
 
     /** Relasi ke session chat */
     public function session(): BelongsTo
@@ -36,17 +62,15 @@ class ChatMessage extends Model
         return $this->belongsTo(ChatSession::class, 'chat_session_id');
     }
 
-    /** Agent yang mengirim pesan (hanya jika sender = agent) */
+    /** Agent pengirim pesan (jika sender = agent) */
     public function agent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    /** Customer tidak pakai user_id, relasi ke tabel customers */
-    public function customer(): BelongsTo
-    {
-        return $this->belongsTo(Customer::class, 'user_id');
-    }
-
-    /** Message tidak punya lastMessage, itu di session */
+    /**
+     * ⚠️ Customer TIDAK direlasikan langsung ke chat_messages
+     * Customer diambil via:
+     * $message->session->customer
+     */
 }

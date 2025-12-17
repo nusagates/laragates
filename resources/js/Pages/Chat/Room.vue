@@ -10,7 +10,9 @@ const loading = ref(false)
 const messages = ref([])
 const panel = ref(null)
 
-/* LOAD MESSAGES */
+/* ===============================
+   LOAD MESSAGES
+   =============================== */
 async function loadMessages() {
   if (!props.roomId) return (messages.value = [])
 
@@ -21,8 +23,11 @@ async function loadMessages() {
 
     await nextTick()
     scrollBottom()
-  } catch (e) { console.error(e) }
-  finally { loading.value = false }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
 }
 
 function scrollBottom() {
@@ -34,60 +39,135 @@ function scrollBottom() {
 watch(() => props.roomId, () => loadMessages())
 onMounted(() => loadMessages())
 
-/* BUBBLE CLASS */
+/* ===============================
+   BUBBLE CLASS
+   =============================== */
 function bubbleClass(m) {
   return m.is_outgoing ? 'bubble-me' : 'bubble-you'
 }
+
+/* ===============================
+   DATE SEPARATOR
+   =============================== */
+function formatDate(date) {
+  const d = new Date(date)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString()
+}
+
+function shouldShowDate(index) {
+  if (index === 0) return true
+  const cur = formatDate(messages.value[index].created_at)
+  const prev = formatDate(messages.value[index - 1].created_at)
+  return cur !== prev
+}
+
+/* ===============================
+   SOUND NOTIFICATION
+   =============================== */
+const audio = new Audio('/sounds/message.mp3')
+
+watch(messages, (newVal, oldVal) => {
+  if (!oldVal.length) return
+  if (newVal.length > oldVal.length) {
+    const last = newVal[newVal.length - 1]
+    if (!last.is_outgoing) {
+      audio.play().catch(() => {})
+    }
+  }
+})
 </script>
 
 <template>
   <div class="wrapper">
-    
+
     <div v-if="!roomId" class="no-room">
       <small>Select a chat...</small>
     </div>
 
     <div v-else ref="panel" class="messages">
+
       <div v-if="loading" class="loading">
         <small>Loading...</small>
       </div>
 
-      <div v-for="m in messages" :key="m.id" :class="['bubble', bubbleClass(m)]">
+      <!-- MESSAGES -->
+      <template v-for="(m, index) in messages" :key="m.id">
 
-        <!-- IMAGE -->
-        <template v-if="m.media_type && m.media_type.startsWith('image')">
-          <img :src="m.media_url" class="img" />
-        </template>
+        <!-- DATE SEPARATOR -->
+        <div
+          v-if="shouldShowDate(index)"
+          class="date-separator"
+        >
+          {{ formatDate(m.created_at) }}
+        </div>
 
-        <!-- FILE -->
-        <template v-else-if="m.media_type">
-          <a :href="m.media_url" target="_blank" class="file">
-            📎 {{ m.message ?? 'Attachment' }}
-          </a>
-        </template>
+        <!-- MESSAGE BUBBLE -->
+        <div :class="['bubble', bubbleClass(m)]">
 
-        <!-- TEXT -->
-        <template v-else>
-          <span>{{ m.message }}</span>
-        </template>
+          <!-- IMAGE -->
+          <template v-if="m.media_type && m.media_type.startsWith('image')">
+            <img :src="m.media_url" class="img" />
+          </template>
 
-        <div class="time">{{ m.created_at }}</div>
+          <!-- FILE -->
+          <template v-else-if="m.media_type">
+            <a :href="m.media_url" target="_blank" class="file">
+              📎 {{ m.message ?? 'Attachment' }}
+            </a>
+          </template>
+
+          <!-- TEXT -->
+          <template v-else>
+            <span>{{ m.message }}</span>
+          </template>
+
+          <!-- TIME + STATUS -->
+          <div class="time">
+            {{ m.created_at }}
+            <span
+              v-if="m.is_outgoing"
+              class="status"
+              :class="{ seen: m.is_seen }"
+            >
+              ✔✔
+            </span>
+          </div>
+
+        </div>
+      </template>
+
+      <!-- TYPING INDICATOR (UI ONLY) -->
+      <div class="typing" v-if="false">
+        <span></span><span></span><span></span>
       </div>
 
       <div v-if="!messages.length && !loading" class="no-msg">
         <small>No messages.</small>
       </div>
+
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ===============================
+   WRAPPER
+   =============================== */
 .wrapper {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
+/* ===============================
+   MESSAGE PANEL
+   =============================== */
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -95,56 +175,178 @@ function bubbleClass(m) {
   display: flex;
   flex-direction: column;
   gap: 10px;
+
+  background-image:
+    radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
-/* BUBBLE */
+/* ===============================
+   DATE SEPARATOR
+   =============================== */
+.date-separator {
+  align-self: center;
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 14px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+}
+
+/* ===============================
+   BUBBLE BASE
+   =============================== */
 .bubble {
-  max-width: 65%;
+  max-width: 72%;
   padding: 10px 14px;
-  border-radius: 14px;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   line-height: 1.45;
   font-size: 14px;
+  animation: fadeUp .25s ease;
+  word-break: break-word;
 }
 
-/* CUSTOMER (LEFT) */
+/* ===============================
+   CUSTOMER (LEFT)
+   =============================== */
 .bubble-you {
   align-self: flex-start;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  color: #111;
+  background: rgba(255,255,255,0.08);
+  color: #f8fafc;
+  border-top-left-radius: 6px;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
 }
 
-/* AGENT (RIGHT) */
+/* ===============================
+   AGENT (RIGHT)
+   =============================== */
 .bubble-me {
   align-self: flex-end;
-  background: #d0f5c7;
-  border: 1px solid #b6e8b3;
-  color: #0a3b21;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: white;
+  border-top-right-radius: 6px;
+  box-shadow: 0 6px 18px rgba(59,130,246,0.45);
+  margin-right: 6px;
 }
 
+/* ===============================
+   GROUPING
+   =============================== */
+.bubble + .bubble {
+  margin-top: 2px;
+}
+
+/* ===============================
+   TIME + STATUS
+   =============================== */
 .time {
-  font-size: 11px;
+  font-size: 10px;
   margin-top: 6px;
-  opacity: 0.55;
+  opacity: 0.45;
   text-align: right;
 }
 
+.status {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.status.seen {
+  color: #60a5fa;
+}
+
+/* ===============================
+   IMAGE
+   =============================== */
 .img {
-  max-width: 220px;
+  max-width: 240px;
   border-radius: 10px;
   margin-bottom: 6px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
 }
 
+/* ===============================
+   FILE
+   =============================== */
 .file {
-  color: #2979ff;
+  color: #93c5fd;
   text-decoration: none;
+  font-weight: 500;
 }
 
-.no-room, .no-msg, .loading {
+.file:hover {
+  text-decoration: underline;
+}
+
+/* ===============================
+   EMPTY / LOADING
+   =============================== */
+.no-room,
+.no-msg,
+.loading {
   text-align: center;
   margin-top: 25px;
-  color: #888;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* ===============================
+   TYPING INDICATOR
+   =============================== */
+.typing {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.08);
+  padding: 10px 14px;
+  border-radius: 14px;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.typing span {
+  width: 6px;
+  height: 6px;
+  background: #c7d2fe;
+  border-radius: 50%;
+  animation: blink 1.4s infinite both;
+}
+
+.typing span:nth-child(2) { animation-delay: .2s }
+.typing span:nth-child(3) { animation-delay: .4s }
+
+/* ===============================
+   MOBILE
+   =============================== */
+@media (max-width: 768px) {
+  .bubble {
+    max-width: 88%;
+  }
+
+  .messages {
+    padding: 12px;
+  }
+}
+
+/* ===============================
+   ANIMATION
+   =============================== */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  0% { opacity: .2 }
+  20% { opacity: 1 }
+  100% { opacity: .2 }
 }
 </style>
