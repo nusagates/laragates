@@ -39,6 +39,16 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
+| PUBLIC PAGES (MARKETING)
+|--------------------------------------------------------------------------
+*/
+Route::get('/pricing', fn () => Inertia::render('Pricing'))->name('pricing');
+Route::get('/solutions', fn () => Inertia::render('Solutions'))->name('solutions');
+Route::get('/docs', fn () => Inertia::render('Docs'))->name('docs');
+
+
+/*
+|--------------------------------------------------------------------------
 | EXTRA ROUTE FOR TEMPLATES LIST
 |--------------------------------------------------------------------------
 */

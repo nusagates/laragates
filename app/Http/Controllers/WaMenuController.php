@@ -10,6 +10,11 @@ use Illuminate\Validation\ValidationException;
 
 class WaMenuController extends Controller
 {
+    /**
+     * ===============================
+     * LIST MENU
+     * ===============================
+     */
     public function index()
     {
         return Inertia::render('Menu/Index', [
@@ -17,45 +22,71 @@ class WaMenuController extends Controller
         ]);
     }
 
+    /**
+     * ===============================
+     * CREATE PAGE (PAKAI Create.vue)
+     * ===============================
+     */
     public function create()
     {
-        return Inertia::render('Menu/Form', [
-            'menu' => null
-        ]);
+        return Inertia::render('Menu/Create');
     }
 
+    /**
+     * ===============================
+     * EDIT PAGE (PAKAI Edit.vue)
+     * ===============================
+     */
     public function edit(WaMenu $menu)
     {
-        return Inertia::render('Menu/Form', [
+        return Inertia::render('Menu/Edit', [
             'menu' => $menu
         ]);
     }
 
+    /**
+     * ===============================
+     * STORE MENU
+     * ===============================
+     */
     public function store(Request $request)
     {
         $data = $this->validateMenu($request);
 
         WaMenu::create($data);
 
-        return redirect()->route('menu.index')
+        return redirect()
+            ->route('menu.index')
             ->with('success', 'Menu berhasil ditambahkan');
     }
 
+    /**
+     * ===============================
+     * UPDATE MENU
+     * ===============================
+     */
     public function update(Request $request, WaMenu $menu)
     {
         $data = $this->validateMenu($request, $menu->id);
 
         $menu->update($data);
 
-        return redirect()->route('menu.index')
+        return redirect()
+            ->route('menu.index')
             ->with('success', 'Menu berhasil diperbarui');
     }
 
+    /**
+     * ===============================
+     * DELETE MENU
+     * ===============================
+     */
     public function destroy(WaMenu $menu)
     {
         $menu->delete();
 
-        return redirect()->route('menu.index')
+        return redirect()
+            ->route('menu.index')
             ->with('success', 'Menu berhasil dihapus');
     }
 
@@ -74,7 +105,7 @@ class WaMenuController extends Controller
             'order'       => 'nullable|integer',
         ]);
 
-        // 🔒 NORMALISASI KEY (PAKAI ENGINE)
+        // 🔒 NORMALISASI KEY
         $normalizedKey = MenuEngine::normalizeKey($request->key);
 
         if (! $normalizedKey) {
