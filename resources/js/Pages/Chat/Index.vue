@@ -4,16 +4,16 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head } from '@inertiajs/vue3'
 import ChatRoom from './Room.vue'
 import axios from 'axios'
-import { useToast } from "vue-toastification";
+import { useToast } from 'vue-toastification'
 
-const toast = useToast();
+const toast = useToast()
 
-/* ====== STATE ====== */
+/* ================= STATE ================= */
 const rooms = ref([])
 const query = ref('')
 const activeRoomId = ref(null)
 
-/* MESSAGE + MEDIA */
+/* MESSAGE */
 const tempMessage = ref('')
 const selectedFile = ref(null)
 const filePicker = ref(null)
@@ -25,10 +25,9 @@ const newChatForm = ref({
   name: '',
   phone: '',
   message: '',
-  create_ticket: false,
 })
 
-/* ===== FETCH ROOMS ===== */
+/* ================= FETCH ROOMS ================= */
 async function loadRooms() {
   const res = await axios.get('/chat/sessions')
   rooms.value = res.data
@@ -39,17 +38,17 @@ async function loadRooms() {
 
 onMounted(loadRooms)
 
-/* ===== ACTIVE ROOM ===== */
+/* ================= ACTIVE ROOM ================= */
 const activeRoom = computed(() =>
   rooms.value.find(r => r.session_id === activeRoomId.value)
 )
 
-/* ===== FILTER ===== */
+/* ================= FILTER ================= */
 const filtered = computed(() => {
   if (!query.value) return rooms.value
   return rooms.value.filter(r =>
     (r.customer_name ?? '').toLowerCase().includes(query.value.toLowerCase()) ||
-    (r.phone ?? '').toLowerCase().includes(query.value.toLowerCase())
+    (r.phone ?? '').includes(query.value)
   )
 })
 
@@ -57,7 +56,7 @@ function openRoom(id) {
   activeRoomId.value = id
 }
 
-/* ===== SEND MESSAGE ===== */
+/* ================= SEND MESSAGE ================= */
 async function sendMessage() {
   if (!activeRoomId.value) return
   if (!tempMessage.value && !selectedFile.value) return
@@ -73,35 +72,39 @@ async function sendMessage() {
   await axios.post(`/chat/sessions/${activeRoomId.value}/messages`, form)
 }
 
-/* ===== NEW CHAT ===== */
+/* ================= NEW CHAT ================= */
 function openNewChat() {
-  newChatForm.value = { name: '', phone: '', message: '', create_ticket: false }
+  newChatForm.value = { name: '', phone: '', message: '' }
   newChatDialog.value = true
 }
 
 async function submitNewChat() {
+  if (!newChatForm.value.phone) {
+    toast.error('Nomor WhatsApp wajib diisi')
+    return
+  }
+
   newChatLoading.value = true
+
   try {
-    const res = await axios.post('/chat/sessions/outbound', newChatForm.value)
+    const res = await axios.post('/chat/sessions/outbound', {
+      name: newChatForm.value.name || newChatForm.value.phone,
+      phone: newChatForm.value.phone,
+      message: newChatForm.value.message || '',
+      create_ticket: false,
+    })
+
+    if (!res.data?.session_id) throw new Error('Invalid response')
+
     newChatDialog.value = false
     await loadRooms()
     activeRoomId.value = res.data.session_id
-  } catch {
-    alert('Gagal membuat chat')
+
+    toast.success('Chat berhasil dibuat')
+  } catch (e) {
+    toast.error('Gagal membuat chat baru')
   } finally {
     newChatLoading.value = false
-  }
-}
-
-/* ===== CONVERT TICKET ===== */
-async function convertToTicket() {
-  if (!activeRoomId.value) return
-  try {
-    await axios.post(`/chat/sessions/${activeRoomId.value}/convert-ticket`)
-    toast.success('Ticket berhasil dibuat')
-    loadRooms()
-  } catch {
-    toast.error('Gagal convert ke ticket')
   }
 }
 </script>
@@ -130,13 +133,13 @@ async function convertToTicket() {
               hide-details
               class="search"
             />
-            <v-btn icon color="primary" @click="openNewChat">
+            <v-btn icon class="btn-primary" @click="openNewChat">
               <v-icon>mdi-plus</v-icon>
             </v-btn>
           </div>
 
           <div class="chat-scroll">
-            <v-list density="compact" class="list-dark">
+            <v-list density="compact">
               <v-list-item
                 v-for="room in filtered"
                 :key="room.session_id"
@@ -144,7 +147,7 @@ async function convertToTicket() {
                 :class="{ active: room.session_id === activeRoomId }"
               >
                 <template #prepend>
-                  <v-avatar color="primary" size="34">
+                  <v-avatar class="avatar">
                     {{ (room.customer_name ?? 'U')[0] }}
                   </v-avatar>
                 </template>
@@ -169,10 +172,9 @@ async function convertToTicket() {
 
           <div class="chat-header" v-if="activeRoom">
             <div class="header-left">
-              <v-avatar color="primary">
+              <v-avatar class="avatar">
                 {{ (activeRoom.customer_name ?? 'U')[0] }}
               </v-avatar>
-
               <div>
                 <div class="header-name">
                   {{ activeRoom.customer_name ?? activeRoom.phone }}
@@ -182,10 +184,6 @@ async function convertToTicket() {
                 </div>
               </div>
             </div>
-
-            <v-btn color="green" size="small" @click="convertToTicket">
-              Convert to Ticket
-            </v-btn>
           </div>
 
           <div class="chat-body">
@@ -207,13 +205,52 @@ async function convertToTicket() {
               class="message-input"
             />
 
-            <v-btn color="primary" @click="sendMessage">SEND</v-btn>
+            <v-btn class="btn-primary" @click="sendMessage">
+              SEND
+            </v-btn>
           </div>
 
         </div>
       </section>
-
     </div>
+
+    <!-- NEW CHAT DIALOG -->
+    <v-dialog v-model="newChatDialog" max-width="420">
+      <v-card class="dialog-dark">
+        <v-card-title>Add New Chat</v-card-title>
+
+        <v-card-text>
+          <v-text-field
+            v-model="newChatForm.name"
+            label="Customer Name"
+            variant="outlined"
+            density="compact"
+          />
+          <v-text-field
+            v-model="newChatForm.phone"
+            label="WhatsApp Number"
+            variant="outlined"
+            density="compact"
+            required
+          />
+          <v-textarea
+            v-model="newChatForm.message"
+            label="Initial Message"
+            rows="3"
+            variant="outlined"
+            density="compact"
+          />
+        </v-card-text>
+
+        <v-card-actions class="justify-end">
+          <v-btn variant="text" @click="newChatDialog=false">Cancel</v-btn>
+          <v-btn class="btn-primary" :loading="newChatLoading" @click="submitNewChat">
+            Create
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
   </AdminLayout>
 </template>
 
@@ -224,15 +261,13 @@ async function convertToTicket() {
   gap: 16px;
 }
 
-/* SIDEBAR */
 .chat-sidebar { width: 28%; }
-.chat-list {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+.chat-list,
+.chat-window {
   background: radial-gradient(circle at top, #0f172a, #020617);
   border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,.35);
 }
 
 .chat-sidebar-title {
@@ -250,74 +285,45 @@ async function convertToTicket() {
 
 .search :deep(.v-field),
 .message-input :deep(.v-field) {
-  background: rgba(255,255,255,0.06) !important;
+  background: rgba(255,255,255,.06);
   border-radius: 10px;
-  border: 1px solid rgba(99,102,241,0.35);
+  border: 1px solid rgba(99,102,241,.35);
 }
 
 .search :deep(input),
 .message-input :deep(input) {
-  color: #f1f5f9 !important;
+  color: #f1f5f9;
 }
 
 .chat-scroll { flex:1; overflow-y:auto; }
 
-/* ===== 🔥 FIX PUTIH DI DAFTAR CHAT (ONLY THIS) ===== */
-.chat-scroll :deep(.v-list) {
-  background: transparent !important;
+.v-list-item {
+  transition: background .2s ease;
 }
-
-.chat-scroll :deep(.v-list-item) {
-  background: transparent !important;
-}
-
-.v-list-item:hover {
-  background: rgba(255,255,255,0.04) !important;
-}
-
 .v-list-item.active {
-  background: rgba(59,130,246,0.25) !important;
-  border-left: 3px solid #3b82f6;
+  background: rgba(99,102,241,.25);
+  border-left: 3px solid #6366f1;
 }
 
-.list-title {
-  color: #f8fafc !important;
-  font-weight: 500;
-}
+.list-title { color:#f8fafc; font-weight:500; }
+.list-subtitle { color:#cbd5f5; font-size:12px; }
 
-.list-subtitle {
-  color: #cbd5f5 !important;
-  font-size: 12px;
-}
-
-/* CHAT */
 .chat-room { flex:1; }
-.chat-window {
-  height:100%;
-  display:flex;
-  flex-direction:column;
-  background: radial-gradient(circle at top, #0f172a, #020617);
-  border-radius:14px;
-}
+.chat-window { height:100%; display:flex; flex-direction:column; }
 
 .chat-header {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
   padding:14px 18px;
-  border-bottom:1px solid rgba(255,255,255,0.06);
+  border-bottom:1px solid rgba(255,255,255,.06);
 }
 
-.header-name {
-  font-size:15px;
-  font-weight:600;
-  color:#f8fafc;
+.header-left {
+  display:flex;
+  gap:12px;
+  align-items:center;
 }
 
-.header-phone {
-  font-size:12px;
-  color:#c7d2fe;
-}
+.header-name { color:#f8fafc; font-weight:600; }
+.header-phone { color:#c7d2fe; font-size:12px; }
 
 .chat-body { flex:1; padding:14px; overflow-y:auto; }
 
@@ -325,323 +331,153 @@ async function convertToTicket() {
   display:flex;
   gap:10px;
   padding:12px;
-  border-top:1px solid rgba(255,255,255,0.06);
+  border-top:1px solid rgba(255,255,255,.06);
 }
-.message-input { flex:1; }
+
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  color: white;
+  font-weight: 600;
+}
+
+.avatar {
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  color: white;
+  font-weight: 600;
+}
+
+.dialog-dark {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  color: #e5e7eb;
+  border-radius: 14px;
+}
 
 /* ===============================
-   FIX HEADER ROOM CHAT LAYOUT
-   (AVATAR DI SAMPING NAMA)
+   FIX PUTIH LIST CHAT (FINAL)
    =============================== */
-.header-left {
+
+/* background list */
+.chat-scroll :deep(.v-list) {
+  background: transparent !important;
+}
+
+/* item normal */
+.chat-scroll :deep(.v-list-item) {
+  background: transparent !important;
+  color: #e5e7eb;
+}
+
+/* hover */
+.chat-scroll :deep(.v-list-item:hover) {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+/* active item */
+.chat-scroll :deep(.v-list-item.active),
+.chat-scroll :deep(.v-list-item--active) {
+  background: rgba(99,102,241,0.28) !important;
+  border-left: 3px solid #6366f1;
+}
+
+/* title & subtitle */
+.chat-scroll :deep(.v-list-item-title) {
+  color: #f8fafc !important;
+}
+
+.chat-scroll :deep(.v-list-item-subtitle) {
+  color: #c7d2fe !important;
+}
+
+/* matiin background default vuetify */
+.chat-scroll :deep(.v-list-item__content),
+.chat-scroll :deep(.v-list-item__overlay) {
+  background: transparent !important;
+}
+
+/* avatar tetap kontras */
+.chat-scroll :deep(.v-avatar) {
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  color: white;
+}
+
+/* =========================================
+   FIX AREA PUTIH & SCROLL LIST CHAT
+   ========================================= */
+
+/* Sidebar harus full tinggi */
+.chat-sidebar {
+  height: 100%;
   display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
-.header-left .v-avatar {
-  flex-shrink: 0;
-}
-
-.header-left > div {
+/* Wrapper list chat wajib column */
+.chat-list {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  overflow: hidden;
 }
 
-/* ===============================
-   ✨ GLOBAL POLISH
-   =============================== */
-.chat-list,
-.chat-window {
-  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
-  transition: all .25s ease;
+/* Area scroll HARUS dibatasi */
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: transparent !important;
 }
 
-/* ===============================
-   ✨ SCROLLBAR (HALUS & DARK)
-   =============================== */
-.chat-scroll::-webkit-scrollbar,
-.chat-body::-webkit-scrollbar {
+/* Matikan background putih Vuetify */
+.chat-scroll :deep(.v-list) {
+  background: transparent !important;
+  min-height: 0 !important;
+}
+
+.chat-scroll :deep(.v-list-item) {
+  background: transparent !important;
+}
+
+/* Jangan biarkan list maksa tinggi */
+.chat-scroll :deep(.v-list-item__content),
+.chat-scroll :deep(.v-list-item__overlay) {
+  background: transparent !important;
+}
+
+/* Hover & active */
+.chat-scroll :deep(.v-list-item:hover) {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+.chat-scroll :deep(.v-list-item.active),
+.chat-scroll :deep(.v-list-item--active) {
+  background: rgba(99,102,241,0.25) !important;
+  border-left: 3px solid #6366f1;
+}
+
+/* Text */
+.chat-scroll :deep(.v-list-item-title) {
+  color: #f8fafc !important;
+}
+
+.chat-scroll :deep(.v-list-item-subtitle) {
+  color: #c7d2fe !important;
+}
+
+/* Avatar konsisten */
+.chat-scroll :deep(.v-avatar) {
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  color: #fff;
+}
+
+/* Scrollbar halus */
+.chat-scroll::-webkit-scrollbar {
   width: 6px;
 }
-
-.chat-scroll::-webkit-scrollbar-thumb,
-.chat-body::-webkit-scrollbar-thumb {
+.chat-scroll::-webkit-scrollbar-thumb {
   background: rgba(99,102,241,0.4);
   border-radius: 6px;
 }
-
-.chat-scroll::-webkit-scrollbar-track,
-.chat-body::-webkit-scrollbar-track {
+.chat-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-
-/* ===============================
-   ✨ LIST ITEM INTERACTION
-   =============================== */
-.v-list-item {
-  transition: background .2s ease, transform .15s ease;
-}
-
-.v-list-item:hover {
-  transform: translateX(2px);
-}
-
-/* ===============================
-   ✨ CHAT HEADER GLOW
-   =============================== */
-.chat-header {
-  backdrop-filter: blur(8px);
-  background: linear-gradient(
-    to right,
-    rgba(99,102,241,0.08),
-    rgba(2,6,23,0.85)
-  );
-}
-
-/* ===============================
-   ✨ INPUT AREA IMPROVEMENT
-   =============================== */
-.chat-input {
-  background: linear-gradient(
-    to top,
-    rgba(2,6,23,0.9),
-    rgba(15,23,42,0.85)
-  );
-}
-
-.chat-input .v-btn {
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-
-.chat-input .v-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(59,130,246,0.35);
-}
-
-/* ===============================
-   ✨ SEND BUTTON EMPHASIS
-   =============================== */
-.chat-input .v-btn[color="primary"] {
-  font-weight: 600;
-  letter-spacing: .4px;
-}
-
-/* ===============================
-   ✨ AVATAR POLISH
-   =============================== */
-.v-avatar {
-  box-shadow: 0 4px 12px rgba(59,130,246,0.45);
-  font-weight: 600;
-}
-
-/* ===============================
-   ✨ CHAT BODY SOFT GRID FEEL
-   =============================== */
-.chat-body {
-  background-image:
-    radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
-  background-size: 22px 22px;
-}
-
-/* ===============================
-   ✨ EMPTY STATE FEEL (ROOM BELUM ADA)
-   =============================== */
-.chat-body:empty::after {
-  content: "Select a chat to start conversation";
-  color: #64748b;
-  font-size: 13px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  opacity: .6;
-}
-
-/* ===============================
-   ✨ GLOBAL POLISH
-   =============================== */
-.chat-list,
-.chat-window {
-  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
-  transition: all .25s ease;
-}
-
-/* ===============================
-   ✨ SCROLLBAR DARK
-   =============================== */
-.chat-scroll::-webkit-scrollbar,
-.chat-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chat-scroll::-webkit-scrollbar-thumb,
-.chat-body::-webkit-scrollbar-thumb {
-  background: rgba(99,102,241,0.4);
-  border-radius: 6px;
-}
-
-.chat-scroll::-webkit-scrollbar-track,
-.chat-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* ===============================
-   ✨ LIST ITEM INTERACTION
-   =============================== */
-.v-list-item {
-  transition: background .2s ease, transform .15s ease;
-}
-
-.v-list-item:hover {
-  transform: translateX(2px);
-}
-
-/* ===============================
-   ✨ CHAT HEADER GLOW
-   =============================== */
-.chat-header {
-  backdrop-filter: blur(8px);
-  background: linear-gradient(
-    to right,
-    rgba(99,102,241,0.08),
-    rgba(2,6,23,0.85)
-  );
-}
-
-/* ===============================
-   ✨ INPUT AREA IMPROVEMENT
-   =============================== */
-.chat-input {
-  background: linear-gradient(
-    to top,
-    rgba(2,6,23,0.9),
-    rgba(15,23,42,0.85)
-  );
-}
-
-.chat-input .v-btn {
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-
-.chat-input .v-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(59,130,246,0.35);
-}
-
-/* ===============================
-   ✨ SEND BUTTON EMPHASIS
-   =============================== */
-.chat-input .v-btn[color="primary"] {
-  font-weight: 600;
-  letter-spacing: .4px;
-}
-
-/* ===============================
-   ✨ AVATAR POLISH
-   =============================== */
-.v-avatar {
-  box-shadow: 0 4px 12px rgba(59,130,246,0.45);
-  font-weight: 600;
-}
-
-/* ===============================
-   ✨ CHAT BODY GRID FEEL
-   =============================== */
-.chat-body {
-  background-image:
-    radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
-  background-size: 22px 22px;
-}
-
-/* ===============================
-   💬 CHAT BUBBLE POLISH
-   =============================== */
-.chat-body :deep(.message) {
-  max-width: 72%;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 14px;
-  line-height: 1.45;
-  word-break: break-word;
-  animation: fadeUp .25s ease;
-}
-
-.chat-body :deep(.message.incoming) {
-  background: rgba(255,255,255,0.08);
-  color: #f8fafc;
-  border-top-left-radius: 6px;
-}
-
-.chat-body :deep(.message.outgoing) {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  color: white;
-  margin-left: auto;
-  border-top-right-radius: 6px;
-}
-
-/* ===============================
-   🕒 TIMESTAMP MINI
-   =============================== */
-.chat-body :deep(.message-time) {
-  display: block;
-  margin-top: 4px;
-  font-size: 10px;
-  opacity: .6;
-  text-align: right;
-}
-
-/* ===============================
-   🔔 SIDEBAR UNREAD FEEL
-   =============================== */
-.v-list-item.active .list-title {
-  font-weight: 600;
-}
-
-.v-list-item:not(.active) .list-title {
-  opacity: .9;
-}
-
-/* ===============================
-   ✍️ INPUT FOCUS FEEL
-   =============================== */
-.message-input :deep(.v-field) {
-  transition: border .2s ease, box-shadow .2s ease;
-}
-
-.message-input :deep(.v-field--active) {
-  border: 1px solid rgba(99,102,241,0.8);
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
-}
-
-/* ===============================
-   ✨ EMPTY CHAT STATE
-   =============================== */
-.chat-body:empty::after {
-  content: "Select a chat to start conversation";
-  color: #64748b;
-  font-size: 13px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  opacity: .6;
-}
-
-/* ===============================
-   🎬 ANIMATION
-   =============================== */
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 
 </style>

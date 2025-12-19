@@ -1,18 +1,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue"
-import { Link, usePage } from "@inertiajs/vue3"
+import { Link, usePage, router } from "@inertiajs/vue3"
 import axios from "axios"
 
-// ===============================
-// AUTH & ROLE
-// ===============================
+/* ================= AUTH ================= */
 const page = usePage()
 const userRole = page.props.auth.user.role
 const drawer = ref(true)
 
-// ===============================
-// SIDEBAR MENU (ROLE BASED)
-// ===============================
+/* ================= MENU ================= */
 const menu = [
   { label: "Dashboard", icon: "mdi-view-dashboard", href: "/dashboard", roles: ["admin","superadmin","supervisor","agent"] },
   { label: "Chat", icon: "mdi-whatsapp", href: "/chat", roles: ["admin","superadmin","supervisor","agent"] },
@@ -25,9 +21,7 @@ const menu = [
   { label: "Settings", icon: "mdi-cog", href: "/settings", roles: ["superadmin"] },
 ]
 
-// ===============================
-// HEARTBEAT (AMAN)
-// ===============================
+/* ================= HEARTBEAT ================= */
 let heartbeatInterval = null
 const sendHeartbeat = () => {
   axios.post("/agent/heartbeat").catch(() => {})
@@ -40,27 +34,73 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(heartbeatInterval)
 })
+
+/* ================= LOGOUT & IDLE ================= */
+const showLogoutConfirm = ref(false)
+const showIdleConfirm = ref(false)
+
+/* ================= TOAST ================= */
+const toast = ref(false)
+const toastText = ref("")
+
+/* idle config (15 menit) */
+const IDLE_LIMIT = 15 * 60 * 1000
+let idleTimer = null
+
+const resetIdleTimer = () => {
+  clearTimeout(idleTimer)
+  idleTimer = setTimeout(() => {
+    showIdleConfirm.value = true
+  }, IDLE_LIMIT)
+}
+
+const activityEvents = ["mousemove", "keydown", "mousedown", "scroll", "touchstart"]
+
+onMounted(() => {
+  activityEvents.forEach(e => window.addEventListener(e, resetIdleTimer))
+  resetIdleTimer()
+})
+
+onUnmounted(() => {
+  activityEvents.forEach(e => window.removeEventListener(e, resetIdleTimer))
+  clearTimeout(idleTimer)
+})
+
+/* ================= ACTIONS ================= */
+const confirmLogout = () => {
+  showLogoutConfirm.value = true
+}
+
+const logoutNow = () => {
+  showLogoutConfirm.value = false
+  showIdleConfirm.value = false
+
+  router.post("/logout", {}, {
+    onFinish: () => {
+      toastText.value = "You have been logged out"
+      toast.value = true
+    }
+  })
+}
+
+const stayLoggedIn = () => {
+  showIdleConfirm.value = false
+  resetIdleTimer()
+}
 </script>
 
 <template>
   <v-app class="admin-dark">
 
     <!-- ================= SIDEBAR ================= -->
-    <v-navigation-drawer
-      v-model="drawer"
-      width="260"
-      permanent
-      class="sidebar"
-    >
-      <div class="logo">
-        WABA
-      </div>
+    <v-navigation-drawer v-model="drawer" width="260" permanent class="sidebar">
+      <div class="logo">WABA</div>
 
       <v-list density="compact" nav>
         <v-list-item
           v-for="item in menu.filter(m => m.roles.includes(userRole))"
           :key="item.href"
-          :class="[$page.url.startsWith(item.href) ? 'active-menu' : 'menu-item']"
+          :class="$page.url.startsWith(item.href) ? 'active-menu' : ''"
         >
           <Link :href="item.href" class="menu-link">
             <v-icon class="mr-3">{{ item.icon }}</v-icon>
@@ -79,32 +119,42 @@ onUnmounted(() => {
           <v-icon>mdi-menu</v-icon>
         </v-btn>
 
-        <v-toolbar-title class="font-weight-bold">
+        <v-toolbar-title class="title">
           <slot name="title" />
         </v-toolbar-title>
 
         <v-spacer />
 
-        <v-menu>
+        <!-- USER MENU -->
+        <v-menu location="bottom end">
           <template #activator="{ props }">
-            <v-btn variant="text" v-bind="props" class="user-btn">
-              <v-icon>mdi-account-circle</v-icon>
+            <v-btn v-bind="props" variant="text" class="user-btn">
+              <v-icon class="mr-1">mdi-account-circle</v-icon>
               {{ page.props.auth.user.name }}
               <v-icon size="18">mdi-chevron-down</v-icon>
             </v-btn>
           </template>
 
-          <v-list>
-            <v-list-item>
-              <Link href="/profile">Profile</Link>
-            </v-list-item>
-            <v-divider />
-            <v-list-item>
-              <Link href="/logout" method="post" as="button" class="text-red">
-                Logout
-              </Link>
-            </v-list-item>
-          </v-list>
+          <!-- ⬇️ FIX PUTIH DI SINI -->
+          <v-theme-provider theme="dark">
+            <v-list class="user-dropdown">
+              <v-list-item>
+                <Link href="/profile" class="dropdown-link">
+                  <v-icon size="18" class="mr-2">mdi-account</v-icon>
+                  Profile
+                </Link>
+              </v-list-item>
+
+              <v-divider />
+
+              <v-list-item @click="confirmLogout">
+                <span class="logout-btn">
+                  <v-icon size="18" class="mr-2">mdi-logout</v-icon>
+                  Logout
+                </span>
+              </v-list-item>
+            </v-list>
+          </v-theme-provider>
         </v-menu>
       </v-app-bar>
 
@@ -112,8 +162,56 @@ onUnmounted(() => {
       <div class="content">
         <slot />
       </div>
-
     </v-main>
+
+    <!-- ================= LOGOUT CONFIRM ================= -->
+    <v-dialog v-model="showLogoutConfirm" max-width="420">
+      <v-card class="dialog-dark">
+        <v-card-title>Confirm Logout</v-card-title>
+        <v-card-text>
+          Are you sure you want to log out?
+        </v-card-text>
+        <v-card-actions class="justify-end">
+          <v-btn variant="text" @click="showLogoutConfirm = false">
+            Cancel
+          </v-btn>
+          <v-btn color="error" @click="logoutNow">
+            Logout
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ================= IDLE CONFIRM ================= -->
+    <v-dialog v-model="showIdleConfirm" max-width="420" persistent>
+      <v-card class="dialog-dark">
+        <v-card-title>Session Expiring</v-card-title>
+        <v-card-text>
+          You have been inactive for a while.<br />
+          Do you want to stay logged in?
+        </v-card-text>
+        <v-card-actions class="justify-end">
+          <v-btn variant="text" color="error" @click="logoutNow">
+            Logout
+          </v-btn>
+          <v-btn color="primary" @click="stayLoggedIn">
+            Stay
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ================= TOAST ================= -->
+    <v-snackbar
+      v-model="toast"
+      location="top right"
+      timeout="3000"
+      class="toast-dark"
+    >
+      <v-icon class="mr-2" color="green">mdi-check-circle</v-icon>
+      {{ toastText }}
+    </v-snackbar>
+
   </v-app>
 </template>
 
@@ -137,7 +235,6 @@ onUnmounted(() => {
   text-align: center;
   padding: 20px;
   color: #38bdf8;
-  letter-spacing: 1px;
 }
 
 /* ================= MENU ================= */
@@ -147,10 +244,6 @@ onUnmounted(() => {
   width: 100%;
   color: #cbd5f5;
   text-decoration: none;
-}
-
-.menu-item:hover {
-  background: rgba(56, 189, 248, 0.1);
 }
 
 .active-menu {
@@ -166,8 +259,13 @@ onUnmounted(() => {
   color: #e5e7eb;
 }
 
-.user-btn {
+.title {
   color: #e5e7eb;
+  font-weight: 600;
+}
+
+.user-btn {
+  color: #e5e7eb !important;
 }
 
 /* ================= MAIN ================= */
@@ -177,5 +275,42 @@ onUnmounted(() => {
 
 .content {
   padding: 24px;
+}
+
+/* ================= DROPDOWN ================= */
+.user-dropdown {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  padding: 6px 0;
+}
+
+.dropdown-link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  color: #e5e7eb;
+  text-decoration: none;
+}
+
+.logout-btn {
+  color: #f87171;
+  cursor: pointer;
+}
+
+/* ================= DIALOG ================= */
+.dialog-dark {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  color: #e5e7eb;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+/* ================= TOAST ================= */
+.toast-dark {
+  background: #020617 !important;
+  color: #e5e7eb !important;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
 }
 </style>
