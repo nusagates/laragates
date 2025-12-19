@@ -39,17 +39,16 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
-| PUBLIC PAGES (MARKETING)
+| PUBLIC PAGES
 |--------------------------------------------------------------------------
 */
 Route::get('/pricing', fn () => Inertia::render('Pricing'))->name('pricing');
 Route::get('/solutions', fn () => Inertia::render('Solutions'))->name('solutions');
 Route::get('/docs', fn () => Inertia::render('Docs'))->name('docs');
 
-
 /*
 |--------------------------------------------------------------------------
-| EXTRA ROUTE FOR TEMPLATES LIST
+| EXTRA ROUTE
 |--------------------------------------------------------------------------
 */
 Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
@@ -61,11 +60,9 @@ Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 */
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    // Dashboard & Chat
     Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
-    // Agent heartbeat
     Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
     Route::post('/agent/offline', [AgentController::class, 'offline']);
 
@@ -88,7 +85,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Chat Advanced
+    | Chat
     |--------------------------------------------------------------------------
     */
     Route::prefix('chat')->group(function () {
@@ -141,18 +138,49 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Broadcast
+    | Broadcast (EXISTING)
     |--------------------------------------------------------------------------
     */
     Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
     Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-    Route::post('/broadcast/campaigns/{campaign}/upload-targets',
+    Route::post(
+        '/broadcast/campaigns/{campaign}/upload-targets',
         [BroadcastController::class, 'uploadTargets']
     )->name('broadcast.upload-targets');
 
     /*
     |--------------------------------------------------------------------------
-    | SUPERADMIN ONLY
+    | 🔥 Broadcast Reports (ADDED)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/broadcast/report', 
+        [BroadcastReportController::class, 'index']
+    )->name('broadcast.report');
+
+    Route::get('/broadcast/report/{campaign}', 
+        [BroadcastReportController::class, 'show']
+    )->name('broadcast.report.show');
+
+    /*
+    |--------------------------------------------------------------------------
+    | 🔥 Broadcast Approvals (ADDED)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/broadcast/approvals', 
+        [BroadcastApprovalController::class, 'index']
+    )->name('broadcast.approvals.index');
+
+    Route::post('/broadcast/approvals/{approval}/approve',
+        [BroadcastApprovalController::class, 'approve']
+    )->name('broadcast.approvals.approve');
+
+    Route::post('/broadcast/approvals/{approval}/reject',
+        [BroadcastApprovalController::class, 'reject']
+    )->name('broadcast.approvals.reject');
+
+    /*
+    |--------------------------------------------------------------------------
+    | SUPERADMIN
     |--------------------------------------------------------------------------
     */
     Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {

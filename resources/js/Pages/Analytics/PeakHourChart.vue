@@ -1,18 +1,8 @@
-<template>
-  <v-card elevation="2" class="pa-4" height="100%">
-    <div class="text-h6 mb-4">Peak Hour Traffic</div>
-
-    <div style="height: 300px;">
-      <Bar :data="chartData" :options="chartOptions" />
-    </div>
-  </v-card>
-</template>
-
 <script setup>
 import { ref, onMounted } from "vue";
 import axios from "axios";
 
-// Chart.js
+/* ================= CHART.JS (LOGIC ASLI) ================= */
 import { Bar } from "vue-chartjs";
 import {
   Chart as ChartJS,
@@ -23,12 +13,9 @@ import {
   Legend,
 } from "chart.js";
 
-// Register chart
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
-// =============================
-// REACTIVE CHART DATA
-// =============================
+/* ================= REACTIVE DATA ================= */
 const chartData = ref({
   labels: [],
   datasets: [
@@ -43,11 +30,28 @@ const chartData = ref({
 const chartOptions = ref({
   responsive: true,
   maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: "top",
+      labels: {
+        color: "#e5e7eb",
+        font: { size: 12 },
+      },
+    },
+  },
+  scales: {
+    x: {
+      ticks: { color: "#94a3b8" },
+      grid: { color: "rgba(255,255,255,.06)" },
+    },
+    y: {
+      ticks: { color: "#94a3b8" },
+      grid: { color: "rgba(255,255,255,.06)" },
+    },
+  },
 });
 
-// =============================
-// FETCH DATA
-// =============================
+/* ================= FETCH DATA (LOGIC ASLI) ================= */
 onMounted(loadData);
 
 async function loadData() {
@@ -69,3 +73,54 @@ async function loadData() {
   }
 }
 </script>
+
+<template>
+  <v-card class="analytics-card" height="100%">
+    <div class="card-header">
+      <div class="card-title">Peak Hour Traffic</div>
+      <div class="card-subtitle">Hourly message distribution</div>
+    </div>
+
+    <div class="chart-wrap">
+      <Bar :data="chartData" :options="chartOptions" />
+    </div>
+  </v-card>
+</template>
+
+<style scoped>
+/* =========================================================
+   DARK WABA – PEAK HOUR CHART
+   Clean • Export-safe • Consistent
+========================================================= */
+
+.analytics-card {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 16px;
+  padding: 18px;
+  color: #e5e7eb;
+}
+
+/* header */
+.card-header {
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.card-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* chart wrapper */
+.chart-wrap {
+  height: 300px;
+}
+
+/* remove shadow for pdf */
+:deep(.v-card) {
+  box-shadow: none !important;
+}
+</style>

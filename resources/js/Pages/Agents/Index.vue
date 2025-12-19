@@ -4,24 +4,28 @@ import { Head, usePage } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import axios from 'axios'
 
-// PROPS
+/* ======================
+   PROPS
+====================== */
 const props = defineProps({
   agents: Array,
   counts: Object,
-  filters: Object,
 })
 
-// AUTH ROLE
+/* ======================
+   AUTH
+====================== */
 const page = usePage()
 const meRole = computed(() => page.props.auth?.user?.role ?? 'agent')
 const canManageAgents = computed(() =>
   ['superadmin', 'admin'].includes(meRole.value)
 )
 
-// STATE
+/* ======================
+   STATE
+====================== */
 const tab = ref('all')
 const search = ref('')
-const loading = ref(false)
 const dialog = ref(false)
 const isEdit = ref(false)
 const formLoading = ref(false)
@@ -33,7 +37,9 @@ const form = ref({
   role: 'Agent',
 })
 
-// FILTER
+/* ======================
+   FILTER
+====================== */
 const filteredAgents = computed(() => {
   let data = props.agents || []
 
@@ -52,19 +58,15 @@ const filteredAgents = computed(() => {
   return data
 })
 
-// OPEN CREATE
+/* ======================
+   ACTIONS
+====================== */
 function openCreate() {
   isEdit.value = false
-  form.value = {
-    id: null,
-    name: '',
-    email: '',
-    role: 'Agent',
-  }
+  form.value = { id: null, name: '', email: '', role: 'Agent' }
   dialog.value = true
 }
 
-// OPEN EDIT
 function openEdit(agent) {
   isEdit.value = true
   form.value = {
@@ -81,33 +83,28 @@ function openEdit(agent) {
   dialog.value = true
 }
 
-// BADGES
 function roleBadgeColor(role) {
-  if (role === 'admin') return 'deep-purple'
-  if (role === 'supervisor') return 'green'
-  return 'blue'
+  if (role === 'admin') return 'indigo-darken-3'
+  if (role === 'supervisor') return 'teal-darken-2'
+  return 'blue-darken-2'
 }
 
 function statusBadgeColor(status) {
-  if (status === 'online') return 'green'
-  if (status === 'offline') return 'grey'
-  return 'orange'
+  if (status === 'online') return 'green-darken-2'
+  if (status === 'offline') return 'grey-darken-1'
+  return 'amber-darken-2'
 }
 
-// APPROVE
 async function approveAgent(id) {
   if (!confirm('Approve this agent?')) return
-  loading.value = true
   await axios.post(`/agents/${id}/approve`)
   window.location.reload()
 }
 
-// SAVE
 async function submitForm() {
   formLoading.value = true
-
   try {
-    if (isEdit.value && form.value.id) {
+    if (isEdit.value) {
       await axios.put(`/agents/${form.value.id}`, form.value)
     } else {
       await axios.post('/agents', form.value)
@@ -119,10 +116,8 @@ async function submitForm() {
   }
 }
 
-// DELETE
 async function deleteAgent(agent) {
   if (!confirm(`Delete agent ${agent.name}?`)) return
-  loading.value = true
   await axios.delete(`/agents/${agent.id}`)
   window.location.reload()
 }
@@ -134,150 +129,139 @@ async function deleteAgent(agent) {
   <AdminLayout>
     <template #title>Agents</template>
 
-    <!-- ==== FLASH MESSAGE PASSWORD GENERATED ==== -->
-    <v-alert
-      v-if="$page.props.flash?.password_generated"
-      type="success"
-      variant="tonal"
-      class="mb-4"
-      title="New Agent Created"
-    >
-      <strong>Email:</strong> {{ $page.props.flash.password_generated.email }} <br>
-      <strong>Password:</strong> {{ $page.props.flash.password_generated.password }}
-    </v-alert>
+    <div v-if="canManageAgents" class="agents-dark">
 
-    <!-- ACCESS DENIED -->
-    <v-alert
-      v-if="!canManageAgents"
-      type="error"
-      variant="tonal"
-      title="Access Denied"
-      class="mb-4"
-    >
-      You don't have permission to manage agents.
-    </v-alert>
-
-    <!-- MAIN CARD -->
-    <v-card v-if="canManageAgents" class="pa-4" elevation="2">
-      <div class="d-flex flex-wrap align-center justify-space-between mb-4">
-        <div>
-          <h3 class="text-h6 mb-1">Agents Management</h3>
-          <p class="text-body-2 text-grey-darken-1">
-            Kelola daftar agent customer service.
-          </p>
+      <!-- SUMMARY -->
+      <div class="summary-grid mb-6">
+        <div class="summary-card">
+          <span>Total Agents</span>
+          <h2>{{ counts.all }}</h2>
         </div>
-
-        <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">
-          Add Agent
-        </v-btn>
+        <div class="summary-card online">
+          <span>Online</span>
+          <h2>{{ counts.online }}</h2>
+        </div>
+        <div class="summary-card offline">
+          <span>Offline</span>
+          <h2>{{ counts.offline }}</h2>
+        </div>
+        <div class="summary-card pending">
+          <span>Pending</span>
+          <h2>{{ counts.pending }}</h2>
+        </div>
       </div>
 
-      <!-- FILTER BAR -->
-      <div class="d-flex flex-wrap align-center justify-space-between mb-4 gap-3">
-        <div class="d-flex gap-2">
-          <v-btn size="small" :variant="tab === 'all' ? 'flat' : 'text'" color="primary" @click="tab = 'all'">
-            All ({{ counts.all ?? 0 }})
-          </v-btn>
-          <v-btn size="small" :variant="tab === 'online' ? 'flat' : 'text'" color="green" @click="tab = 'online'">
-            Online ({{ counts.online ?? 0 }})
-          </v-btn>
-          <v-btn size="small" :variant="tab === 'offline' ? 'flat' : 'text'" color="grey" @click="tab = 'offline'">
-            Offline ({{ counts.offline ?? 0 }})
-          </v-btn>
-          <v-btn size="small" :variant="tab === 'pending' ? 'flat' : 'text'" color="orange" @click="tab = 'pending'">
-            Pending ({{ counts.pending ?? 0 }})
+      <!-- MAIN -->
+      <v-card class="main-card pa-5">
+        <div class="d-flex justify-space-between align-center mb-4">
+          <div>
+            <h3 class="text-white">Agents Management</h3>
+            <p class="text-muted">Kelola agent dan supervisor customer service</p>
+          </div>
+
+          <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">
+            Add Agent
           </v-btn>
         </div>
 
-        <v-text-field
-          v-model="search"
-          placeholder="Search name or email..."
-          density="compact"
-          hide-details
-          prepend-inner-icon="mdi-magnify"
-          style="max-width: 260px"
-        />
-      </div>
+        <!-- FILTER -->
+        <div class="d-flex justify-space-between mb-4">
+          <div class="d-flex gap-2">
+            <v-btn size="small" color="primary" :variant="tab==='all'?'flat':'text'" @click="tab='all'">All</v-btn>
+            <v-btn size="small" color="primary" :variant="tab==='online'?'flat':'text'" @click="tab='online'">Online</v-btn>
+            <v-btn size="small" color="primary" :variant="tab==='offline'?'flat':'text'" @click="tab='offline'">Offline</v-btn>
+            <v-btn size="small" color="primary" :variant="tab==='pending'?'flat':'text'" @click="tab='pending'">Pending</v-btn>
+          </div>
 
-      <!-- TABLE -->
-      <v-table fixed-header height="420px">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th class="text-center">Approval</th>
-            <th class="text-center">Action</th>
-          </tr>
-        </thead>
+          <v-text-field
+            v-model="search"
+            density="compact"
+            prepend-inner-icon="mdi-magnify"
+            placeholder="Search agent..."
+            hide-details
+            style="max-width:260px"
+          />
+        </div>
 
-        <tbody>
-          <tr v-for="agent in filteredAgents" :key="agent.id" class="hover-card">
-            <td>{{ agent.name }}</td>
-            <td>{{ agent.email }}</td>
+        <!-- TABLE -->
+        <v-table>
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th class="text-center">Approval</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
 
-            <td>
-              <v-chip size="small" :color="roleBadgeColor(agent.role)" class="text-white" variant="flat">
-                {{ agent.role }}
-              </v-chip>
-            </td>
+          <tbody>
+            <tr v-for="agent in filteredAgents" :key="agent.id" class="row-hover">
+              <td>
+                <strong>{{ agent.name }}</strong><br>
+                <small class="text-muted">{{ agent.email }}</small>
+              </td>
 
-            <td>
-              <v-chip size="small" :color="statusBadgeColor(agent.status)" class="text-white" variant="flat">
-                {{ agent.status }}
-              </v-chip>
-            </td>
+              <td>
+                <v-chip size="small" :color="roleBadgeColor(agent.role)">
+                  {{ agent.role }}
+                </v-chip>
+              </td>
 
-            <td class="text-center">
-              <v-btn
-                v-if="!agent.approved_at"
-                color="green"
-                icon="mdi-check"
-                size="small"
-                @click="approveAgent(agent.id)"
-              />
-              <v-chip v-else size="small" color="blue" variant="tonal">
-                <v-icon start size="16">mdi-shield-check</v-icon>
-                Approved
-              </v-chip>
-            </td>
+              <td>
+                <v-chip size="small" :color="statusBadgeColor(agent.status)">
+                  {{ agent.status }}
+                </v-chip>
+              </td>
 
-            <td class="text-center">
-              <v-btn icon="mdi-pencil" size="small" variant="text" @click="openEdit(agent)" />
-              <v-btn icon="mdi-delete" size="small" color="red" variant="text" @click="deleteAgent(agent)" />
-            </td>
-          </tr>
+              <td class="text-center">
+                <v-btn
+                  v-if="!agent.approved_at"
+                  size="small"
+                  icon="mdi-check"
+                  color="green"
+                  @click="approveAgent(agent.id)"
+                ></v-btn>
 
-          <tr v-if="!filteredAgents.length">
-            <td colspan="6" class="text-center text-grey pa-4">
-              No agents found.
-            </td>
-          </tr>
-        </tbody>
-      </v-table>
-    </v-card>
+                <v-chip v-else size="small" color="blue-darken-2" variant="tonal">
+                  Approved
+                </v-chip>
+              </td>
 
-    <!-- DIALOG ADD / EDIT -->
-    <v-dialog v-model="dialog" max-width="480">
+              <td class="text-center">
+                <v-btn
+                  icon="mdi-pencil"
+                  size="small"
+                  variant="text"
+                  @click="openEdit(agent)"
+                ></v-btn>
+
+                <v-btn
+                  icon="mdi-delete"
+                  size="small"
+                  color="red"
+                  variant="text"
+                  @click="deleteAgent(agent)"
+                ></v-btn>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card>
+    </div>
+
+    <!-- DIALOG -->
+    <v-dialog v-model="dialog" max-width="480" content-class="agents-dialog-dark">
       <v-card class="pa-4">
-        <h3 class="text-h6 mb-2">{{ isEdit ? 'Edit Agent' : 'Add Agent' }}</h3>
+        <h3 class="mb-4 text-white">{{ isEdit ? 'Edit Agent' : 'Add Agent' }}</h3>
 
-        <v-text-field v-model="form.name" label="Full Name" class="mb-3" />
-        <v-text-field v-model="form.email" label="Email" class="mb-3" />
+        <v-text-field v-model="form.name" label="Full Name" />
+        <v-text-field v-model="form.email" label="Email" />
+        <v-select v-model="form.role" :items="['Admin','Supervisor','Agent']" label="Role" />
 
-        <v-select
-          v-model="form.role"
-          :items="['Admin', 'Supervisor', 'Agent']"
-          label="Role"
-          class="mb-4"
-        />
-
-        <div class="d-flex justify-end gap-2 mt-2">
-          <v-btn variant="text" @click="dialog = false">Cancel</v-btn>
-          <v-btn color="primary" :loading="formLoading" @click="submitForm">
-            Save
-          </v-btn>
+        <div class="d-flex justify-end mt-4 gap-2">
+          <v-btn variant="text" @click="dialog=false">Cancel</v-btn>
+          <v-btn color="primary" :loading="formLoading" @click="submitForm">Save</v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -285,8 +269,84 @@ async function deleteAgent(agent) {
 </template>
 
 <style scoped>
-.hover-card:hover {
-  background-color: rgba(18, 131, 218, 0.07);
-  transition: 0.2s;
+.agents-dark {
+  color: #e5e7eb;
 }
+
+.main-card {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: #020617;
+  border-left: 4px solid #2563eb;
+}
+
+.summary-card.online { border-color: #22c55e; }
+.summary-card.offline { border-color: #64748b; }
+.summary-card.pending { border-color: #f59e0b; }
+
+.text-muted {
+  color: #94a3b8;
+}
+
+.row-hover:hover {
+  background: rgba(59,130,246,0.08);
+}
+
+/* DIALOG (TELEPORT SAFE) */
+:deep(.agents-dialog-dark) {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  color: #e5e7eb;
+}
+
+/* ===============================
+   FORCE DARK TABLE (VUETIFY)
+================================ */
+
+/* wrapper */
+.agents-dark :deep(.v-table),
+.agents-dark :deep(.v-table__wrapper),
+.agents-dark :deep(.v-table__wrapper table) {
+  background: transparent !important;
+}
+
+/* thead */
+.agents-dark :deep(.v-table thead),
+.agents-dark :deep(.v-table thead tr),
+.agents-dark :deep(.v-table thead th) {
+  background: #020617 !important;
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+/* tbody rows */
+.agents-dark :deep(.v-table tbody),
+.agents-dark :deep(.v-table tbody tr) {
+  background: transparent !important;
+  color: #e5e7eb !important;
+}
+
+/* tbody cells */
+.agents-dark :deep(.v-table tbody td) {
+  background: transparent !important;
+  color: #e5e7eb !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* hover */
+.agents-dark :deep(.v-table tbody tr:hover) {
+  background: rgba(59,130,246,0.08) !important;
+}
+
+
 </style>

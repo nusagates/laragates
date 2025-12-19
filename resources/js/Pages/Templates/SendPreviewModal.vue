@@ -60,23 +60,31 @@ async function sendPreview() {
 </script>
 
 <template>
-  <v-dialog v-model="props.modelValue" max-width="500px">
-    <v-card class="pa-4">
+  <!-- ======================
+       DARK DIALOG
+  ======================= -->
+  <v-dialog
+    v-model="props.modelValue"
+    max-width="500"
+    theme="dark"
+  >
+    <v-card class="pa-5 dark-dialog-card">
 
-      <h3 class="text-h6 font-weight-bold mb-3">
-        Send Preview  
+      <h3 class="text-h6 mb-2">
+        Send Preview
       </h3>
 
-      <div class="text-subtitle-2 mb-1">
-        Template: <strong>{{ props.template?.name }}</strong>
-      </div>
+      <p class="text-muted mb-3">
+        Template:
+        <strong>{{ props.template?.name }}</strong>
+      </p>
 
       <!-- PHONE -->
       <v-text-field
         v-model="form.phone"
         label="Phone (e.g. 628123...)"
         density="compact"
-        class="mt-3"
+        class="mb-3"
         :error-messages="fieldError('phone')"
       />
 
@@ -86,7 +94,7 @@ async function sendPreview() {
         :items="['id', 'en']"
         label="Language"
         density="compact"
-        class="mt-3"
+        class="mb-3"
       />
 
       <!-- COMPONENTS -->
@@ -95,12 +103,14 @@ async function sendPreview() {
         label="Optional components JSON"
         placeholder='[{"type":"body","parameters":[{"type":"text","text":"Hello"}]}]'
         auto-grow
-        class="mt-3"
+        class="mb-2"
       />
 
-      <!-- BUTTONS -->
-      <div class="d-flex justify-end mt-5" style="gap: 12px;">
-        <v-btn variant="text" @click="closeModal">Cancel</v-btn>
+      <!-- ACTION -->
+      <div class="d-flex justify-end gap-3 mt-5">
+        <v-btn variant="text" @click="closeModal">
+          Cancel
+        </v-btn>
 
         <v-btn
           color="primary"
@@ -114,3 +124,19 @@ async function sendPreview() {
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+/* ===============================
+   DARK DIALOG STYLE
+================================ */
+.dark-dialog-card {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  color: #e5e7eb;
+}
+
+.text-muted {
+  color: #94a3b8;
+}
+</style>

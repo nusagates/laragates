@@ -99,124 +99,196 @@ async function save() {
       {{ isEdit ? 'Edit Template' : 'New Template' }}
     </template>
 
-    <v-row>
-      <!-- LEFT SIDE = FORM -->
-      <v-col cols="12" md="6">
-        <v-card class="pa-4" elevation="2">
+    <div class="template-form-dark">
+      <v-row>
 
-          <h3 class="text-h6 font-weight-bold mb-4">
-            {{ isEdit ? 'Edit Template' : 'Create New Template' }}
-          </h3>
+        <!-- LEFT : FORM -->
+        <v-col cols="12" md="6">
+          <v-card class="dark-card pa-5">
 
-          <v-text-field v-model="form.name" label="Template Name" class="mb-3" />
+            <h3 class="text-h6 mb-4">
+              {{ isEdit ? 'Edit Template' : 'Create New Template' }}
+            </h3>
 
-          <v-select
-            v-model="form.category"
-            label="Category"
-            :items="['Utility','Marketing','Authentication']"
-            class="mb-3"
-          />
+            <v-text-field v-model="form.name" label="Template Name" />
+            <v-select
+              v-model="form.category"
+              label="Category"
+              :items="['Utility','Marketing','Authentication']"
+            />
+            <v-select
+              v-model="form.language"
+              label="Language"
+              :items="['id','en']"
+            />
 
-          <v-select
-            v-model="form.language"
-            label="Language"
-            :items="['id','en']"
-            class="mb-3"
-          />
+            <v-text-field
+              v-model="form.header"
+              label="Header (optional)"
+            />
 
-          <v-text-field
-            v-model="form.header"
-            label="Header (optional)"
-            class="mb-3"
-          />
+            <v-textarea
+              v-model="form.body"
+              label="Body Message"
+              rows="5"
+              hint="Gunakan {1}, {2} sebagai variable"
+              persistent-hint
+            />
 
-          <v-textarea
-            v-model="form.body"
-            label="Body Message"
-            rows="5"
-            hint="Gunakan {1}, {2} sebagai variable"
-            class="mb-3"
-          />
+            <v-text-field
+              v-model="form.footer"
+              label="Footer (optional)"
+            />
 
-          <v-text-field
-            v-model="form.footer"
-            label="Footer (optional)"
-            class="mb-3"
-          />
+            <v-textarea
+              v-model="form.buttons"
+              label="Buttons JSON (optional)"
+              hint='Example: [{"type":"url","text":"Visit","url":"https://..."}]'
+              rows="3"
+              persistent-hint
+            />
 
-          <v-textarea
-            v-model="form.buttons"
-            label="Buttons JSON (optional)"
-            hint='Example: [{"type":"url","text":"Visit","url":"https://..."}]'
-            rows="3"
-            class="mb-3"
-          />
+            <div class="d-flex justify-end gap-2 mt-5">
+              <v-btn variant="text" @click="router.visit('/templates')">
+                Cancel
+              </v-btn>
+              <v-btn color="primary" @click="save">
+                {{ isEdit ? 'Update' : 'Save' }}
+              </v-btn>
+            </div>
 
-          <div class="d-flex justify-end gap-2 mt-4">
-            <v-btn variant="text" @click="router.visit('/templates')">Cancel</v-btn>
-            <v-btn color="primary" @click="save">
-              {{ isEdit ? 'Update' : 'Save' }}
-            </v-btn>
-          </div>
+          </v-card>
+        </v-col>
 
-        </v-card>
-      </v-col>
+        <!-- RIGHT : PREVIEW -->
+        <v-col cols="12" md="6">
+          <v-card class="dark-card pa-5">
 
-      <!-- RIGHT SIDE = PREVIEW -->
-      <v-col cols="12" md="6">
-        <v-card class="pa-4" elevation="2">
-          <h3 class="text-h6 font-weight-bold mb-4">Live Preview</h3>
+            <h3 class="text-h6 mb-4">Live Preview</h3>
 
-          <div v-if="allVars.length">
-            <h4 class="text-subtitle-2 mb-2">Variables</h4>
+            <!-- VARIABLES -->
+            <div v-if="allVars.length">
+              <h4 class="text-subtitle-2 mb-2 text-muted">Variables</h4>
 
-            <v-row>
-              <v-col cols="12" md="6" v-for="v in allVars" :key="v">
-                <v-text-field
-                  v-model="params[v]"
-                  :label="`Value for {${v}}`"
-                  class="mb-2"
-                />
-              </v-col>
-            </v-row>
-          </div>
-
-          <v-sheet
-            elevation="1"
-            class="pa-4 mt-4"
-            style="background:#ece5dd; border-radius:12px;"
-          >
-            <div style="
-              background:#dcf8c6;
-              padding:14px 16px;
-              border-radius:12px;
-              max-width:90%;
-              font-size:15px;
-              line-height:1.4;
-            ">
-              <p v-if="previewHeader"><b>{{ previewHeader }}</b></p>
-              <p style="white-space:pre-line;">{{ previewBody }}</p>
-              <p v-if="previewFooter" class="text-grey-darken-1 text-caption">
-                {{ previewFooter }}
-              </p>
-
-              <div v-if="form.buttons?.length" class="mt-2">
-                <v-chip
-                  v-for="(btn,i) in form.buttons"
-                  :key="i"
-                  class="ma-1"
-                  color="blue"
-                  label
-                  small
+              <v-row>
+                <v-col
+                  cols="12"
+                  md="6"
+                  v-for="v in allVars"
+                  :key="v"
                 >
-                  {{ btn.text || 'Button' }}
-                </v-chip>
+                  <v-text-field
+                    v-model="params[v]"
+                    :label="`Value for {${v}}`"
+                    density="compact"
+                  />
+                </v-col>
+              </v-row>
+            </div>
+
+            <!-- WHATSAPP PREVIEW -->
+            <div class="wa-preview mt-4">
+              <div class="wa-bubble">
+
+                <p v-if="previewHeader" class="wa-header">
+                  {{ previewHeader }}
+                </p>
+
+                <p class="wa-body">
+                  {{ previewBody }}
+                </p>
+
+                <p
+                  v-if="previewFooter"
+                  class="wa-footer"
+                >
+                  {{ previewFooter }}
+                </p>
+
+                <div
+                  v-if="form.buttons?.length"
+                  class="wa-buttons"
+                >
+                  <v-chip
+                    v-for="(btn,i) in form.buttons"
+                    :key="i"
+                    size="small"
+                    color="blue-darken-2"
+                    label
+                  >
+                    {{ btn.text || 'Button' }}
+                  </v-chip>
+                </div>
+
               </div>
             </div>
-          </v-sheet>
 
-        </v-card>
-      </v-col>
-    </v-row>
+          </v-card>
+        </v-col>
+
+      </v-row>
+    </div>
   </AdminLayout>
 </template>
+
+<style scoped>
+/* ===============================
+   PAGE BASE
+================================ */
+.template-form-dark {
+  color: #e5e7eb;
+}
+
+/* ===============================
+   CARD
+================================ */
+.dark-card {
+  background: linear-gradient(180deg,#020617,#0f172a);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 16px;
+}
+
+/* ===============================
+   TEXT
+================================ */
+.text-muted {
+  color: #94a3b8;
+}
+
+/* ===============================
+   WHATSAPP PREVIEW
+================================ */
+.wa-preview {
+  background: rgba(255,255,255,.04);
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.wa-bubble {
+  background: #1f2937;
+  padding: 14px 16px;
+  border-radius: 14px;
+  max-width: 90%;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.wa-header {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.wa-body {
+  white-space: pre-line;
+}
+
+.wa-footer {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+
+.wa-buttons {
+  margin-top: 8px;
+}
+</style>
