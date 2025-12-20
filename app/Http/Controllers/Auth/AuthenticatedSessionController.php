@@ -26,13 +26,40 @@ class AuthenticatedSessionController extends Controller
 
     /**
      * Handle an incoming authentication request.
+     * 🔐 STEP 4 — IAM LIFECYCLE ENFORCEMENT
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        // AUTHENTICATE (PASSWORD VALID)
         $request->authenticate();
 
+        // SESSION SAFE
         $request->session()->regenerate();
 
+        $user = auth()->user();
+
+        /**
+         * 🔐 IAM ENFORCEMENT
+         * - User belum di-approve
+         * - User belum aktif
+         * - User masih pending
+         */
+        if (
+            !$user->is_active ||
+            $user->status === 'pending' ||
+            $user->approved_at === null
+        ) {
+            Auth::logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                'email' => 'Your account is not yet approved or has been deactivated.',
+            ]);
+        }
+
+        // LOGIN SUCCESS
         return redirect()->intended(route('dashboard', absolute: false));
     }
 
@@ -44,7 +71,6 @@ class AuthenticatedSessionController extends Controller
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
-
         $request->session()->regenerateToken();
 
         return redirect('/');

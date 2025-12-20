@@ -21,6 +21,7 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WaMenuController;
 
 use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\IdleTimeout;
 use App\Models\Template;
 
 /*
@@ -58,7 +59,7 @@ Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 | AUTH PROTECTED ROUTES
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
     Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
@@ -184,12 +185,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
-        Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+    Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
 
-        Route::get('/agents', [AgentController::class, 'index'])->name('agents');
-        Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
-        Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-    });
+    Route::get('/agents', [AgentController::class, 'index'])->name('agents');
+    Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+    Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
+    Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
+});
+
 
     /*
     |--------------------------------------------------------------------------

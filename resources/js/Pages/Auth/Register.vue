@@ -102,9 +102,14 @@ const submit = () => {
             :append-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
             @click:append="showPassword = !showPassword"
             :error-messages="form.errors.password"
-            class="mb-4"
+            class="mb-1"
             required
           />
+
+          <!-- PASSWORD HINT -->
+          <p class="text-caption text-grey-darken-1 mb-4">
+            Password minimal 8 karakter, mengandung huruf besar, huruf kecil, angka, dan simbol.
+          </p>
 
           <!-- CONFIRM PASSWORD -->
           <v-text-field

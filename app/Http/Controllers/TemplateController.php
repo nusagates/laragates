@@ -107,38 +107,48 @@ class TemplateController extends Controller
      | UPDATE
      ------------------------------------------------------*/
     public function update(Request $request, Template $template)
-    {
-        $this->ensureCanManageTemplates();
+{
+    $this->ensureCanManageTemplates();
 
-        $data = $request->validate([
-            'name'     => 'required|string|max:191',
-            'category' => 'nullable|string|max:50',
-            'language' => 'required|string|max:10',
-            'header'   => 'nullable|string',
-            'body'     => 'required|string',
-            'footer'   => 'nullable|string',
-            'buttons'  => 'nullable|array',
-        ]);
+    $data = $request->validate([
+        'name'     => 'required|string|max:191',
+        'category' => 'nullable|string|max:50',
+        'language' => 'required|string|max:10',
+        'header'   => 'nullable|string',
+        'body'     => 'required|string',
+        'footer'   => 'nullable|string',
+        'buttons'  => 'nullable|array',
+    ]);
 
-        $this->validateTemplateRules($data);
+    $this->validateTemplateRules($data);
 
-        $template->update(array_merge($data, [
-            'version' => $template->version + 1,
-            'status'  => 'draft',
-        ]));
+    $template->update(array_merge($data, [
+        'version' => $template->version + 1,
+        'status'  => 'draft',
+    ]));
 
-        return back()->with('success','Updated.');
-    }
+    return response()->json([
+        'message'  => 'Template updated',
+        'template' => $template->fresh()
+    ]);
+}
+
 
     /* -----------------------------------------------------
      | DELETE
      ------------------------------------------------------*/
     public function destroy(Template $template)
-    {
-        $this->ensureCanManageTemplates();
-        $template->delete();
-        return back()->with('success','Deleted.');
-    }
+{
+    $this->ensureCanManageTemplates();
+
+    $template->delete();
+
+    return response()->json([
+        'message' => 'Template deleted',
+        'id'      => $template->id
+    ]);
+}
+
 
     /* -----------------------------------------------------
      | SUBMIT FOR APPROVAL

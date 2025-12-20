@@ -13,6 +13,11 @@ const props = defineProps({
 })
 
 /* ======================
+   LOCAL STATE (KEY FIX)
+====================== */
+const agents = ref([...props.agents])
+
+/* ======================
    AUTH
 ====================== */
 const page = usePage()
@@ -38,10 +43,10 @@ const form = ref({
 })
 
 /* ======================
-   FILTER
+   FILTER (PAKAI STATE LOKAL)
 ====================== */
 const filteredAgents = computed(() => {
-  let data = props.agents || []
+  let data = agents.value || []
 
   if (tab.value !== 'all') {
     data = data.filter(a => a.status === tab.value)
@@ -98,7 +103,10 @@ function statusBadgeColor(status) {
 async function approveAgent(id) {
   if (!confirm('Approve this agent?')) return
   await axios.post(`/agents/${id}/approve`)
-  window.location.reload()
+
+  // update lokal (optional, tapi rapi)
+  const agent = agents.value.find(a => a.id === id)
+  if (agent) agent.approved_at = new Date()
 }
 
 async function submitForm() {
@@ -106,11 +114,17 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await axios.put(`/agents/${form.value.id}`, form.value)
+
+      const idx = agents.value.findIndex(a => a.id === form.value.id)
+      if (idx !== -1) {
+        agents.value[idx] = { ...agents.value[idx], ...form.value }
+      }
     } else {
-      await axios.post('/agents', form.value)
+      const res = await axios.post('/agents', form.value)
+      // optional: push agent baru kalau backend return data
+      if (res?.data) agents.value.push(res.data)
     }
     dialog.value = false
-    window.location.reload()
   } finally {
     formLoading.value = false
   }
@@ -118,10 +132,14 @@ async function submitForm() {
 
 async function deleteAgent(agent) {
   if (!confirm(`Delete agent ${agent.name}?`)) return
+
   await axios.delete(`/agents/${agent.id}`)
-  window.location.reload()
+
+  // 🔥 REAL-TIME UI (TANPA RELOAD)
+  agents.value = agents.value.filter(a => a.id !== agent.id)
 }
 </script>
+
 
 <template>
   <Head title="Agents" />

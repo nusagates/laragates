@@ -98,11 +98,12 @@ async function saveTemplate() {
 
 async function deleteTemplate(id) {
   if (!confirm('Delete template?')) return
-  actionLoading.value = true
+
   await axios.delete(`/templates/${id}`)
-  await loadTemplates()
-  actionLoading.value = false
+
+  templates.value = templates.value.filter(t => t.id !== id)
 }
+
 
 async function syncTemplate(id) {
   if (!confirm('Sync template?')) return
