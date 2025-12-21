@@ -23,17 +23,24 @@ const menu = [
 
 /* ================= HEARTBEAT ================= */
 let heartbeatInterval = null
+
 const sendHeartbeat = () => {
   axios.post("/agent/heartbeat").catch(() => {})
 }
 
 onMounted(() => {
-  heartbeatInterval = setInterval(sendHeartbeat, 5000)
+  // 🔥 HEARTBEAT HANYA UNTUK AGENT & SUPERVISOR
+  if (["agent", "supervisor"].includes(userRole)) {
+    heartbeatInterval = setInterval(sendHeartbeat, 30000)
+  }
 })
 
 onUnmounted(() => {
-  clearInterval(heartbeatInterval)
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval)
+  }
 })
+
 
 /* ================= LOGOUT & IDLE ================= */
 const showLogoutConfirm = ref(false)

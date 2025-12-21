@@ -20,8 +20,11 @@ use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WaMenuController;
 
+// Middleware
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\IdleTimeout;
+
+// Models
 use App\Models\Template;
 
 /*
@@ -69,7 +72,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Analytics
+    | ANALYTICS
     |--------------------------------------------------------------------------
     */
     Route::get('/analytics', fn () => Inertia::render('Analytics/AnalyticsDashboard'))
@@ -86,30 +89,26 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Chat
+    | CHAT
     |--------------------------------------------------------------------------
     */
     Route::prefix('chat')->group(function () {
         Route::get('/sessions', [ChatSessionController::class, 'index']);
         Route::get('/sessions/{session}', [ChatSessionController::class, 'show']);
-
         Route::post('/sessions/{session}/pin', [ChatSessionController::class, 'pin']);
         Route::post('/sessions/{session}/unpin', [ChatSessionController::class, 'unpin']);
         Route::post('/sessions/{session}/mark-read', [ChatSessionController::class, 'markRead']);
-
         Route::get('/sessions/{session}/messages', [ChatMessageController::class, 'index']);
         Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
-
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
-
         Route::post('/sessions/outbound', [ChatController::class, 'outbound'])
             ->name('chat.outbound');
     });
 
     /*
     |--------------------------------------------------------------------------
-    | Tickets
+    | TICKETS
     |--------------------------------------------------------------------------
     */
     Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
@@ -121,7 +120,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Templates
+    | TEMPLATES
     |--------------------------------------------------------------------------
     */
     Route::prefix('templates')->group(function () {
@@ -130,7 +129,6 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::get('/{template}', [TemplateController::class, 'show'])->name('templates.show');
         Route::put('/{template}', [TemplateController::class, 'update'])->name('templates.update');
         Route::delete('/{template}', [TemplateController::class, 'destroy'])->name('templates.destroy');
-
         Route::post('/{template}/submit', [TemplateController::class, 'submitForApproval'])->name('templates.submit');
         Route::post('/{template}/approve', [TemplateController::class, 'approve'])->name('templates.approve');
         Route::post('/{template}/reject', [TemplateController::class, 'reject'])->name('templates.reject');
@@ -139,74 +137,54 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Broadcast (EXISTING)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
-    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-    Route::post(
-        '/broadcast/campaigns/{campaign}/upload-targets',
-        [BroadcastController::class, 'uploadTargets']
-    )->name('broadcast.upload-targets');
-
-    /*
-    |--------------------------------------------------------------------------
-    | 🔥 Broadcast Reports (ADDED)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/broadcast/report', 
-        [BroadcastReportController::class, 'index']
-    )->name('broadcast.report');
-
-    Route::get('/broadcast/report/{campaign}', 
-        [BroadcastReportController::class, 'show']
-    )->name('broadcast.report.show');
-
-    /*
-    |--------------------------------------------------------------------------
-    | 🔥 Broadcast Approvals (ADDED)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/broadcast/approvals', 
-        [BroadcastApprovalController::class, 'index']
-    )->name('broadcast.approvals.index');
-
-    Route::post('/broadcast/approvals/{approval}/approve',
-        [BroadcastApprovalController::class, 'approve']
-    )->name('broadcast.approvals.approve');
-
-    Route::post('/broadcast/approvals/{approval}/reject',
-        [BroadcastApprovalController::class, 'reject']
-    )->name('broadcast.approvals.reject');
-
-    /*
-    |--------------------------------------------------------------------------
-    | SUPERADMIN
+    | SUPERADMIN — INERTIA PAGE ONLY
     |--------------------------------------------------------------------------
     */
     Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
+
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
 
     Route::get('/agents', [AgentController::class, 'index'])->name('agents');
     Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+
+    // ✅ INI YANG HILANG
+    Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
+
     Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
     Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
 });
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | WHATSAPP MENU
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('menu')->name('menu.')->group(function () {
-        Route::get('/', [WaMenuController::class, 'index'])->name('index');
-        Route::get('/create', [WaMenuController::class, 'create'])->name('create');
-        Route::post('/', [WaMenuController::class, 'store'])->name('store');
-        Route::get('/{menu}/edit', [WaMenuController::class, 'edit'])->name('edit');
-        Route::put('/{menu}', [WaMenuController::class, 'update'])->name('update');
-        Route::delete('/{menu}', [WaMenuController::class, 'destroy'])->name('destroy');
+});
+
+/*
+|--------------------------------------------------------------------------
+| 🔥 AGENTS AJAX ACTIONS (NO INERTIA)
+|--------------------------------------------------------------------------
+| INI KUNCI FIX REALTIME
+*/
+Route::middleware(['auth'])
+    ->withoutMiddleware([\App\Http\Middleware\HandleInertiaRequests::class])
+    ->group(function () {
+
+        Route::post('/agents', [AgentController::class, 'store']);
+        Route::put('/agents/{user}', [AgentController::class, 'update']);
+        Route::delete('/agents/{user}', [AgentController::class, 'destroy']);
+        Route::post('/agents/{user}/approve', [AgentController::class, 'approve']);
     });
+
+/*
+|--------------------------------------------------------------------------
+| WHATSAPP MENU
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->prefix('menu')->name('menu.')->group(function () {
+    Route::get('/', [WaMenuController::class, 'index'])->name('index');
+    Route::get('/create', [WaMenuController::class, 'create'])->name('create');
+    Route::post('/', [WaMenuController::class, 'store'])->name('store');
+    Route::get('/{menu}/edit', [WaMenuController::class, 'edit'])->name('edit');
+    Route::put('/{menu}', [WaMenuController::class, 'update'])->name('update');
+    Route::delete('/{menu}', [WaMenuController::class, 'destroy'])->name('destroy');
 });
 
 /*

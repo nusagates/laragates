@@ -121,14 +121,18 @@ async function submitForm() {
       }
     } else {
       const res = await axios.post('/agents', form.value)
-      // optional: push agent baru kalau backend return data
       if (res?.data) agents.value.push(res.data)
     }
+
     dialog.value = false
+  } catch (e) {
+    console.error('Submit agent failed:', e)
+    alert(e.response?.data?.message ?? 'Failed to save agent')
   } finally {
     formLoading.value = false
   }
 }
+
 
 async function deleteAgent(agent) {
   if (!confirm(`Delete agent ${agent.name}?`)) return
