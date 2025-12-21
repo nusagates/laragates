@@ -117,6 +117,8 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])->name('tickets.status');
     Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
     Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
+    Route::post('/tickets', [TicketController::class, 'store']);
+
 
     /*
     |--------------------------------------------------------------------------
