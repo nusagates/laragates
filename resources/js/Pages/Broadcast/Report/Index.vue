@@ -6,18 +6,32 @@ import { ref, computed } from 'vue'
 const page = usePage()
 
 const campaigns = computed(() => page.props.campaigns ?? {
-  data: [], last_page: 1, current_page: 1
+  data: [],
+  current_page: 1,
+  last_page: 1,
 })
 
 const filters = ref({
   search: page.props.filters?.search ?? '',
-  status: page.props.filters?.status ?? ''
+  status: page.props.filters?.status ?? '',
 })
 
 function applyFilter() {
   router.get(
     route('broadcast.report'),
     {
+      search: filters.value.search,
+      status: filters.value.status,
+    },
+    { preserveState: true, preserveScroll: true }
+  )
+}
+
+function goPage(pageNumber) {
+  router.get(
+    route('broadcast.report'),
+    {
+      page: pageNumber,
       search: filters.value.search,
       status: filters.value.status,
     },
@@ -33,14 +47,6 @@ function applyFilter() {
     <template #title>Broadcast Report</template>
 
     <div class="report-dark">
-
-      <!-- HEADER -->
-      <div class="header-card mb-6">
-        <div>
-          <h3>Broadcast Campaign Report</h3>
-          <p>Summary & performance of broadcast campaigns</p>
-        </div>
-      </div>
 
       <!-- FILTER -->
       <v-card class="card pa-4 mb-4">
@@ -87,31 +93,23 @@ function applyFilter() {
           </thead>
 
           <tbody>
-            <tr
-              v-for="c in campaigns.data"
-              :key="c.id"
-              class="row-hover"
-            >
+            <tr v-for="c in campaigns.data" :key="c.id">
               <td>
                 <strong>{{ c.name }}</strong>
                 <div class="muted text-caption">
-                  by {{ c.created_by }}
+                  by {{ c.created_by ?? '-' }}
                 </div>
               </td>
 
-              <td>{{ c.template?.name || '-' }}</td>
-              <td>{{ c.targets_count ?? '-' }}</td>
-              <td>{{ c.sent_count }}</td>
-              <td class="text-danger">{{ c.failed_count }}</td>
+              <td>{{ c.template?.name ?? '-' }}</td>
+              <td>{{ c.targets_count ?? 0 }}</td>
+              <td>{{ c.sent_count ?? 0 }}</td>
+              <td class="text-danger">{{ c.failed_count ?? 0 }}</td>
               <td>{{ new Date(c.created_at).toLocaleString() }}</td>
 
               <td class="text-right">
                 <Link :href="route('broadcast.report.show', c.id)">
-                  <v-btn
-                    size="small"
-                    variant="tonal"
-                    color="primary"
-                  >
+                  <v-btn size="small" variant="tonal" color="primary">
                     Detail
                   </v-btn>
                 </Link>
@@ -127,122 +125,15 @@ function applyFilter() {
         </v-table>
       </v-card>
 
-      <!-- PAGINATION -->
+      <!-- PAGINATION (FIXED) -->
       <div class="d-flex justify-end mt-4">
         <v-pagination
-          v-model="campaigns.current_page"
+          :model-value="campaigns.current_page"
           :length="campaigns.last_page"
-          @update:modelValue="p =>
-            router.get(
-              route('broadcast.report'),
-              { page: p },
-              { preserveState:true, preserveScroll:true }
-            )
-          "
+          @update:modelValue="goPage"
         />
       </div>
 
     </div>
   </AdminLayout>
 </template>
-
-<style scoped>
-/* =========================================================
-   BROADCAST REPORT – DARK WABA
-========================================================= */
-
-:global(:root) {
-  --bg-main: #020617;
-  --bg-soft: #0f172a;
-  --border-soft: rgba(255,255,255,.06);
-
-  --text-main: #e5e7eb;
-  --text-muted: #94a3b8;
-
-  --blue-strong: #3b82f6;
-  --blue-soft: rgba(59,130,246,.12);
-  --danger: #f87171;
-}
-
-/* WRAPPER */
-.report-dark {
-  color: var(--text-main);
-}
-
-/* HEADER */
-.header-card {
-  background: linear-gradient(180deg, var(--bg-main), var(--bg-soft));
-  padding: 20px;
-  border-radius: 16px;
-}
-
-.header-card p {
-  color: var(--text-muted);
-}
-
-/* CARD */
-.card {
-  background: linear-gradient(180deg, var(--bg-main), var(--bg-soft));
-  border: 1px solid var(--border-soft);
-  border-radius: 16px;
-}
-
-/* FILTER */
-.filters {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-/* TABLE FORCE DARK */
-:deep(.v-table),
-:deep(.v-table__wrapper),
-:deep(table) {
-  background: transparent !important;
-}
-
-:deep(thead th) {
-  background: #020617 !important;
-  color: var(--text-muted) !important;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-:deep(tbody td) {
-  background: transparent !important;
-  color: var(--text-main) !important;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.row-hover:hover {
-  background: var(--blue-soft);
-}
-
-/* TEXT */
-.muted {
-  color: var(--text-muted);
-}
-
-.text-danger {
-  color: var(--danger);
-}
-
-/* BUTTON */
-.v-btn {
-  border-radius: 10px;
-}
-
-/* INPUT FIX */
-:deep(.v-field__input input),
-:deep(.v-field__input textarea),
-:deep(.v-select__selection-text) {
-  color: var(--text-main) !important;
-}
-
-:deep(.v-label) {
-  color: var(--text-muted) !important;
-}
-
-:deep(.v-field--active .v-label) {
-  color: var(--blue-strong) !important;
-}
-</style>

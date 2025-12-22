@@ -3,13 +3,42 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+
+use App\Services\TicketSlaService;
 use App\Jobs\SendScheduledBroadcastJob;
 
-// Command default
+/*
+|--------------------------------------------------------------------------
+| DEFAULT COMMAND
+|--------------------------------------------------------------------------
+*/
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote')->hourly();
+})
+->purpose('Display an inspiring quote')
+->hourly();
 
-// === SCHEDULER BROADCAST ===
-// Check dan kirim broadcast yang waktunya telah tiba
-Schedule::job(new SendScheduledBroadcastJob)->everyMinute();
+/*
+|--------------------------------------------------------------------------
+| SCHEDULER — BROADCAST
+|--------------------------------------------------------------------------
+| Kirim broadcast yang waktunya sudah tiba
+| (HARUS anti duplicate)
+*/
+Schedule::job(new SendScheduledBroadcastJob)
+    ->everyMinute()
+    ->name('broadcast-scheduler')
+    ->withoutOverlapping();
+
+/*
+|--------------------------------------------------------------------------
+| SCHEDULER — TICKET SLA
+|--------------------------------------------------------------------------
+| Monitor SLA ticket (warning & breach)
+*/
+Schedule::call(function () {
+    TicketSlaService::run();
+})
+->everyMinute()
+->name('ticket-sla-check')
+->withoutOverlapping();

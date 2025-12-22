@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue"
+import { ref, onMounted, onUnmounted, computed } from "vue"
 import { Link, usePage, router } from "@inertiajs/vue3"
 import axios from "axios"
 
@@ -7,6 +7,9 @@ import axios from "axios"
 const page = usePage()
 const userRole = page.props.auth.user.role
 const drawer = ref(true)
+
+/* 🔒 FIX: SAFE URL ACCESS (ANTI RECURSIVE) */
+const currentUrl = computed(() => page.url || "")
 
 /* ================= MENU ================= */
 const menu = [
@@ -29,18 +32,14 @@ const sendHeartbeat = () => {
 }
 
 onMounted(() => {
-  // 🔥 HEARTBEAT HANYA UNTUK AGENT & SUPERVISOR
   if (["agent", "supervisor"].includes(userRole)) {
     heartbeatInterval = setInterval(sendHeartbeat, 30000)
   }
 })
 
 onUnmounted(() => {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval)
-  }
+  if (heartbeatInterval) clearInterval(heartbeatInterval)
 })
-
 
 /* ================= LOGOUT & IDLE ================= */
 const showLogoutConfirm = ref(false)
@@ -107,7 +106,7 @@ const stayLoggedIn = () => {
         <v-list-item
           v-for="item in menu.filter(m => m.roles.includes(userRole))"
           :key="item.href"
-          :class="$page.url.startsWith(item.href) ? 'active-menu' : ''"
+          :class="currentUrl.startsWith(item.href) ? 'active-menu' : ''"
         >
           <Link :href="item.href" class="menu-link">
             <v-icon class="mr-3">{{ item.icon }}</v-icon>
@@ -142,7 +141,6 @@ const stayLoggedIn = () => {
             </v-btn>
           </template>
 
-          <!-- ⬇️ FIX PUTIH DI SINI -->
           <v-theme-provider theme="dark">
             <v-list class="user-dropdown">
               <v-list-item>
@@ -179,12 +177,8 @@ const stayLoggedIn = () => {
           Are you sure you want to log out?
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn variant="text" @click="showLogoutConfirm = false">
-            Cancel
-          </v-btn>
-          <v-btn color="error" @click="logoutNow">
-            Logout
-          </v-btn>
+          <v-btn variant="text" @click="showLogoutConfirm = false">Cancel</v-btn>
+          <v-btn color="error" @click="logoutNow">Logout</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -198,12 +192,8 @@ const stayLoggedIn = () => {
           Do you want to stay logged in?
         </v-card-text>
         <v-card-actions class="justify-end">
-          <v-btn variant="text" color="error" @click="logoutNow">
-            Logout
-          </v-btn>
-          <v-btn color="primary" @click="stayLoggedIn">
-            Stay
-          </v-btn>
+          <v-btn variant="text" color="error" @click="logoutNow">Logout</v-btn>
+          <v-btn color="primary" @click="stayLoggedIn">Stay</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -223,13 +213,11 @@ const stayLoggedIn = () => {
 </template>
 
 <style scoped>
-/* ================= GLOBAL ================= */
 .admin-dark {
   background: linear-gradient(180deg, #020617, #0f172a);
   min-height: 100vh;
 }
 
-/* ================= SIDEBAR ================= */
 .sidebar {
   background: #020617;
   border-right: 1px solid #1e293b;
@@ -244,7 +232,6 @@ const stayLoggedIn = () => {
   color: #38bdf8;
 }
 
-/* ================= MENU ================= */
 .menu-link {
   display: flex;
   align-items: center;
@@ -259,23 +246,12 @@ const stayLoggedIn = () => {
   font-weight: 600;
 }
 
-/* ================= TOPBAR ================= */
 .topbar {
   background: #020617;
   border-bottom: 1px solid #1e293b;
   color: #e5e7eb;
 }
 
-.title {
-  color: #e5e7eb;
-  font-weight: 600;
-}
-
-.user-btn {
-  color: #e5e7eb !important;
-}
-
-/* ================= MAIN ================= */
 .main-area {
   background: #0f172a;
 }
@@ -284,40 +260,19 @@ const stayLoggedIn = () => {
   padding: 24px;
 }
 
-/* ================= DROPDOWN ================= */
 .user-dropdown {
   background: linear-gradient(180deg, #020617, #0f172a);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
-  padding: 6px 0;
 }
 
-.dropdown-link {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  color: #e5e7eb;
-  text-decoration: none;
-}
-
-.logout-btn {
-  color: #f87171;
-  cursor: pointer;
-}
-
-/* ================= DIALOG ================= */
 .dialog-dark {
   background: linear-gradient(180deg, #020617, #0f172a);
   color: #e5e7eb;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.08);
 }
 
-/* ================= TOAST ================= */
 .toast-dark {
   background: #020617 !important;
   color: #e5e7eb !important;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
 }
 </style>

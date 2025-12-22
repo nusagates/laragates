@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\TicketAuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -35,6 +36,18 @@ class TicketController extends Controller
                   ->orWhere('subject', 'like', "%{$search}%")
                   ->orWhere('customer_phone', 'like', "%{$search}%");
             });
+
+            TicketAuditService::log(
+    $ticket,
+    'ticket_created',
+    null,
+    [
+        'subject' => $ticket->subject,
+        'status'  => $ticket->status,
+    ],
+    $request
+);
+
         }
 
         $tickets = $query->get()->map(function ($t) {
@@ -188,6 +201,17 @@ class TicketController extends Controller
             'message'     => $msg->message,
             'time'        => $msg->created_at->format('H:i'),
         ];
+
+        TicketAuditService::log(
+    $ticket,
+    'reply_sent',
+    null,
+    [
+        'message_id' => $msg->id,
+    ],
+    $request
+);
+
     }
 
     /**
@@ -205,6 +229,20 @@ class TicketController extends Controller
         $ticket->save();
 
         return back()->with('success', 'Ticket status updated.');
+
+        $old = ['status' => $ticket->status];
+
+$ticket->status = $data['status'];
+$ticket->save();
+
+TicketAuditService::log(
+    $ticket,
+    'status_changed',
+    $old,
+    ['status' => $ticket->status],
+    $request
+);
+
     }
 
     /**
@@ -213,14 +251,31 @@ class TicketController extends Controller
      * ===============================
      */
     public function assign(Request $request, Ticket $ticket)
-    {
-        $data = $request->validate([
-            'assigned_to' => 'nullable|exists:users,id',
-        ]);
+{
+    $data = $request->validate([
+        'assigned_to' => 'nullable|exists:users,id',
+    ]);
 
-        $ticket->assigned_to = $data['assigned_to'];
-        $ticket->save();
+    // SIMPAN NILAI LAMA
+    $old = [
+        'assigned_to' => $ticket->assigned_to,
+    ];
 
-        return back()->with('success', 'Ticket assigned.');
-    }
+    // UPDATE DATA
+    $ticket->assigned_to = $data['assigned_to'];
+    $ticket->save();
+
+    // AUDIT LOG
+    TicketAuditService::log(
+        $ticket,
+        'agent_assigned',
+        $old,
+        [
+            'assigned_to' => $ticket->assigned_to,
+        ],
+        $request
+    );
+
+    return back()->with('success', 'Ticket assigned.');
+}
 }

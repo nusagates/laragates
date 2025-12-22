@@ -107,17 +107,25 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     });
 
     /*
-    |--------------------------------------------------------------------------
-    | TICKETS
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
-    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
-    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
-    Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])->name('tickets.status');
-    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
-    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
-    Route::post('/tickets', [TicketController::class, 'store']);
+|--------------------------------------------------------------------------
+| TICKETS
+|--------------------------------------------------------------------------
+*/
+Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
+Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
+
+Route::post('/tickets', [TicketController::class, 'store'])
+    ->name('tickets.store');
+
+Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])
+    ->name('tickets.reply');
+
+Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])
+    ->name('tickets.status');
+
+Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
+    ->name('tickets.assign');
+
 
 
     /*
@@ -136,6 +144,45 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/{template}/reject', [TemplateController::class, 'reject'])->name('templates.reject');
         Route::post('/{template}/sync', [TemplateController::class, 'sync'])->name('templates.sync');
     });
+
+    /*
+|--------------------------------------------------------------------------
+| BROADCAST
+| Supervisor & Superadmin
+|--------------------------------------------------------------------------
+*/
+Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(function () {
+
+    // ===============================
+    // MAIN PAGE
+    // ===============================
+    Route::get('/broadcast', [BroadcastController::class, 'index'])
+        ->name('broadcast');
+
+    // ===============================
+    // CREATE CAMPAIGN
+    // ===============================
+    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])
+        ->name('broadcast.store');
+
+    // ===============================
+    // UPLOAD TARGET CSV
+    // ===============================
+    Route::post(
+        '/broadcast/campaigns/{campaign}/upload-targets',
+        [BroadcastController::class, 'uploadTargets']
+    )->name('broadcast.upload-targets');
+
+    // ===============================
+    // REPORT PAGE (⚠️ INI YANG TADI HILANG)
+    // ===============================
+    Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])
+    ->name('broadcast.reports');
+
+
+});
+
+
 
     /*
     |--------------------------------------------------------------------------

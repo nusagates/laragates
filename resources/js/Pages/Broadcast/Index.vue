@@ -125,7 +125,7 @@ async function uploadTargets(id) {
         <v-btn
           color="primary"
           prepend-icon="mdi-chart-box"
-          @click="router.visit(route('broadcast.report'))"
+          @click="router.visit(route('broadcast.reports'))"
 
         >
           View Report
