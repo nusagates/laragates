@@ -2,78 +2,313 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SystemLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SystemLogController extends Controller
 {
-    /**
-     * DASHBOARD LOG
-     */
     public function index(Request $request)
     {
-        $query = SystemLog::query()->orderByDesc('created_at');
+        /**
+         * ===============================
+         * REQUEST FILTERS
+         * ===============================
+         */
+        $source = $request->get('source'); // system | iam | ticket | sla | behavior
+        $q      = $request->get('q');      // global search
 
-        if ($request->filled('category')) {
-            $query->where('category', $request->category);
+        /**
+         * ===============================
+         * AGGREGATED LOG QUERY (UNION)
+         * ===============================
+         */
+        $logs = DB::query()->fromSub(function ($qbuilder) {
+
+            /**
+             * SYSTEM LOGS
+             */
+            $qbuilder
+                ->selectRaw("
+                    id,
+                    'system' as source,
+                    event,
+                    entity_type as description,
+                    user_id,
+                    user_role as role,
+                    ip_address as ip,
+                    user_agent,
+                    created_at,
+                    meta,
+                    'info' as severity
+                ")
+                ->from('system_logs')
+
+            /**
+             * IAM LOGS
+             */
+            ->unionAll(
+                DB::table('iam_logs')->selectRaw("
+                    id,
+                    'iam' as source,
+                    action as event,
+                    CONCAT(
+                        'actor:', actor_id,
+                        ', target:', IFNULL(target_user_id, '-')
+                    ) as description,
+                    actor_id as user_id,
+                    NULL as role,
+                    ip_address as ip,
+                    user_agent,
+                    created_at,
+                    NULL as meta,
+                    CASE
+                        WHEN action LIKE '%DELETE%' THEN 'critical'
+                        ELSE 'warning'
+                    END as severity
+                ")
+            )
+
+            /**
+             * TICKET AUDIT LOGS
+             */
+            ->unionAll(
+                DB::table('ticket_audit_logs')->selectRaw("
+                    id,
+                    'ticket' as source,
+                    action as event,
+                    CONCAT('Ticket #', ticket_id) as description,
+                    user_id,
+                    NULL as role,
+                    ip_address as ip,
+                    user_agent,
+                    created_at,
+                    JSON_OBJECT(
+                        'old', old_value,
+                        'new', new_value
+                    ) as meta,
+                    'info' as severity
+                ")
+            )
+
+            /**
+             * TICKET SLA LOGS
+             */
+            ->unionAll(
+                DB::table('ticket_sla_logs')->selectRaw("
+                    id,
+                    'sla' as source,
+                    status as event,
+                    rule as description,
+                    NULL as user_id,
+                    NULL as role,
+                    NULL as ip,
+                    NULL as user_agent,
+                    triggered_at as created_at,
+                    meta,
+                    'critical' as severity
+                ")
+            )
+
+            /**
+             * USER BEHAVIOR LOGS
+             */
+            ->unionAll(
+                DB::table('user_behavior_logs')->selectRaw("
+                    id,
+                    'behavior' as source,
+                    action as event,
+                    endpoint as description,
+                    user_id,
+                    role,
+                    ip,
+                    user_agent,
+                    created_at,
+                    meta,
+                    'info' as severity
+                ")
+            );
+
+        }, 'logs');
+
+        /**
+         * ===============================
+         * FILTER BY SOURCE
+         * ===============================
+         */
+        if ($source) {
+            $logs->where('source', $source);
         }
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        if ($request->filled('q')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('action', 'like', "%{$request->q}%")
-                  ->orWhere('route', 'like', "%{$request->q}%");
+        /**
+         * ===============================
+         * GLOBAL SEARCH
+         * ===============================
+         */
+        if ($q) {
+            $logs->where(function ($sub) use ($q) {
+                $sub->where('event', 'like', "%{$q}%")
+                    ->orWhere('description', 'like', "%{$q}%");
             });
         }
 
+        /**
+         * ===============================
+         * FINAL RESPONSE
+         * ===============================
+         */
         return Inertia::render('SystemLogs/Index', [
-            'logs' => $query->paginate(25)->withQueryString(),
-            'filters' => $request->only('category', 'user_id', 'q'),
+            'logs' => $logs
+                ->orderByDesc('created_at')
+                ->paginate(30)
+                ->withQueryString(),
+
+            'filters' => [
+                'source' => $source,
+                'q'      => $q,
+            ],
         ]);
     }
 
-    /**
-     * EXPORT CSV
-     */
-    public function export(Request $request): StreamedResponse
-    {
-        $filename = 'system_logs_' . now()->format('Ymd_His') . '.csv';
+    public function export(Request $request)
+{
+    $source = $request->get('source');
+    $q      = $request->get('q');
 
-        $logs = SystemLog::orderByDesc('created_at')->get();
+    $logs = DB::query()
+        ->fromSub(function ($qbuilder) {
 
-        return response()->streamDownload(function () use ($logs) {
-            $handle = fopen('php://output', 'w');
+            $qbuilder
+                ->selectRaw("
+                    id,
+                    'system' as source,
+                    event,
+                    entity_type as description,
+                    user_id,
+                    user_role as role,
+                    ip_address as ip,
+                    user_agent,
+                    created_at,
+                    meta,
+                    'info' as severity
+                ")
+                ->from('system_logs')
 
-            fputcsv($handle, [
-                'Time',
-                'User ID',
-                'Role',
-                'Category',
-                'Action',
-                'Route',
-                'Method',
-                'IP',
-            ]);
+                ->unionAll(
+                    DB::table('iam_logs')->selectRaw("
+                        id,
+                        'iam' as source,
+                        action as event,
+                        CONCAT(
+                            'actor:', actor_id,
+                            ', target:', IFNULL(target_user_id, '-')
+                        ) as description,
+                        actor_id as user_id,
+                        NULL as role,
+                        ip_address as ip,
+                        user_agent,
+                        created_at,
+                        NULL as meta,
+                        CASE
+                            WHEN action LIKE '%DELETE%' THEN 'critical'
+                            ELSE 'warning'
+                        END as severity
+                    ")
+                )
 
-            foreach ($logs as $log) {
-                fputcsv($handle, [
-                    $log->created_at,
-                    $log->user_id,
-                    $log->role,
-                    $log->category,
-                    $log->action,
-                    $log->route,
-                    $log->method,
-                    $log->ip,
-                ]);
-            }
+                ->unionAll(
+                    DB::table('ticket_audit_logs')->selectRaw("
+                        id,
+                        'ticket' as source,
+                        action as event,
+                        CONCAT('Ticket #', ticket_id) as description,
+                        user_id,
+                        NULL as role,
+                        ip_address as ip,
+                        user_agent,
+                        created_at,
+                        JSON_OBJECT('old', old_value, 'new', new_value) as meta,
+                        'info' as severity
+                    ")
+                )
 
-            fclose($handle);
-        }, $filename);
+                ->unionAll(
+                    DB::table('ticket_sla_logs')->selectRaw("
+                        id,
+                        'sla' as source,
+                        status as event,
+                        rule as description,
+                        NULL as user_id,
+                        NULL as role,
+                        NULL as ip,
+                        NULL as user_agent,
+                        triggered_at as created_at,
+                        meta,
+                        'critical' as severity
+                    ")
+                )
+
+                ->unionAll(
+                    DB::table('user_behavior_logs')->selectRaw("
+                        id,
+                        'behavior' as source,
+                        action as event,
+                        endpoint as description,
+                        user_id,
+                        role,
+                        ip,
+                        user_agent,
+                        created_at,
+                        meta,
+                        'info' as severity
+                    ")
+                );
+
+        }, 'logs');
+
+    if ($source) {
+        $logs->where('source', $source);
     }
+
+    if ($q) {
+        $logs->where(function ($sub) use ($q) {
+            $sub->where('event', 'like', "%{$q}%")
+                ->orWhere('description', 'like', "%{$q}%");
+        });
+    }
+
+    $filename = 'system_logs_' . now()->format('Ymd_His') . '.csv';
+
+    return response()->streamDownload(function () use ($logs) {
+        $handle = fopen('php://output', 'w');
+
+        // HEADER CSV
+        fputcsv($handle, [
+            'Time',
+            'Source',
+            'Severity',
+            'Event',
+            'Description',
+            'User ID',
+            'Role',
+            'IP',
+        ]);
+
+        foreach ($logs->orderByDesc('created_at')->get() as $log) {
+            fputcsv($handle, [
+                $log->created_at,
+                $log->source,
+                $log->severity,
+                $log->event,
+                $log->description,
+                $log->user_id,
+                $log->role,
+                $log->ip,
+            ]);
+        }
+
+        fclose($handle);
+    }, $filename);
+}
+
 }

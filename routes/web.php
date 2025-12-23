@@ -211,6 +211,10 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
 
         Route::get('/system-logs/export', [SystemLogController::class, 'export'])
             ->name('system.logs.export');
+
+            Route::get('/system-logs/export', [SystemLogController::class, 'export'])
+    ->name('system.logs.export');
+
     });
 });
 
