@@ -19,6 +19,8 @@ use App\Http\Controllers\Api\Chat\ChatSessionController;
 use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WaMenuController;
+use App\Http\Controllers\SystemLogController;
+
 
 // Middleware
 use App\Http\Middleware\RoleMiddleware;
@@ -174,7 +176,7 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
     )->name('broadcast.upload-targets');
 
     // ===============================
-    // REPORT PAGE (⚠️ INI YANG TADI HILANG)
+    // REPORT PAGE 
     // ===============================
     Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])
     ->name('broadcast.reports');
@@ -186,24 +188,30 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
 
     /*
     |--------------------------------------------------------------------------
-    | SUPERADMIN — INERTIA PAGE ONLY
+    | SUPERADMIN ONLY
     |--------------------------------------------------------------------------
     */
     Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
 
-    Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
 
-    Route::get('/agents', [AgentController::class, 'index'])->name('agents');
-    Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+        Route::get('/agents', [AgentController::class, 'index'])->name('agents');
+        Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+        Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
+        Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
+        Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
 
-    // ✅ INI YANG HILANG
-    Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
+        /*
+        |--------------------------------------------------------------------------
+        | SYSTEM LOG DASHBOARD ✅ TAMBAHAN
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/system-logs', [SystemLogController::class, 'index'])
+            ->name('system.logs');
 
-    Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
-    Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-});
-
-
+        Route::get('/system-logs/export', [SystemLogController::class, 'export'])
+            ->name('system.logs.export');
+    });
 });
 
 /*

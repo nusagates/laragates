@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from "vue"
+import { ref, onMounted, onUnmounted, watch } from "vue"
 import { Link, usePage, router } from "@inertiajs/vue3"
 import axios from "axios"
 
@@ -8,8 +8,17 @@ const page = usePage()
 const userRole = page.props.auth.user.role
 const drawer = ref(true)
 
-/* 🔒 FIX: SAFE URL ACCESS (ANTI RECURSIVE) */
-const currentUrl = computed(() => page.url || "")
+/* =====================================================
+   ✅ SAFE URL SNAPSHOT (ANTI INFINITE REACTIVE LOOP)
+   ===================================================== */
+const currentUrl = ref(page.url || "")
+
+watch(
+  () => page.url,
+  (val) => {
+    currentUrl.value = val || ""
+  }
+)
 
 /* ================= MENU ================= */
 const menu = [
@@ -21,6 +30,7 @@ const menu = [
   { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates", roles: ["admin","superadmin","supervisor"] },
   { label: "Broadcast", icon: "mdi-send", href: "/broadcast", roles: ["admin","superadmin","supervisor"] },
   { label: "Analytics", icon: "mdi-finance", href: "/analytics", roles: ["admin","superadmin"] },
+  { label: "System Logs", icon: "mdi-clipboard-text-clock-outline", href: "/system-logs", roles: ["superadmin"] },
   { label: "Settings", icon: "mdi-cog", href: "/settings", roles: ["superadmin"] },
 ]
 
