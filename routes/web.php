@@ -181,6 +181,11 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
     Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])
     ->name('broadcast.reports');
 
+    Route::get('/broadcast/reports/{campaign}', 
+    [BroadcastReportController::class, 'show']
+)->name('broadcast.report.show');
+
+
 
 });
 

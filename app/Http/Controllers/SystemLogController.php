@@ -199,10 +199,7 @@ class SystemLogController extends Controller
                         id,
                         'iam' as source,
                         action as event,
-                        CONCAT(
-                            'actor:', actor_id,
-                            ', target:', IFNULL(target_user_id, '-')
-                        ) as description,
+                        CONCAT('actor:', actor_id, ', target:', IFNULL(target_user_id, '-')) as description,
                         actor_id as user_id,
                         NULL as role,
                         ip_address as ip,
@@ -280,9 +277,13 @@ class SystemLogController extends Controller
     $filename = 'system_logs_' . now()->format('Ymd_His') . '.csv';
 
     return response()->streamDownload(function () use ($logs) {
+
         $handle = fopen('php://output', 'w');
 
-        // HEADER CSV
+        // ✅ UTF-8 BOM (WAJIB BIAR EXCEL BACA BENAR)
+        fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+        // ✅ HEADER (PAKAI ; BIAR EXCEL INDONESIA RAPI)
         fputcsv($handle, [
             'Time',
             'Source',
@@ -291,24 +292,40 @@ class SystemLogController extends Controller
             'Description',
             'User ID',
             'Role',
-            'IP',
-        ]);
+            'IP Address',
+        ], ';');
 
         foreach ($logs->orderByDesc('created_at')->get() as $log) {
-            fputcsv($handle, [
-                $log->created_at,
-                $log->source,
-                $log->severity,
-                $log->event,
-                $log->description,
-                $log->user_id,
-                $log->role,
-                $log->ip,
-            ]);
-        }
+
+    $time = $log->created_at
+        ? "'" . \Carbon\Carbon::parse($log->created_at)->format('Y-m-d H:i:s')
+        : '-';
+
+    $event = ucwords(str_replace('_', ' ', $log->event));
+
+    $description = $log->source === 'sla' && $log->description
+        ? ucwords(str_replace('_', ' ', $log->description)) . ' SLA Breach'
+        : ($log->description ?: '-');
+
+    fputcsv($handle, [
+        $time,
+        strtoupper($log->source),
+        strtoupper($log->severity),
+        $event,
+        $description,
+        $log->user_id ?: '-',
+        $log->role ?: '-',
+        $log->ip ?: '-',
+    ], ';');
+}
+
+
 
         fclose($handle);
-    }, $filename);
+
+    }, $filename, [
+        'Content-Type' => 'text/csv; charset=UTF-8',
+    ]);
 }
 
 }
