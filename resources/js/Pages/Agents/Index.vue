@@ -13,7 +13,7 @@ const props = defineProps({
 })
 
 /* ======================
-   LOCAL STATE (KEY FIX)
+   LOCAL STATE
 ====================== */
 const agents = ref([...props.agents])
 
@@ -43,7 +43,15 @@ const form = ref({
 })
 
 /* ======================
-   FILTER (PAKAI STATE LOKAL)
+   LOCK HELPERS
+====================== */
+function isLocked(agent) {
+  if (!agent.locked_until) return false
+  return new Date(agent.locked_until) > new Date()
+}
+
+/* ======================
+   FILTER
 ====================== */
 const filteredAgents = computed(() => {
   let data = agents.value || []
@@ -103,10 +111,15 @@ function statusBadgeColor(status) {
 async function approveAgent(id) {
   if (!confirm('Approve this agent?')) return
   await axios.post(`/agents/${id}/approve`)
-
-  // update lokal (optional, tapi rapi)
   const agent = agents.value.find(a => a.id === id)
   if (agent) agent.approved_at = new Date()
+}
+
+async function unlockAgent(agent) {
+  if (!confirm(`Unlock account ${agent.name}?`)) return
+  await axios.post(`/agents/${agent.id}/unlock`)
+  agent.failed_login_attempts = 0
+  agent.locked_until = null
 }
 
 async function submitForm() {
@@ -114,7 +127,6 @@ async function submitForm() {
   try {
     if (isEdit.value) {
       await axios.put(`/agents/${form.value.id}`, form.value)
-
       const idx = agents.value.findIndex(a => a.id === form.value.id)
       if (idx !== -1) {
         agents.value[idx] = { ...agents.value[idx], ...form.value }
@@ -123,27 +135,20 @@ async function submitForm() {
       const res = await axios.post('/agents', form.value)
       if (res?.data) agents.value.push(res.data)
     }
-
     dialog.value = false
   } catch (e) {
-    console.error('Submit agent failed:', e)
     alert(e.response?.data?.message ?? 'Failed to save agent')
   } finally {
     formLoading.value = false
   }
 }
 
-
 async function deleteAgent(agent) {
   if (!confirm(`Delete agent ${agent.name}?`)) return
-
   await axios.delete(`/agents/${agent.id}`)
-
-  // 🔥 REAL-TIME UI (TANPA RELOAD)
   agents.value = agents.value.filter(a => a.id !== agent.id)
 }
 </script>
-
 
 <template>
   <Head title="Agents" />
@@ -180,7 +185,6 @@ async function deleteAgent(agent) {
             <h3 class="text-white">Agents Management</h3>
             <p class="text-muted">Kelola agent dan supervisor customer service</p>
           </div>
-
           <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">
             Add Agent
           </v-btn>
@@ -220,7 +224,7 @@ async function deleteAgent(agent) {
           <tbody>
             <tr v-for="agent in filteredAgents" :key="agent.id" class="row-hover">
               <td>
-                <strong>{{ agent.name }}</strong><br>
+                <strong>{{ agent.name }}</strong><br />
                 <small class="text-muted">{{ agent.email }}</small>
               </td>
 
@@ -231,7 +235,19 @@ async function deleteAgent(agent) {
               </td>
 
               <td>
-                <v-chip size="small" :color="statusBadgeColor(agent.status)">
+                <v-chip
+                  v-if="isLocked(agent)"
+                  size="small"
+                  class="locked"
+                >
+                  🔒 Locked
+                </v-chip>
+
+                <v-chip
+                  v-else
+                  size="small"
+                  :color="statusBadgeColor(agent.status)"
+                >
                   {{ agent.status }}
                 </v-chip>
               </td>
@@ -243,8 +259,7 @@ async function deleteAgent(agent) {
                   icon="mdi-check"
                   color="green"
                   @click="approveAgent(agent.id)"
-                ></v-btn>
-
+                />
                 <v-chip v-else size="small" color="blue-darken-2" variant="tonal">
                   Approved
                 </v-chip>
@@ -252,19 +267,15 @@ async function deleteAgent(agent) {
 
               <td class="text-center">
                 <v-btn
-                  icon="mdi-pencil"
+                  v-if="isLocked(agent)"
+                  icon="mdi-lock-open-variant"
                   size="small"
+                  class="unlock"
                   variant="text"
-                  @click="openEdit(agent)"
-                ></v-btn>
-
-                <v-btn
-                  icon="mdi-delete"
-                  size="small"
-                  color="red"
-                  variant="text"
-                  @click="deleteAgent(agent)"
-                ></v-btn>
+                  @click="unlockAgent(agent)"
+                />
+                <v-btn icon="mdi-pencil" size="small" variant="text" @click="openEdit(agent)" />
+                <v-btn icon="mdi-delete" size="small" color="red" variant="text" @click="deleteAgent(agent)" />
               </td>
             </tr>
           </tbody>
@@ -276,11 +287,9 @@ async function deleteAgent(agent) {
     <v-dialog v-model="dialog" max-width="480" content-class="agents-dialog-dark">
       <v-card class="pa-4">
         <h3 class="mb-4 text-white">{{ isEdit ? 'Edit Agent' : 'Add Agent' }}</h3>
-
         <v-text-field v-model="form.name" label="Full Name" />
         <v-text-field v-model="form.email" label="Email" />
         <v-select v-model="form.role" :items="['Admin','Supervisor','Agent']" label="Role" />
-
         <div class="d-flex justify-end mt-4 gap-2">
           <v-btn variant="text" @click="dialog=false">Cancel</v-btn>
           <v-btn color="primary" :loading="formLoading" @click="submitForm">Save</v-btn>
@@ -291,58 +300,51 @@ async function deleteAgent(agent) {
 </template>
 
 <style scoped>
-.agents-dark {
-  color: #e5e7eb;
-}
-
+.agents-dark { color:#e5e7eb; }
 .main-card {
-  background: linear-gradient(180deg, #020617, #0f172a);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: linear-gradient(180deg,#020617,#0f172a);
+  border:1px solid rgba(255,255,255,.06);
 }
-
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
-  gap: 16px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:16px;
 }
-
 .summary-card {
-  padding: 16px;
-  border-radius: 14px;
-  background: #020617;
-  border-left: 4px solid #2563eb;
+  padding:16px;
+  border-radius:14px;
+  background:#020617;
+  border-left:4px solid #2563eb;
 }
-
-.summary-card.online { border-color: #22c55e; }
-.summary-card.offline { border-color: #64748b; }
-.summary-card.pending { border-color: #f59e0b; }
-
-.text-muted {
-  color: #94a3b8;
+.summary-card.online{border-color:#22c55e;}
+.summary-card.offline{border-color:#64748b;}
+.summary-card.pending{border-color:#f59e0b;}
+.text-muted{color:#94a3b8;}
+.row-hover:hover{background:rgba(59,130,246,.08);}
+.locked{
+  background:rgba(239,68,68,.15);
+  color:#fecaca;
+  border:1px solid rgba(239,68,68,.35);
+  font-weight:600;
 }
-
-.row-hover:hover {
-  background: rgba(59,130,246,0.08);
-}
-
-/* DIALOG (TELEPORT SAFE) */
-:deep(.agents-dialog-dark) {
-  background: linear-gradient(180deg, #020617, #0f172a);
-  color: #e5e7eb;
+.unlock{color:#fb923c;}
+:deep(.agents-dialog-dark){
+  background:linear-gradient(180deg,#020617,#0f172a);
+  color:#e5e7eb;
 }
 
 /* ===============================
-   FORCE DARK TABLE (VUETIFY)
+   FORCE DARK TABLE (OVERRIDE PUTIH)
 ================================ */
 
-/* wrapper */
+/* wrapper tabel */
 .agents-dark :deep(.v-table),
 .agents-dark :deep(.v-table__wrapper),
 .agents-dark :deep(.v-table__wrapper table) {
   background: transparent !important;
 }
 
-/* thead */
+/* header */
 .agents-dark :deep(.v-table thead),
 .agents-dark :deep(.v-table thead tr),
 .agents-dark :deep(.v-table thead th) {
@@ -351,14 +353,14 @@ async function deleteAgent(agent) {
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
-/* tbody rows */
+/* body rows */
 .agents-dark :deep(.v-table tbody),
 .agents-dark :deep(.v-table tbody tr) {
-  background: transparent !important;
+  background: #020617 !important;
   color: #e5e7eb !important;
 }
 
-/* tbody cells */
+/* body cells */
 .agents-dark :deep(.v-table tbody td) {
   background: transparent !important;
   color: #e5e7eb !important;
@@ -370,5 +372,22 @@ async function deleteAgent(agent) {
   background: rgba(59,130,246,0.08) !important;
 }
 
+/* approval badge (Approved) */
+.agents-dark :deep(.v-chip) {
+  background-color: rgba(59,130,246,0.15) !important;
+  color: #93c5fd !important;
+}
+
+/* offline badge */
+.agents-dark :deep(.v-chip.bg-grey-lighten-3),
+.agents-dark :deep(.v-chip.bg-grey) {
+  background-color: rgba(148,163,184,0.15) !important;
+  color: #cbd5f5 !important;
+}
+
+/* row selected / active */
+.agents-dark tr {
+  transition: background 0.2s ease;
+}
 
 </style>

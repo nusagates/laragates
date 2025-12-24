@@ -200,7 +200,8 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
         Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
         Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
         Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-
+        Route::post('/agents/{user}/unlock', [AgentController::class, 'unlock'])
+        ->name('agents.unlock');
         /*
         |--------------------------------------------------------------------------
         | SYSTEM LOG DASHBOARD ✅ TAMBAHAN
@@ -216,6 +217,15 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
     ->name('system.logs.export');
 
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | USER SECURITY / HARDENING
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/admin/users/{user}/unlock',
+        [\App\Http\Controllers\Admin\AdminUserController::class, 'unlock']
+    )->name('admin.users.unlock');
 });
 
 /*

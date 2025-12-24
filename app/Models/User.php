@@ -34,7 +34,10 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'last_seen'         => 'datetime',
         'approved_at'       => 'datetime',
-        'skills'            => 'array'
+        'skills'            => 'array',
+        'email_verified_at' => 'datetime',
+        'last_seen'         => 'datetime',
+        'locked_until'      => 'datetime'
     ];
 
     /* =======================

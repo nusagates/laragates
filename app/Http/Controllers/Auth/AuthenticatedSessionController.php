@@ -8,8 +8,13 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use App\Models\User;
+use App\Services\AccountLockService;
+use App\Services\SystemLogService;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+
 
 class AuthenticatedSessionController extends Controller
 {
@@ -28,41 +33,75 @@ class AuthenticatedSessionController extends Controller
      * Handle an incoming authentication request.
      * 🔐 STEP 4 — IAM LIFECYCLE ENFORCEMENT
      */
-    public function store(LoginRequest $request): RedirectResponse
-    {
-        // AUTHENTICATE (PASSWORD VALID)
-        $request->authenticate();
+    public function store(LoginRequest $request)
+{
+    $user = User::where('email', $request->email)->first();
 
-        // SESSION SAFE
-        $request->session()->regenerate();
+    /**
+     * BLOCK IF ACCOUNT LOCKED
+     */
+    if ($user && AccountLockService::isLocked($user)) {
 
-        $user = auth()->user();
+        SystemLogService::record(
+            'auth_login_blocked_account_locked',
+            'user',
+            $user->id,
+            null,
+            null,
+            [
+                'locked_until' => $user->locked_until,
+            ]
+        );
 
-        /**
-         * 🔐 IAM ENFORCEMENT
-         * - User belum di-approve
-         * - User belum aktif
-         * - User masih pending
-         */
-        if (
-            !$user->is_active ||
-            $user->status === 'pending' ||
-            $user->approved_at === null
-        ) {
-            Auth::logout();
-
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return back()->withErrors([
-                'email' => 'Your account is not yet approved or has been deactivated.',
-            ]);
-        }
-
-        // LOGIN SUCCESS
-        return redirect()->intended(route('dashboard', absolute: false));
+        throw ValidationException::withMessages([
+            'email' => 'Account is temporarily locked. Please try again later.',
+        ]);
     }
 
+    /**
+     * TRY AUTHENTICATION
+     */
+    try {
+        $request->authenticate();
+    } catch (ValidationException $e) {
+
+        if ($user) {
+            AccountLockService::recordFailedAttempt($user);
+
+            SystemLogService::record(
+                'auth_login_failed',
+                'user',
+                $user->id,
+                null,
+                null,
+                [
+                    'remaining_attempts' =>
+                        AccountLockService::MAX_ATTEMPTS - $user->failed_login_attempts,
+                ]
+            );
+        }
+
+        throw $e;
+    }
+
+    /**
+     * SUCCESS LOGIN
+     */
+    if ($user) {
+        AccountLockService::unlock($user);
+
+        SystemLogService::record(
+            'auth_login_success',
+            'user',
+            $user->id
+        );
+    }
+
+    $request->session()->regenerate();
+
+    return redirect()->intended('/dashboard');
+
+}
     /**
      * Destroy an authenticated session.
      */
