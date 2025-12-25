@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WaMenuController;
 use App\Http\Controllers\SystemLogController;
+use App\Http\Controllers\AiSummaryController;
 
 
 // Middleware
@@ -107,6 +108,13 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/sessions/outbound', [ChatController::class, 'outbound'])
             ->name('chat.outbound');
     });
+
+    // ===============================
+    // 🔹 AI SUMMARY (TARUH DI SINI)
+    // ===============================
+    Route::post('/ai/chat-summary', [AiSummaryController::class, 'generate'])
+        ->name('ai.chat.summary')
+        ->can('use-ai-summary');
 
     /*
 |--------------------------------------------------------------------------
