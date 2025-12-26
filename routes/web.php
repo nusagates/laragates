@@ -21,6 +21,8 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\WaMenuController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\AiSummaryController;
+use App\Http\Controllers\Admin\AiSettingController;
+use App\Http\Controllers\Admin\AiReportController;
 
 
 // Middleware
@@ -115,6 +117,13 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     Route::post('/ai/chat-summary', [AiSummaryController::class, 'generate'])
         ->name('ai.chat.summary')
         ->can('use-ai-summary');
+
+        Route::middleware(['auth:sanctum'])
+    ->prefix('admin/ai')
+    ->group(function () {
+        Route::get('/settings', [AiSettingController::class, 'show']);
+        Route::put('/settings', [AiSettingController::class, 'update']);
+    });
 
     /*
 |--------------------------------------------------------------------------
@@ -229,6 +238,12 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
             Route::get('/system-logs/export', [SystemLogController::class, 'export'])
     ->name('system.logs.export');
 
+    });
+
+    Route::middleware(['auth:sanctum'])
+    ->prefix('admin/ai')
+    ->group(function () {
+        Route::get('/report/csv', [AiReportController::class, 'exportCsv']);
     });
 
     /*

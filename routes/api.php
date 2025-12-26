@@ -7,6 +7,7 @@ use App\Http\Controllers\ChatSessionController;
 use App\Http\Controllers\FonnteWebhookController;
 use App\Http\Controllers\WhatsappTemplateController;
 use App\Http\Controllers\WabaMenuController;
+use App\Http\Controllers\AiMetricsController;
 
 /*
 |--------------------------------------------------------------------------|
@@ -85,4 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ChatSessionController::class,
         'close'
     ]);
+
+    Route::middleware(['auth:sanctum'])
+    ->get('/ai/metrics', [AiMetricsController::class, 'index']);
 });

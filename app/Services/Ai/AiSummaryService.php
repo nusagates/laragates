@@ -3,54 +3,65 @@
 namespace App\Services\Ai;
 
 use App\Models\ChatMessage;
-use App\Models\ChatSummary;
-use App\Models\SystemLog;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class AiSummaryService
 {
-    public function generate(int $chatSessionId): ChatSummary
+    /**
+     * Generate summary untuk 1 chat session
+     */
+    public function generate(int $chatSessionId): string
     {
-        // 1️⃣ Ambil pesan (READ ONLY)
+        // ===============================
+        // AMBIL KONTEN CHAT TERAKHIR
+        // ===============================
         $messages = ChatMessage::where('chat_session_id', $chatSessionId)
             ->orderBy('created_at', 'desc')
-            ->limit(40)
+            ->limit(40) // enterprise-safe: batasi konteks
             ->get()
-            ->reverse()
-            ->map(function ($m) {
-                return [
-                    'role' => $m->is_outgoing ? 'agent' : 'customer',
-                    'content' => $m->message ?? '[media]',
-                ];
-            })
-            ->values()
-            ->toArray();
+            ->reverse();
 
-        // 2️⃣ Generate summary (dummy)
-        $summaryText = app(DummySummaryService::class)
-            ->summarize($messages);
+        if ($messages->isEmpty()) {
+            return 'Tidak ada percakapan untuk diringkas.';
+        }
 
-        // 3️⃣ Simpan summary
-        $summary = ChatSummary::create([
-            'chat_session_id' => $chatSessionId,
-            'summary_text' => $summaryText,
-            'created_by' => Auth::id(),
-        ]);
+        // ===============================
+        // FORMAT KE PROMPT
+        // ===============================
+        $conversation = $messages->map(function ($msg) {
+            $role = $msg->is_outgoing ? 'Agent' : 'Customer';
+            $text = $msg->message ?: '[media]';
 
-        // 4️⃣ SYSLOG (AUDIT EVENT)
-        SystemLog::create([
-            'event' => 'ai_summary_generated',
-            'user_id' => Auth::id(),
-            'entity_type' => 'chat_summary',
-            'entity_id' => $summary->id,
-            'meta' => [
-                'chat_session_id' => $chatSessionId,
-                'mode' => 'dummy',
-                'message_count' => count($messages),
-            ],
-        ]);
+            return "{$role}: {$text}";
+        })->implode("\n");
 
-        // 5️⃣ Return hasil
-        return $summary;
+        $prompt = <<<PROMPT
+Ringkas percakapan berikut secara singkat, jelas, dan profesional.
+Fokus pada inti permasalahan dan hasil akhir.
+
+Percakapan:
+{$conversation}
+PROMPT;
+
+        // ===============================
+        // PANGGIL AI VIA GATEWAY
+        // ===============================
+        $gateway = app(AiGateway::class);
+
+        return $gateway->call(
+    action: 'chat_summary',
+    prompt: $prompt,
+    executor: function (string $safePrompt) {
+        return 'Ringkasan AI: ' .
+            \Illuminate\Support\Str::limit($safePrompt, 200);
+    },
+    chatSessionId: $chatSessionId,
+    model: 'dummy-ai-summary-v1',
+    fallback: function () {
+        return 'Ringkasan tidak tersedia. Silakan ditangani oleh agent.';
+    }
+);
+
+
     }
 }
