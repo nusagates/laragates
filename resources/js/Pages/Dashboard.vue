@@ -1,24 +1,55 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, usePage, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
 
-const stats = {
-  activeChats: 12,
-  waitingChats: 4,
-  agentsOnline: 3,
+/**
+ * ===============================
+ * INERTIA PAGE PROPS (SAFE)
+ * ===============================
+ */
+const page = usePage()
+
+const stats = computed(() => page.props.stats ?? {
+  active_chats: 0,
+  waiting_queue: 0,
+  agents_online: 0,
+})
+
+const waitingQueue = computed(() => page.props.waiting_queue_list ?? [])
+
+/**
+ * ===============================
+ * ACTIONS
+ * ===============================
+ */
+function takeChat(chatId) {
+  router.post(
+    route('dashboard.chat.take', chatId),
+    {},
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        // reload halaman agar KPI & queue update
+        router.reload()
+      },
+    }
+  )
 }
 
-const waitingQueue = [
-  { id: 101, customer: 'Andi', time: '2 min' },
-  { id: 102, customer: 'Budi', time: '5 min' },
-  { id: 103, customer: 'Siti', time: '7 min' },
-]
+/**
+ * ===============================
+ * HELPERS
+ * ===============================
+ */
+function formatWaiting(minutes) {
+  if (!minutes || minutes <= 0) return '0 min'
+  if (minutes < 60) return `${minutes} min`
 
-const agents = [
-  { name: 'Aldi', chats: 2, status: 'online' },
-  { name: 'Rina', chats: 1, status: 'online' },
-  { name: 'Bayu', chats: 0, status: 'online' },
-]
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${h}h ${m}m`
+}
 </script>
 
 <template>
@@ -29,57 +60,34 @@ const agents = [
 
     <div class="pa-6 dashboard-bg">
 
-      <!-- ================= KPI CARDS ================= -->
+      <!-- ================= KPI ================= -->
       <v-row class="mb-6">
         <v-col cols="12" md="4">
           <v-card class="pa-5 stat-card">
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <div class="stat-label">Active Chats</div>
-                <div class="stat-value">{{ stats.activeChats }}</div>
-              </div>
-              <v-icon color="primary" size="36">
-                mdi-message-processing-outline
-              </v-icon>
-            </div>
+            <div class="stat-label">Active Chats</div>
+            <div class="stat-value">{{ stats.active_chats }}</div>
           </v-card>
         </v-col>
 
         <v-col cols="12" md="4">
           <v-card class="pa-5 stat-card warning">
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <div class="stat-label">Waiting Queue</div>
-                <div class="stat-value">{{ stats.waitingChats }}</div>
-              </div>
-              <v-icon color="warning" size="36">
-                mdi-timer-sand
-              </v-icon>
-            </div>
+            <div class="stat-label">Waiting Queue</div>
+            <div class="stat-value">{{ stats.waiting_queue }}</div>
           </v-card>
         </v-col>
 
         <v-col cols="12" md="4">
           <v-card class="pa-5 stat-card success">
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <div class="stat-label">Agents Online</div>
-                <div class="stat-value">{{ stats.agentsOnline }}</div>
-              </div>
-              <v-icon color="success" size="36">
-                mdi-account-group-outline
-              </v-icon>
-            </div>
+            <div class="stat-label">Agents Online</div>
+            <div class="stat-value">{{ stats.agents_online }}</div>
           </v-card>
         </v-col>
       </v-row>
 
-      <!-- ================= MAIN PANELS ================= -->
-      <v-row align="stretch">
-
-        <!-- WAITING QUEUE -->
-        <v-col cols="12" md="6" class="d-flex">
-          <v-card class="pa-6 w-100 surface-card">
+      <!-- ================= WAITING QUEUE ================= -->
+      <v-row>
+        <v-col cols="12" md="6">
+          <v-card class="pa-6 surface-card">
             <h3 class="panel-title">Waiting Queue</h3>
             <v-divider class="divider" />
 
@@ -90,51 +98,29 @@ const agents = [
             >
               <div>
                 <div class="row-main">{{ chat.customer }}</div>
-                <div class="row-sub">Waiting {{ chat.time }}</div>
+                <div class="row-sub">
+                  Waiting {{ formatWaiting(chat.waiting) }}
+                </div>
               </div>
 
               <v-btn
                 size="small"
                 color="primary"
                 variant="flat"
+                @click="takeChat(chat.id)"
               >
                 Take
               </v-btn>
             </div>
 
-            <div v-if="!waitingQueue.length" class="empty-text">
+            <div
+              v-if="waitingQueue.length === 0"
+              class="empty-text"
+            >
               No waiting chats 🎉
             </div>
           </v-card>
         </v-col>
-
-        <!-- AGENT STATUS -->
-        <v-col cols="12" md="6" class="d-flex">
-          <v-card class="pa-6 w-100 surface-card">
-            <h3 class="panel-title">Agent Status</h3>
-            <v-divider class="divider" />
-
-            <div
-              v-for="agent in agents"
-              :key="agent.name"
-              class="row-item"
-            >
-              <div>
-                <div class="row-main">{{ agent.name }}</div>
-                <div class="row-sub">{{ agent.chats }} active chats</div>
-              </div>
-
-              <v-chip
-                size="small"
-                color="success"
-                variant="flat"
-              >
-                Online
-              </v-chip>
-            </div>
-          </v-card>
-        </v-col>
-
       </v-row>
 
       <!-- ================= QUICK ACTIONS ================= -->
@@ -143,21 +129,15 @@ const agents = [
 
         <div class="d-flex flex-wrap ga-3">
           <Link href="/chat">
-            <v-btn color="primary" variant="flat">
-              Open Chat
-            </v-btn>
+            <v-btn color="primary">Open Chat</v-btn>
           </Link>
 
           <Link href="/broadcast">
-            <v-btn color="secondary" variant="outlined">
-              Broadcast
-            </v-btn>
+            <v-btn variant="outlined">Broadcast</v-btn>
           </Link>
 
           <Link href="/tickets">
-            <v-btn color="secondary" variant="outlined">
-              Create Ticket
-            </v-btn>
+            <v-btn variant="outlined">Create Ticket</v-btn>
           </Link>
         </div>
       </v-card>

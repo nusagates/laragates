@@ -23,6 +23,8 @@ use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\AiSummaryController;
 use App\Http\Controllers\Admin\AiSettingController;
 use App\Http\Controllers\Admin\AiReportController;
+use App\Http\Controllers\Dashboard\TakeChatController;
+use App\Http\Controllers\DashboardController;
 
 
 // Middleware
@@ -69,7 +71,9 @@ Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 */
 Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
-    Route::get('/dashboard', fn () => Inertia::render('Dashboard'))->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('dashboard');
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
     Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
