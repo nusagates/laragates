@@ -9,36 +9,20 @@ class DashboardStatsService
 {
     /**
      * ===============================
-     * DASHBOARD KPI STATS
+     * KPI STATS
      * ===============================
      */
     public function getStats(): array
     {
         return [
-            /**
-             * Active Chats
-             * - sudah di-assign ke agent
-             * - status masih open
-             */
             'active_chats' => ChatSession::whereNotNull('assigned_to')
                 ->where('status', 'open')
                 ->count(),
 
-            /**
-             * Waiting Queue
-             * - belum di-assign
-             * - status masih open
-             */
             'waiting_queue' => ChatSession::whereNull('assigned_to')
                 ->where('status', 'open')
                 ->count(),
 
-            /**
-             * Agents Online
-             * - role agent
-             * - status online
-             * - is_active = 1
-             */
             'agents_online' => User::where('role', 'agent')
                 ->where('status', 'online')
                 ->where('is_active', 1)
@@ -48,7 +32,7 @@ class DashboardStatsService
 
     /**
      * ===============================
-     * WAITING QUEUE LIST (REAL DATA)
+     * WAITING QUEUE LIST
      * ===============================
      */
     public function getWaitingQueue(int $limit = 10)
@@ -62,15 +46,41 @@ class DashboardStatsService
             ->get()
             ->map(function ($session) {
 
-                $waitingMinutes = $session->created_at
+                $minutes = $session->created_at
                     ? $session->created_at->diffInMinutes(now(), true)
                     : 0;
 
                 return [
                     'id'       => $session->id,
                     'customer' => $session->customer->name ?? 'Unknown',
-                    'waiting'  => (int) $waitingMinutes,
+                    'waiting'  => (int) $minutes,
                 ];
             });
+    }
+
+    /**
+     * ===============================
+     * AGENT STATUS
+     * ===============================
+     */
+    public function getAgentStatus(int $limit = 10)
+    {
+        return User::query()
+            ->where('role', 'agent')
+            ->where('is_active', 1)
+            ->withCount([
+                'chatSessions as active_chats' => function ($q) {
+                    $q->where('status', 'open');
+                }
+            ])
+            ->orderByDesc('active_chats')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($agent) => [
+                'id'           => $agent->id,
+                'name'         => $agent->name,
+                'active_chats' => $agent->active_chats,
+                'status'       => $agent->status,
+            ]);
     }
 }

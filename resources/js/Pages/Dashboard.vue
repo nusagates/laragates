@@ -1,54 +1,36 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
-import { Head, Link, usePage, router } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { Head, router } from '@inertiajs/vue3'
 
-/**
- * ===============================
- * INERTIA PAGE PROPS (SAFE)
- * ===============================
- */
-const page = usePage()
-
-const stats = computed(() => page.props.stats ?? {
-  active_chats: 0,
-  waiting_queue: 0,
-  agents_online: 0,
+const props = defineProps({
+  stats: {
+    type: Object,
+    required: true,
+  },
+  waiting_queue_list: {
+    type: Array,
+    default: () => [],
+  },
+  agents: {
+    type: Array,
+    default: () => [],
+  },
 })
 
-const waitingQueue = computed(() => page.props.waiting_queue_list ?? [])
-
-/**
- * ===============================
- * ACTIONS
- * ===============================
- */
-function takeChat(chatId) {
-  router.post(
-    route('dashboard.chat.take', chatId),
-    {},
-    {
-      preserveScroll: true,
-      onSuccess: () => {
-        // reload halaman agar KPI & queue update
-        router.reload()
-      },
-    }
-  )
+function takeChat(sessionId) {
+  router.post(route('dashboard.take-chat', sessionId), {}, {
+    preserveScroll: true,
+  })
 }
 
-/**
- * ===============================
- * HELPERS
- * ===============================
- */
 function formatWaiting(minutes) {
-  if (!minutes || minutes <= 0) return '0 min'
-  if (minutes < 60) return `${minutes} min`
+  if (!minutes || minutes < 1) return 'just now'
 
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return `${h}h ${m}m`
+
+  if (h > 0) return `Waiting ${h}h ${m}m`
+  return `Waiting ${m}m`
 }
 </script>
 
@@ -64,63 +46,121 @@ function formatWaiting(minutes) {
       <v-row class="mb-6">
         <v-col cols="12" md="4">
           <v-card class="pa-5 stat-card">
-            <div class="stat-label">Active Chats</div>
-            <div class="stat-value">{{ stats.active_chats }}</div>
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-label">Active Chats</div>
+                <div class="stat-value">{{ stats.active_chats }}</div>
+              </div>
+              <v-icon size="36" color="primary">
+                mdi-message-processing-outline
+              </v-icon>
+            </div>
           </v-card>
         </v-col>
 
         <v-col cols="12" md="4">
           <v-card class="pa-5 stat-card warning">
-            <div class="stat-label">Waiting Queue</div>
-            <div class="stat-value">{{ stats.waiting_queue }}</div>
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-label">Waiting Queue</div>
+                <div class="stat-value">{{ stats.waiting_queue }}</div>
+              </div>
+              <v-icon size="36" color="warning">
+                mdi-timer-sand
+              </v-icon>
+            </div>
           </v-card>
         </v-col>
 
         <v-col cols="12" md="4">
           <v-card class="pa-5 stat-card success">
-            <div class="stat-label">Agents Online</div>
-            <div class="stat-value">{{ stats.agents_online }}</div>
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="stat-label">Agents Online</div>
+                <div class="stat-value">{{ stats.agents_online }}</div>
+              </div>
+              <v-icon size="36" color="success">
+                mdi-account-group-outline
+              </v-icon>
+            </div>
           </v-card>
         </v-col>
       </v-row>
 
-      <!-- ================= WAITING QUEUE ================= -->
+      <!-- ================= MAIN ================= -->
       <v-row>
+
+        <!-- WAITING QUEUE -->
         <v-col cols="12" md="6">
           <v-card class="pa-6 surface-card">
             <h3 class="panel-title">Waiting Queue</h3>
             <v-divider class="divider" />
 
-            <div
-              v-for="chat in waitingQueue"
-              :key="chat.id"
-              class="row-item"
-            >
-              <div>
-                <div class="row-main">{{ chat.customer }}</div>
-                <div class="row-sub">
-                  Waiting {{ formatWaiting(chat.waiting) }}
-                </div>
-              </div>
-
-              <v-btn
-                size="small"
-                color="primary"
-                variant="flat"
-                @click="takeChat(chat.id)"
+            <template v-if="waiting_queue_list.length">
+              <div
+                v-for="chat in waiting_queue_list"
+                :key="chat.id"
+                class="row-item"
               >
-                Take
-              </v-btn>
-            </div>
+                <div>
+                  <div class="row-main">{{ chat.customer }}</div>
+                  <div class="row-sub">
+                    {{ formatWaiting(chat.waiting) }}
+                  </div>
+                </div>
 
-            <div
-              v-if="waitingQueue.length === 0"
-              class="empty-text"
-            >
+                <v-btn
+                  size="small"
+                  color="primary"
+                  variant="flat"
+                  @click="takeChat(chat.id)"
+                >
+                  TAKE
+                </v-btn>
+              </div>
+            </template>
+
+            <div v-else class="empty-text">
               No waiting chats 🎉
             </div>
           </v-card>
         </v-col>
+
+        <!-- AGENT STATUS -->
+        <v-col cols="12" md="6">
+          <v-card class="pa-6 surface-card">
+            <h3 class="panel-title">Agent Status</h3>
+            <v-divider class="divider" />
+
+            <template v-if="agents.length">
+              <div
+                v-for="agent in agents"
+                :key="agent.id"
+                class="row-item"
+              >
+                <div>
+                  <div class="row-main">{{ agent.name }}</div>
+                  <div class="row-sub">
+                    {{ agent.active_chats }} active chats
+                  </div>
+                </div>
+
+                <v-chip
+                  size="small"
+                  :color="agent.status === 'online' ? 'success' : 'grey'"
+                  variant="flat"
+                >
+                  {{ agent.status }}
+                </v-chip>
+              </div>
+            </template>
+
+            <div v-else class="empty-text">
+              No agents online
+            </div>
+          </v-card>
+        </v-col>
+
       </v-row>
 
       <!-- ================= QUICK ACTIONS ================= -->
@@ -128,17 +168,29 @@ function formatWaiting(minutes) {
         <h3 class="panel-title">Quick Actions</h3>
 
         <div class="d-flex flex-wrap ga-3">
-          <Link href="/chat">
-            <v-btn color="primary">Open Chat</v-btn>
-          </Link>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="router.visit('/chat')"
+          >
+            Open Chat
+          </v-btn>
 
-          <Link href="/broadcast">
-            <v-btn variant="outlined">Broadcast</v-btn>
-          </Link>
+          <v-btn
+            color="secondary"
+            variant="outlined"
+            @click="router.visit('/broadcast')"
+          >
+            Broadcast
+          </v-btn>
 
-          <Link href="/tickets">
-            <v-btn variant="outlined">Create Ticket</v-btn>
-          </Link>
+          <v-btn
+            color="secondary"
+            variant="outlined"
+            @click="router.visit('/tickets')"
+          >
+            Create Ticket
+          </v-btn>
         </div>
       </v-card>
 
@@ -148,7 +200,8 @@ function formatWaiting(minutes) {
 
 <style scoped>
 .dashboard-bg {
-  background: #0f172a;
+  background: radial-gradient(circle at top, #0f172a, #020617);
+  min-height: 100vh;
 }
 
 /* KPI */
@@ -195,7 +248,7 @@ function formatWaiting(minutes) {
   margin-bottom: 16px;
 }
 
-/* ROW ITEM */
+/* ROW */
 .row-item {
   display: flex;
   justify-content: space-between;

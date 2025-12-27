@@ -93,4 +93,13 @@ class User extends Authenticatable
     {
         return $this->last_seen && $this->last_seen->gt(now()->subMinutes(3));
     }
+
+    public function chatSessions()
+{
+    return $this->hasMany(
+        \App\Models\ChatSession::class,
+        'assigned_to'
+    );
+}
+
 }

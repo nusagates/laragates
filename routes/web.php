@@ -25,6 +25,7 @@ use App\Http\Controllers\Admin\AiSettingController;
 use App\Http\Controllers\Admin\AiReportController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Dashboard\CloseChatController;
 
 
 // Middleware
@@ -74,6 +75,13 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth'])
     ->name('dashboard');
+    Route::middleware(['auth'])->group(function () {
+    Route::post(
+        '/dashboard/take-chat/{session}',
+        [TakeChatController::class, 'take']
+    )->name('dashboard.take-chat');
+});
+
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
     Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
@@ -113,6 +121,9 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
         Route::post('/sessions/outbound', [ChatController::class, 'outbound'])
             ->name('chat.outbound');
+        Route::post('/chat/sessions/{session}/close', [CloseChatController::class, 'close'])
+    ->middleware(['auth'])
+    ->name('chat.close');
     });
 
     // ===============================

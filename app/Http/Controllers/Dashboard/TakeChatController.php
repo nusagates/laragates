@@ -4,40 +4,53 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatSession;
+use App\Models\SystemLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class TakeChatController extends Controller
 {
-    /**
-     * Assign waiting chat ke agent yang login
-     */
-    public function __invoke(Request $request, ChatSession $chat)
+    public function take(Request $request, ChatSession $session)
     {
-        $user = Auth::user();
+        DB::transaction(function () use ($session) {
 
-        // Optional: pastikan role agent
-        if ($user->role !== 'agent') {
-            abort(403, 'Only agent can take chat');
-        }
+            // ===============================
+            // 🔒 LOCK ROW (ANTI DOUBLE TAKE)
+            // ===============================
+            $session = ChatSession::where('id', $session->id)
+                ->lockForUpdate()
+                ->first();
 
-        DB::transaction(function () use ($chat, $user) {
-
-            // Lock row untuk cegah double take
-            $chat->lockForUpdate();
-
-            // Jika sudah diambil agent lain
-            if ($chat->assigned_to !== null) {
-                abort(409, 'Chat already assigned');
+            if ($session->assigned_to) {
+                abort(409, 'Chat already taken');
             }
 
-            // Assign ke agent
-            $chat->update([
-                'assigned_to' => $user->id,
+            // ===============================
+            // ASSIGN CHAT TO AGENT
+            // ===============================
+            $session->update([
+                'assigned_to'        => Auth::id(),
+                'last_agent_read_at' => now(),
+            ]);
+
+            // ===============================
+            // 🧾 SYSTEM LOG (COMPLIANCE)
+            // ===============================
+            SystemLog::create([
+                'event'       => 'chat_take',
+                'source'      => 'system',
+                'description' => 'Agent mengambil chat session #' . $session->id,
+                'user_id'     => Auth::id(),
+                'user_role'   => Auth::user()->role ?? 'agent',
+                'ip_address'  => request()->ip(),
+                'meta'        => json_encode([
+                    'chat_session_id' => $session->id,
+                    'agent_id'        => Auth::id(),
+                ]),
             ]);
         });
 
-        return back()->with('success', 'Chat berhasil diambil');
+        return redirect()->route('chat');
     }
 }
