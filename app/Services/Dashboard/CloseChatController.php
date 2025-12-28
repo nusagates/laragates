@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Models\ChatSession;
 use App\Models\SystemLog;
+use App\Services\Security\RateMonitorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,18 +14,60 @@ class CloseChatController extends Controller
 {
     public function close(Request $request, ChatSession $session)
     {
+        /**
+         * ===============================
+         * D5.1 — RATE MONITOR (MONITOR ONLY)
+         * ===============================
+         */
+        RateMonitorService::check('chat_close', 8);
+
         DB::transaction(function () use ($session, $request) {
 
-            // 🔒 Lock row (anti double close)
+            // 🔒 Lock row
             $session = ChatSession::where('id', $session->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            /**
+             * ===============================
+             * DENIED: ALREADY CLOSED
+             * ===============================
+             */
             if ($session->status === 'closed') {
+                SystemLog::create([
+                    'event'       => 'chat_close_denied',
+                    'entity_type' => 'chat_session',
+                    'entity_id'   => $session->id,
+                    'user_id'     => Auth::id(),
+                    'user_role'   => Auth::user()->role,
+                    'ip_address'  => $request->ip(),
+                    'meta'        => json_encode([
+                        'reason' => 'already_closed',
+                    ]),
+                ]);
+
                 abort(409, 'Chat already closed');
             }
 
+            /**
+             * ===============================
+             * DENIED: NOT OWNER
+             * ===============================
+             */
             if ($session->assigned_to !== Auth::id()) {
+                SystemLog::create([
+                    'event'       => 'chat_close_denied',
+                    'entity_type' => 'chat_session',
+                    'entity_id'   => $session->id,
+                    'user_id'     => Auth::id(),
+                    'user_role'   => Auth::user()->role,
+                    'ip_address'  => $request->ip(),
+                    'meta'        => json_encode([
+                        'reason'   => 'not_owner',
+                        'owner_id'=> $session->assigned_to,
+                    ]),
+                ]);
+
                 abort(403, 'Unauthorized');
             }
 
@@ -34,8 +77,8 @@ class CloseChatController extends Controller
              * ===============================
              */
             $oldValues = [
-                'status'    => $session->status,
-                'closed_at' => $session->closed_at,
+                'status'     => $session->status,
+                'closed_at'  => $session->closed_at,
             ];
 
             /**
@@ -44,8 +87,8 @@ class CloseChatController extends Controller
              * ===============================
              */
             $session->update([
-                'status'    => 'closed',
-                'closed_at'=> now(),
+                'status'     => 'closed',
+                'closed_at'  => now(),
             ]);
 
             /**
@@ -54,13 +97,13 @@ class CloseChatController extends Controller
              * ===============================
              */
             $newValues = [
-                'status'    => $session->status,
-                'closed_at'=> $session->closed_at,
+                'status'     => $session->status,
+                'closed_at'  => $session->closed_at,
             ];
 
             /**
              * ===============================
-             * SYSTEM LOG (D.3)
+             * SYSTEM LOG (SUCCESS)
              * ===============================
              */
             SystemLog::create([
@@ -79,8 +122,7 @@ class CloseChatController extends Controller
         });
 
         return response()->json([
-            'status'  => 'ok',
-            'message' => 'Chat closed successfully',
+            'status' => 'ok',
         ]);
     }
 }
