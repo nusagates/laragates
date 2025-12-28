@@ -5,15 +5,9 @@ namespace App\Services\Security;
 use App\Models\SystemLog;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Request;
 
 class RateMonitorService
 {
-    /**
-     * ===============================
-     * RATE CHECK ENTRY POINT
-     * ===============================
-     */
     public static function check(string $action, int $limitPerMinute = 10): void
     {
         $user = Auth::user();
@@ -21,36 +15,24 @@ class RateMonitorService
             return;
         }
 
-        /**
-         * WINDOW = per minute (audit friendly)
-         */
-        $windowKey = now()->format('YmdHi');
-        $key = "rate:{$action}:user:{$user->id}:{$windowKey}";
+        // window per menit
+        $window = now()->format('YmdHi');
+        $key = "rate:{$action}:user:{$user->id}:{$window}";
 
-        // SAFE counter
         $count = Cache::get($key, 0) + 1;
 
         Cache::put(
             $key,
             $count,
-            now()->addSeconds(65) // 1 minute + buffer
+            now()->addSeconds(65) // buffer 1 menit
         );
 
-        /**
-         * ===============================
-         * ESCALATION ONLY (NO DOUBLE LOG)
-         * ===============================
-         */
+        // escalation logging
         if ($count > $limitPerMinute) {
             self::logEscalation($action, $count, $limitPerMinute);
         }
     }
 
-    /**
-     * ===============================
-     * ESCALATION LOGGER
-     * ===============================
-     */
     protected static function logEscalation(string $action, int $count, int $limit): void
     {
         $event = match (true) {
@@ -63,7 +45,7 @@ class RateMonitorService
             'event'      => $event,
             'user_id'    => Auth::id(),
             'user_role'  => Auth::user()->role ?? null,
-            'ip_address' => Request::ip(),
+            'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),
             'meta'       => json_encode([
                 'action' => $action,

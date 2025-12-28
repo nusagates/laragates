@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Models\ChatSession;
 use App\Models\SystemLog;
+use App\Services\Security\ActionGuardService;
+use App\Services\Security\RateMonitorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,40 +15,63 @@ class TakeChatController extends Controller
 {
     public function take(Request $request, ChatSession $session)
     {
-        DB::transaction(function () use ($session) {
+        // 🔒 D5.3 — ENFORCEMENT
+        ActionGuardService::check('chat_take', 5);
 
-            // ===============================
-            // 🔒 LOCK ROW (ANTI DOUBLE TAKE)
-            // ===============================
+        // 📊 D5.1 + D5.2 — MONITOR
+        RateMonitorService::check('chat_take', 5);
+
+        DB::transaction(function () use ($session, $request) {
+
+            // lock row
             $session = ChatSession::where('id', $session->id)
                 ->lockForUpdate()
-                ->first();
+                ->firstOrFail();
 
+            // denied: already taken
             if ($session->assigned_to) {
+                SystemLog::create([
+                    'event'       => 'chat_take_denied',
+                    'entity_type' => 'chat_session',
+                    'entity_id'   => $session->id,
+                    'user_id'     => Auth::id(),
+                    'user_role'   => Auth::user()->role,
+                    'ip_address'  => $request->ip(),
+                    'meta'        => json_encode([
+                        'reason'      => 'already_taken',
+                        'assigned_to' => $session->assigned_to,
+                    ]),
+                ]);
+
                 abort(409, 'Chat already taken');
             }
 
-            // ===============================
-            // ASSIGN CHAT TO AGENT
-            // ===============================
+            $oldValues = [
+                'assigned_to' => $session->assigned_to,
+                'status'      => $session->status,
+            ];
+
             $session->update([
                 'assigned_to'        => Auth::id(),
                 'last_agent_read_at' => now(),
             ]);
 
-            // ===============================
-            // 🧾 SYSTEM LOG (COMPLIANCE)
-            // ===============================
+            $newValues = [
+                'assigned_to' => $session->assigned_to,
+                'status'      => $session->status,
+            ];
+
             SystemLog::create([
                 'event'       => 'chat_take',
-                'source'      => 'system',
-                'description' => 'Agent mengambil chat session #' . $session->id,
+                'entity_type' => 'chat_session',
+                'entity_id'   => $session->id,
                 'user_id'     => Auth::id(),
-                'user_role'   => Auth::user()->role ?? 'agent',
-                'ip_address'  => request()->ip(),
+                'user_role'   => Auth::user()->role,
+                'old_values'  => json_encode($oldValues),
+                'new_values'  => json_encode($newValues),
+                'ip_address'  => $request->ip(),
                 'meta'        => json_encode([
-                    'chat_session_id' => $session->id,
-                    'agent_id'        => Auth::id(),
+                    'action' => 'agent_take_chat',
                 ]),
             ]);
         });
