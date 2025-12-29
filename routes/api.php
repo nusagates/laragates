@@ -10,73 +10,53 @@ use App\Http\Controllers\WabaMenuController;
 use App\Http\Controllers\AiMetricsController;
 
 /*
-|--------------------------------------------------------------------------|
+|--------------------------------------------------------------------------
 | API Routes
-|--------------------------------------------------------------------------|
+|--------------------------------------------------------------------------
 */
 
-// ===============================
 // Health check
-// ===============================
 Route::get('/ping', fn () => response()->json([
     'message' => 'API is running'
 ]));
 
-// ===============================
 // Broadcast channels
-// ===============================
 Broadcast::routes();
 
-// ===============================
 // 🔔 WEBHOOK FONNTE (NO AUTH)
-// ===============================
 Route::match(['GET', 'POST'], '/webhook/fonnte', [
     FonnteWebhookController::class,
     'handle'
 ]);
 
-// ===============================
-// Simulate inbound WhatsApp (DEV)
-// ===============================
+// 🧪 Simulate inbound WhatsApp (DEV ONLY)
 Route::post('/simulate-inbound', [
     \App\Http\Controllers\ChatSimulationController::class,
     'simulate'
 ]);
 
-// ===============================
-// Update message status
-// ===============================
+// Update WA message status (delivery report)
 Route::post('/chat-messages/{message}/status', [
     ChatController::class,
     'updateStatus'
 ]);
 
-// ===============================
 // 🔒 AUTHENTICATED API
-// ===============================
 Route::middleware('auth:sanctum')->group(function () {
 
-    // ===============================
     // Template sync
-    // ===============================
-    Route::prefix('templates')->group(function () {
-        Route::post('/{template}/sync', [
-            WhatsappTemplateController::class,
-            'sync'
-        ]);
-    });
+    Route::post('/templates/{template}/sync', [
+        WhatsappTemplateController::class,
+        'sync'
+    ]);
 
-    // ===============================
-    // ⭐ WABA MENU API
-    // ===============================
+    // WABA menu
     Route::post('/waba/send-main-menu', [
         WabaMenuController::class,
         'sendMainMenu'
     ]);
 
-    // ===============================
-    // ⭐ CHAT SESSION (STEP 6)
-    // ===============================
+    // Chat session control
     Route::post('/chat-sessions/{session}/take', [
         ChatSessionController::class,
         'take'
@@ -87,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
         'close'
     ]);
 
-    Route::middleware(['auth:sanctum'])
-    ->get('/ai/metrics', [AiMetricsController::class, 'index']);
+    // AI metrics
+    Route::get('/ai/metrics', [
+        AiMetricsController::class,
+        'index'
+    ]);
 });

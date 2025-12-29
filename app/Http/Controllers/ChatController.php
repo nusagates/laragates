@@ -6,6 +6,7 @@ use App\Models\ChatSession;
 use App\Models\ChatMessage;
 use App\Models\Customer;
 use App\Services\MessageDeliveryService;
+use App\Services\System\ChatLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,6 +17,14 @@ class ChatController extends Controller
      */
     public function index()
     {
+        ChatLogService::log(
+            event: 'chat_access',
+            meta: [
+                'path' => request()->path(),
+                'method' => request()->method(),
+            ]
+        );
+
         $query = ChatSession::with(['customer', 'lastMessage'])
             ->orderByDesc('updated_at')
             ->limit(50)
@@ -42,6 +51,14 @@ class ChatController extends Controller
      */
     public function show(ChatSession $session)
     {
+        ChatLogService::log(
+            event: 'chat_open_room',
+            sessionId: $session->id,
+            meta: [
+                'customer_phone' => $session->customer?->phone,
+            ]
+        );
+
         $session->load([
             'customer',
             'agent',
@@ -61,6 +78,7 @@ class ChatController extends Controller
                 'sender' => $m->sender,
                 'type'   => $m->type,
                 'text'   => $m->message,
+                'media'  => $m->media_url,
                 'time'   => $m->created_at->format('H:i'),
                 'is_me'  => $m->sender === 'agent' && $m->user_id === Auth::id(),
             ]),
@@ -79,16 +97,13 @@ class ChatController extends Controller
 
         $agent = Auth::user();
         if (!$agent) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json(['success' => false], 401);
         }
 
         if (!$session->assigned_to) {
             $session->update(['assigned_to' => $agent->id]);
         }
 
-        // ============================
-        // HANDLE MEDIA
-        // ============================
         $mediaUrl = null;
         $mediaType = null;
         $isMedia = false;
@@ -102,38 +117,33 @@ class ChatController extends Controller
             $isMedia   = true;
         }
 
-        // ============================
-        // SAVE MESSAGE (QUEUED)
-        // ============================
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'agent',
             'user_id'         => $agent->id,
-
             'message'         => $request->message ?? '',
             'media_url'       => $mediaUrl,
             'media_type'      => $mediaType,
             'type'            => $isMedia ? 'media' : 'text',
-
             'status'          => 'pending',
             'delivery_status' => 'queued',
-
             'is_outgoing'     => true,
             'is_bot'          => false,
         ]);
 
-        $session->touch();
+        ChatLogService::log(
+            event: $isMedia ? 'chat_send_media' : 'chat_send_text',
+            sessionId: $session->id,
+            meta: [
+                'media_type' => $mediaType,
+                'filename'   => $request->file('media')?->getClientOriginalName(),
+            ]
+        );
 
-        // ============================
-        // SEND VIA DELIVERY ENGINE
-        // ============================
+        $session->touch();
         MessageDeliveryService::send($msg);
 
-        try {
-            broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers();
-        } catch (\Throwable $e) {}
-
-        return response()->json(['success' => true, 'data' => $msg]);
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -166,15 +176,17 @@ class ChatController extends Controller
             'user_id'         => Auth::id(),
             'message'         => $data['message'],
             'type'            => 'text',
-
             'status'          => 'pending',
             'delivery_status' => 'queued',
-
             'is_outgoing'     => true,
             'is_bot'          => false,
         ]);
 
-        $session->touch();
+        ChatLogService::log(
+            event: 'chat_outbound_start',
+            sessionId: $session->id,
+            meta: ['phone' => $phone]
+        );
 
         MessageDeliveryService::send($msg);
 
@@ -189,20 +201,19 @@ class ChatController extends Controller
      */
     public function close(ChatSession $session)
     {
-        $session->status = 'closed';
-        $session->save();
+        $session->update(['status' => 'closed']);
+
+        ChatLogService::log(
+            event: 'chat_close',
+            sessionId: $session->id
+        );
 
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Normalize phone
-     */
     protected function normalizePhone(string $phone): string
     {
-        $clean = preg_replace('/[^0-9+]/', '', $phone ?? '');
-
-        if (!$clean) return '';
+        $clean = preg_replace('/[^0-9+]/', '', $phone);
 
         if (str_starts_with($clean, '+')) return $clean;
         if (str_starts_with($clean, '0')) return '+62' . substr($clean, 1);

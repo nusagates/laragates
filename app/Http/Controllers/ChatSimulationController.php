@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
+use App\Models\Customer;
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
-use App\Models\Customer;
-use Illuminate\Http\Request;
+use App\Models\SystemLog;
 
 class ChatSimulationController extends Controller
 {
@@ -14,46 +15,74 @@ class ChatSimulationController extends Controller
         $data = $request->validate([
             'phone'   => 'required|string',
             'message' => 'required|string',
+            'name'    => 'nullable|string',
         ]);
 
-        // Normalisasi nomor
+        // ===============================
+        // NORMALISASI NOMOR
+        // ===============================
         $phone = preg_replace('/[^0-9]/', '', $data['phone']);
         if (str_starts_with($phone, '0')) {
             $phone = '62' . substr($phone, 1);
         }
+        if (!str_starts_with($phone, '62')) {
+            $phone = '62' . $phone;
+        }
 
-        // Cari customer atau buat baru
+        // ===============================
+        // CUSTOMER
+        // ===============================
         $customer = Customer::firstOrCreate(
             ['phone' => $phone],
-            ['name' => $phone]
+            ['name' => $data['name'] ?? $phone]
         );
 
-        // Cari session yang masih open
+        // ===============================
+        // CHAT SESSION
+        // ===============================
         $session = ChatSession::firstOrCreate(
-            ['customer_id' => $customer->id, 'status' => 'open'],
-            ['assigned_to' => null]
+            [
+                'customer_id' => $customer->id,
+                'status'      => 'open',
+            ]
         );
 
-        // Masukkan pesan inbound
+        // ===============================
+        // CHAT MESSAGE (INBOUND)
+        // ===============================
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
             'sender'          => 'customer',
             'message'         => $data['message'],
             'type'            => 'text',
             'is_outgoing'     => false,
+            'status'          => 'received',
         ]);
 
         $session->touch();
 
-        // Broadcast realtime (ignore error jika pusher off)
-        try {
-            broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers();
-        } catch (\Throwable $e) {}
+        // ===============================
+        // 🔥 SYSTEM LOG (INI YANG KURANG)
+        // ===============================
+        SystemLog::create([
+            'event'       => 'chat_inbound_simulated',
+            'entity_type' => 'chat_session',
+            'entity_id'   => $session->id,
+            'description' => 'Simulated inbound WhatsApp message',
+            'meta'        => json_encode([
+                'provider' => 'simulate',
+                'phone'    => $phone,
+                'message'  => $data['message'],
+            ]),
+            'user_id'     => null,
+            'user_role'   => 'system',
+            'ip_address'  => $request->ip(),
+        ]);
 
         return response()->json([
-            'success' => true,
+            'success'    => true,
             'session_id' => $session->id,
-            'message' => 'Simulated inbound delivered successfully!'
+            'message'    => 'Simulated inbound delivered & logged',
         ]);
     }
 }
