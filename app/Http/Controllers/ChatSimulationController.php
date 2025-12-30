@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Customer;
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
-use App\Models\SystemLog;
+use App\Services\SystemLogService;
 
 class ChatSimulationController extends Controller
 {
@@ -22,9 +22,11 @@ class ChatSimulationController extends Controller
         // NORMALISASI NOMOR
         // ===============================
         $phone = preg_replace('/[^0-9]/', '', $data['phone']);
+
         if (str_starts_with($phone, '0')) {
             $phone = '62' . substr($phone, 1);
         }
+
         if (!str_starts_with($phone, '62')) {
             $phone = '62' . $phone;
         }
@@ -62,22 +64,21 @@ class ChatSimulationController extends Controller
         $session->touch();
 
         // ===============================
-        // 🔥 SYSTEM LOG (INI YANG KURANG)
+        // ✅ SYSTEM LOG (COMPLIANCE SAFE)
         // ===============================
-        SystemLog::create([
-            'event'       => 'chat_inbound_simulated',
-            'entity_type' => 'chat_session',
-            'entity_id'   => $session->id,
-            'description' => 'Simulated inbound WhatsApp message',
-            'meta'        => json_encode([
-                'provider' => 'simulate',
-                'phone'    => $phone,
-                'message'  => $data['message'],
-            ]),
-            'user_id'     => null,
-            'user_role'   => 'system',
-            'ip_address'  => $request->ip(),
-        ]);
+        SystemLogService::record(
+            event: 'chat_inbound_simulated',
+            entityType: 'chat_session',
+            entityId: $session->id,
+            oldValues: null,
+            newValues: null,
+            meta: [
+                'description' => 'Simulated inbound WhatsApp message',
+                'provider'    => 'simulate',
+                'phone'       => $phone,
+                'message'     => $data['message'],
+            ]
+        );
 
         return response()->json([
             'success'    => true,

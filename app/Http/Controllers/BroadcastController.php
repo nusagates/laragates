@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BroadcastCampaign;
 use App\Models\BroadcastTarget;
 use App\Models\WhatsappTemplate;
+use App\Services\SystemLogService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -15,15 +16,14 @@ class BroadcastController extends Controller
 {
     /**
      * MAIN PAGE (Broadcast Create)
+     * AUDIT: access
      */
     public function index()
     {
-        // 🔥 FIX: AMBIL TEMPLATE AGAR MUNCUL DI DROPDOWN
         $templates = WhatsappTemplate::where('status', 'approved')
             ->orderBy('updated_at', 'desc')
             ->get();
 
-        // Riwayat broadcast
         $history = BroadcastCampaign::orderBy('created_at', 'desc')
             ->limit(10)
             ->get()
@@ -37,24 +37,44 @@ class BroadcastController extends Controller
                 ];
             });
 
+        SystemLogService::record(
+            'broadcast_view',
+            null,
+            null,
+            null,
+            null,
+            [
+                'description' => 'Opened broadcast create page',
+                'audit' => [
+                    'actor_id'   => auth()->id(),
+                    'actor_role' => auth()->user()->role ?? null,
+                    'source'     => 'broadcast_module',
+                    'mode'       => 'manual',
+                ],
+                'risk' => [
+                    'level' => 'low',
+                ]
+            ]
+        );
+
         return Inertia::render('Broadcast/Index', [
-            'templates' => $templates,   // ✔ WAJIB untuk dropdown
-            'history'   => $history,     // ✔ History panel
+            'templates' => $templates,
+            'history'   => $history,
         ]);
     }
 
-
     /**
      * CREATE CAMPAIGN (DRAFT)
+     * AUDIT: data creation
      */
     public function store(Request $request)
     {
         $request->validate([
-            'name'                  => 'required|string|max:255',
-            'template_id'           => 'required|exists:whatsapp_templates,id',
-            'audience_type'         => 'required|in:all,csv',
-            'schedule_type'         => 'required|in:now,later',
-            'send_at'               => 'nullable|date',
+            'name'          => 'required|string|max:255',
+            'template_id'   => 'required|exists:whatsapp_templates,id',
+            'audience_type' => 'required|in:all,csv',
+            'schedule_type' => 'required|in:now,later',
+            'send_at'       => 'nullable|date',
         ]);
 
         $template = WhatsappTemplate::findOrFail($request->template_id);
@@ -62,28 +82,56 @@ class BroadcastController extends Controller
         return DB::transaction(function () use ($request, $template) {
 
             $campaign = BroadcastCampaign::create([
-                'name'                  => $request->name,
-                'whatsapp_template_id'  => $template->id,
-                'audience_type'         => $request->audience_type,
-                'send_now'              => $request->schedule_type === 'now',
-                'send_at'               => $request->schedule_type === 'later'
+                'name'                 => $request->name,
+                'whatsapp_template_id' => $template->id,
+                'audience_type'        => $request->audience_type,
+                'send_now'             => $request->schedule_type === 'now',
+                'send_at'              => $request->schedule_type === 'later'
                                             ? Carbon::parse($request->send_at)
                                             : null,
-                'status'                => 'draft',
-                'created_by'            => auth()->id(),
-                'total_targets'         => 0,
+                'status'               => 'draft',
+                'created_by'           => auth()->id(),
+                'total_targets'        => 0,
             ]);
 
+            SystemLogService::record(
+                'broadcast_create',
+                'broadcast_campaign',
+                $campaign->id,
+                null,
+                $campaign->toArray(),
+                [
+                    'description' => 'Broadcast campaign "' . $campaign->name . '" created',
+                    'audit' => [
+                        'actor_id'   => auth()->id(),
+                        'actor_role' => auth()->user()->role ?? null,
+                        'source'     => 'broadcast_module',
+                        'mode'       => 'manual',
+                    ],
+                    'broadcast' => [
+                        'id'     => $campaign->id,
+                        'name'   => $campaign->name,
+                        'status' => $campaign->status,
+                    ],
+                    'impact' => [
+                        'total_targets' => 0,
+                    ],
+                    'risk' => [
+                        'level' => 'low',
+                    ]
+                ]
+            );
+
             return response()->json([
-                'success'   => true,
-                'campaign'  => $campaign,
+                'success'  => true,
+                'campaign' => $campaign,
             ]);
         });
     }
 
-
     /**
-     * UPLOAD TARGETS (CSV/XLSX)
+     * UPLOAD TARGETS (CSV / XLSX)
+     * AUDIT: data import + anomaly detection
      */
     public function uploadTargets(Request $request, BroadcastCampaign $campaign)
     {
@@ -115,8 +163,8 @@ class BroadcastController extends Controller
 
         foreach ($rows as $row) {
 
-            $name   = $row['name']  ?? $row[0] ?? null;
-            $phone  = $row['phone'] ?? $row[1] ?? null;
+            $name  = $row['name']  ?? $row[0] ?? null;
+            $phone = $row['phone'] ?? $row[1] ?? null;
 
             $phone = $this->normalizePhone($phone);
             if (!$phone) continue;
@@ -152,6 +200,33 @@ class BroadcastController extends Controller
             $campaign->save();
         }
 
+        // Compliance rule
+        $riskLevel = $count > 10000 ? 'high' : ($count > 3000 ? 'medium' : 'low');
+
+        SystemLogService::record(
+            'broadcast_target_upload',
+            'broadcast_campaign',
+            $campaign->id,
+            null,
+            null,
+            [
+                'description' => "Uploaded {$count} broadcast targets",
+                'audit' => [
+                    'actor_id' => auth()->id(),
+                    'source'   => 'broadcast_module',
+                    'mode'     => 'manual',
+                ],
+                'impact' => [
+                    'added'         => $count,
+                    'total_targets' => $campaign->total_targets,
+                ],
+                'risk' => [
+                    'level'  => $riskLevel,
+                    'reason' => $riskLevel !== 'low' ? 'Large target upload' : null,
+                ]
+            ]
+        );
+
         return response()->json([
             'success' => true,
             'added'   => $count,
@@ -159,20 +234,59 @@ class BroadcastController extends Controller
         ]);
     }
 
-
     /**
-     * DETECT TEMPLATE VARIABLES ({{1}}, {{2}} ...)
+     * REPORT PAGE
+     * AUDIT: access
      */
+    public function report(Request $request)
+    {
+        $query = BroadcastCampaign::with('template', 'creator')
+            ->orderBy('created_at', 'desc');
+
+        if ($search = $request->input('search')) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        SystemLogService::record(
+            'broadcast_report_view',
+            null,
+            null,
+            null,
+            null,
+            [
+                'description' => 'Viewed broadcast report',
+                'audit' => [
+                    'actor_id'   => auth()->id(),
+                    'actor_role' => auth()->user()->role ?? null,
+                    'source'     => 'broadcast_module',
+                ],
+                'filters' => $request->only('search', 'status'),
+                'risk' => [
+                    'level' => 'low',
+                ]
+            ]
+        );
+
+        return Inertia::render('Broadcast/Report', [
+            'campaigns' => $query->paginate(10)->withQueryString(),
+            'filters'   => $request->only('search', 'status'),
+        ]);
+    }
+
+    /* =====================================================
+     | HELPERS (NO BUSINESS CHANGE)
+     =====================================================*/
+
     private function detectVariables($text)
     {
         preg_match_all('/\{\{\d+\}\}/', $text, $matches);
         return count($matches[0]);
     }
 
-
-    /**
-     * PARSE CSV / XLSX
-     */
     private function parseFile($file)
     {
         $ext = strtolower($file->getClientOriginalExtension());
@@ -198,11 +312,6 @@ class BroadcastController extends Controller
         return $rows;
     }
 
-
-    /**
-     * NORMALIZE PHONE NUMBER
-     * 0812 → 62812
-     */
     private function normalizePhone($phone)
     {
         if (!$phone) return null;
@@ -222,28 +331,5 @@ class BroadcastController extends Controller
         }
 
         return null;
-    }
-
-
-    /**
-     * REPORT PAGE
-     */
-    public function report(Request $request)
-    {
-        $query = BroadcastCampaign::with('template', 'creator')
-            ->orderBy('created_at', 'desc');
-
-        if ($search = $request->input('search')) {
-            $query->where('name', 'like', "%{$search}%");
-        }
-
-        if ($status = $request->input('status')) {
-            $query->where('status', $status);
-        }
-
-        return Inertia::render('Broadcast/Report', [
-            'campaigns' => $query->paginate(10)->withQueryString(),
-            'filters'   => $request->only('search', 'status'),
-        ]);
     }
 }
