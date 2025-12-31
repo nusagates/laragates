@@ -6,11 +6,6 @@ use App\Models\SystemLog;
 
 class SystemLogService
 {
-    /**
-     * ==================================================
-     * RECORD SYSTEM LOG (EVENT-BASED ONLY)
-     * ==================================================
-     */
     public static function record(
         string $event,
         ?string $entityType = null,
@@ -21,36 +16,54 @@ class SystemLogService
     ): void {
         try {
 
-            /**
-             * --------------------------------------------------
-             * 🚫 DISABLE ROUTE ACCESS LOG COMPLETELY
-             * --------------------------------------------------
-             * We already log explicit business events
-             * (menu_create, login_success, template_approve, etc)
-             * so route_access is NO LONGER NEEDED.
-             */
+            // Disable noisy route access
             if ($event === 'route_access') {
                 return;
             }
 
+            /**
+             * SOURCE
+             */
+            $source = strtoupper(
+                $meta['source']
+                ?? (str_starts_with($event, 'sla_') ? 'SLA' : 'SYSTEM')
+            );
+
+            /**
+             * LEVEL
+             */
+            $level = 'info';
+            if (str_contains($event, 'breach')) {
+                $level = 'critical';
+            } elseif (str_contains($event, 'warning')) {
+                $level = 'warning';
+            }
+
+            /**
+             * DESCRIPTION (for UI)
+             */
+            $description = $meta['sla_type']
+                ?? $entityType
+                ?? null;
+
             SystemLog::create([
-                'event'       => $event,
-                'entity_type' => $entityType,
-                'entity_id'   => $entityId,
-                'user_id'     => auth()->id(),
-                'user_role'   => auth()->user()->role ?? null,
-                'old_values'  => $oldValues,
-                'new_values'  => $newValues,
-                'meta'        => $meta,
-                'ip_address'  => request()->ip(),
-                'user_agent'  => request()->userAgent(),
+                'source'       => $source,
+                'event'        => $event,
+                'level'        => $level,
+                'description'  => $description,
+                'entity_type'  => $entityType,
+                'entity_id'    => $entityId,
+                'user_id'      => auth()->id(),
+                'user_role'    => auth()->user()->role ?? null,
+                'old_values'   => $oldValues,
+                'new_values'   => $newValues,
+                'meta'         => $meta,
+                'ip_address'   => request()->ip(),
+                'user_agent'   => request()->userAgent(),
             ]);
 
         } catch (\Throwable $e) {
-            /**
-             * SILENT FAIL
-             * Logging must NEVER break business flow
-             */
+            // logging must never break business flow
         }
     }
 }

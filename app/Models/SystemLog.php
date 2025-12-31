@@ -8,8 +8,16 @@ class SystemLog extends Model
 {
     protected $table = 'system_logs';
 
+    /**
+     * ==================================================
+     * ALLOW ALL LOG ATTRIBUTES (SLA-AWARE)
+     * ==================================================
+     */
     protected $fillable = [
+        'source',        // SYSTEM | SLA | IAM | etc
+        'level',         // info | warning | critical
         'event',
+        'description',
         'entity_type',
         'entity_id',
         'user_id',

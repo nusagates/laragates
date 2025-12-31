@@ -26,26 +26,30 @@ class SystemLogController extends Controller
         $logs = DB::query()->fromSub(function ($qbuilder) {
 
             /**
-             * SYSTEM LOGS
+             * ==================================================
+             * SYSTEM LOGS (FIXED — USE DB COLUMNS)
+             * ==================================================
              */
             $qbuilder
                 ->selectRaw("
                     id,
-                    'system' as source,
+                    source,
                     event,
-                    entity_type as description,
+                    description,
                     user_id,
                     user_role as role,
                     ip_address as ip,
                     user_agent,
                     created_at,
                     meta,
-                    'info' as severity
+                    level as severity
                 ")
                 ->from('system_logs')
 
             /**
+             * ==================================================
              * IAM LOGS
+             * ==================================================
              */
             ->unionAll(
                 DB::table('iam_logs')->selectRaw("
@@ -70,7 +74,9 @@ class SystemLogController extends Controller
             )
 
             /**
+             * ==================================================
              * TICKET AUDIT LOGS
+             * ==================================================
              */
             ->unionAll(
                 DB::table('ticket_audit_logs')->selectRaw("
@@ -92,7 +98,9 @@ class SystemLogController extends Controller
             )
 
             /**
-             * TICKET SLA LOGS
+             * ==================================================
+             * TICKET SLA LOGS (LEGACY)
+             * ==================================================
              */
             ->unionAll(
                 DB::table('ticket_sla_logs')->selectRaw("
@@ -111,7 +119,9 @@ class SystemLogController extends Controller
             )
 
             /**
+             * ==================================================
              * USER BEHAVIOR LOGS
+             * ==================================================
              */
             ->unionAll(
                 DB::table('user_behavior_logs')->selectRaw("
@@ -137,7 +147,7 @@ class SystemLogController extends Controller
          * ===============================
          */
         if ($source) {
-            $logs->where('source', $source);
+            $logs->where('source', strtoupper($source));
         }
 
         /**
@@ -170,30 +180,40 @@ class SystemLogController extends Controller
         ]);
     }
 
+    /**
+     * ==================================================
+     * EXPORT CSV
+     * ==================================================
+     */
     public function export(Request $request)
-{
-    $source = $request->get('source');
-    $q      = $request->get('q');
+    {
+        $source = $request->get('source');
+        $q      = $request->get('q');
 
-    $logs = DB::query()
-        ->fromSub(function ($qbuilder) {
+        $logs = DB::query()->fromSub(function ($qbuilder) {
 
+            /**
+             * SYSTEM LOGS (FIXED)
+             */
             $qbuilder
                 ->selectRaw("
                     id,
-                    'system' as source,
+                    source,
                     event,
-                    entity_type as description,
+                    description,
                     user_id,
                     user_role as role,
                     ip_address as ip,
                     user_agent,
                     created_at,
                     meta,
-                    'info' as severity
+                    level as severity
                 ")
                 ->from('system_logs')
 
+                /**
+                 * IAM LOGS
+                 */
                 ->unionAll(
                     DB::table('iam_logs')->selectRaw("
                         id,
@@ -213,6 +233,9 @@ class SystemLogController extends Controller
                     ")
                 )
 
+                /**
+                 * TICKET AUDIT LOGS
+                 */
                 ->unionAll(
                     DB::table('ticket_audit_logs')->selectRaw("
                         id,
@@ -229,6 +252,9 @@ class SystemLogController extends Controller
                     ")
                 )
 
+                /**
+                 * TICKET SLA LOGS (LEGACY)
+                 */
                 ->unionAll(
                     DB::table('ticket_sla_logs')->selectRaw("
                         id,
@@ -245,6 +271,9 @@ class SystemLogController extends Controller
                     ")
                 )
 
+                /**
+                 * USER BEHAVIOR LOGS
+                 */
                 ->unionAll(
                     DB::table('user_behavior_logs')->selectRaw("
                         id,
@@ -263,69 +292,61 @@ class SystemLogController extends Controller
 
         }, 'logs');
 
-    if ($source) {
-        $logs->where('source', $source);
+        if ($source) {
+            $logs->where('source', strtoupper($source));
+        }
+
+        if ($q) {
+            $logs->where(function ($sub) use ($q) {
+                $sub->where('event', 'like', "%{$q}%")
+                    ->orWhere('description', 'like', "%{$q}%");
+            });
+        }
+
+        $filename = 'system_logs_' . now()->format('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($logs) {
+
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM for Excel
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, [
+                'Time',
+                'Source',
+                'Severity',
+                'Event',
+                'Description',
+                'User ID',
+                'Role',
+                'IP Address',
+            ], ';');
+
+            foreach ($logs->orderByDesc('created_at')->get() as $log) {
+
+                $time = $log->created_at
+                    ? "'" . \Carbon\Carbon::parse($log->created_at)->format('Y-m-d H:i:s')
+                    : '-';
+
+                $event = ucwords(str_replace('_', ' ', $log->event));
+
+                fputcsv($handle, [
+                    $time,
+                    strtoupper($log->source),
+                    strtoupper($log->severity),
+                    $event,
+                    $log->description ?: '-',
+                    $log->user_id ?: '-',
+                    $log->role ?: '-',
+                    $log->ip ?: '-',
+                ], ';');
+            }
+
+            fclose($handle);
+
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
-
-    if ($q) {
-        $logs->where(function ($sub) use ($q) {
-            $sub->where('event', 'like', "%{$q}%")
-                ->orWhere('description', 'like', "%{$q}%");
-        });
-    }
-
-    $filename = 'system_logs_' . now()->format('Ymd_His') . '.csv';
-
-    return response()->streamDownload(function () use ($logs) {
-
-        $handle = fopen('php://output', 'w');
-
-        // ✅ UTF-8 BOM (WAJIB BIAR EXCEL BACA BENAR)
-        fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
-
-        // ✅ HEADER (PAKAI ; BIAR EXCEL INDONESIA RAPI)
-        fputcsv($handle, [
-            'Time',
-            'Source',
-            'Severity',
-            'Event',
-            'Description',
-            'User ID',
-            'Role',
-            'IP Address',
-        ], ';');
-
-        foreach ($logs->orderByDesc('created_at')->get() as $log) {
-
-    $time = $log->created_at
-        ? "'" . \Carbon\Carbon::parse($log->created_at)->format('Y-m-d H:i:s')
-        : '-';
-
-    $event = ucwords(str_replace('_', ' ', $log->event));
-
-    $description = $log->source === 'sla' && $log->description
-        ? ucwords(str_replace('_', ' ', $log->description)) . ' SLA Breach'
-        : ($log->description ?: '-');
-
-    fputcsv($handle, [
-        $time,
-        strtoupper($log->source),
-        strtoupper($log->severity),
-        $event,
-        $description,
-        $log->user_id ?: '-',
-        $log->role ?: '-',
-        $log->ip ?: '-',
-    ], ';');
-}
-
-
-
-        fclose($handle);
-
-    }, $filename, [
-        'Content-Type' => 'text/csv; charset=UTF-8',
-    ]);
-}
-
 }

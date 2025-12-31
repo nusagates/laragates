@@ -6,6 +6,7 @@ use App\Models\ChatSession;
 use App\Models\ChatMessage;
 use App\Models\Customer;
 use App\Services\MessageDeliveryService;
+use App\Services\SlaService;
 use App\Services\System\ChatLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -13,24 +14,26 @@ use Illuminate\Support\Facades\Auth;
 class ChatController extends Controller
 {
     /**
+     * ===============================
      * Sidebar list chats
+     * ===============================
      */
     public function index()
     {
         ChatLogService::log(
             event: 'chat_access',
             meta: [
-                'path' => request()->path(),
-                'method' => request()->method(),
+                'path'   => request()->path(),
+                'method'=> request()->method(),
             ]
         );
 
-        $query = ChatSession::with(['customer', 'lastMessage'])
+        $sessions = ChatSession::with(['customer', 'lastMessage'])
             ->orderByDesc('updated_at')
             ->limit(50)
             ->get();
 
-        return $query->map(function ($session) {
+        return $sessions->map(function ($session) {
             $last = $session->lastMessage;
 
             return [
@@ -42,12 +45,53 @@ class ChatController extends Controller
                 'time'          => $last?->created_at?->format('H:i'),
                 'unread_count'  => 0,
                 'status'        => $session->status,
+
+                /**
+                 * 🔴🟡🟢 SLA BADGE
+                 * meet | warning | breach | null
+                 */
+                'sla' => $this->getSlaBadge($session),
             ];
         });
     }
 
     /**
+     * ===============================
+     * SLA BADGE LOGIC (CHAT LIST)
+     * ===============================
+     */
+    protected function getSlaBadge(ChatSession $session): ?string
+    {
+        // Already evaluated
+        if ($session->sla_status === 'breach') {
+            return 'breach'; // 🔴
+        }
+
+        if ($session->sla_status === 'meet') {
+            return 'meet'; // 🟢
+        }
+
+        // Still open → check almost breach (first response)
+        if (
+            $session->status === 'open' &&
+            $session->first_response_at === null
+        ) {
+            $limitSeconds = config('sla.first_response_minutes') * 60;
+            $elapsed      = now()->diffInSeconds($session->created_at);
+
+            // 80% threshold → warning
+            if ($elapsed >= ($limitSeconds * 0.8)) {
+                return 'warning'; // 🟡
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * ===============================
      * Get chat detail
+     * ===============================
      */
     public function show(ChatSession $session)
     {
@@ -86,7 +130,9 @@ class ChatController extends Controller
     }
 
     /**
+     * ===============================
      * SEND MESSAGE (AGENT → CUSTOMER)
+     * ===============================
      */
     public function send(Request $request, ChatSession $session)
     {
@@ -104,9 +150,9 @@ class ChatController extends Controller
             $session->update(['assigned_to' => $agent->id]);
         }
 
-        $mediaUrl = null;
+        $mediaUrl  = null;
         $mediaType = null;
-        $isMedia = false;
+        $isMedia   = false;
 
         if ($request->hasFile('media')) {
             $file = $request->file('media');
@@ -141,13 +187,21 @@ class ChatController extends Controller
         );
 
         $session->touch();
+
+        /**
+         * 🔔 SLA — FIRST RESPONSE
+         */
+        SlaService::recordFirstResponse($session);
+
         MessageDeliveryService::send($msg);
 
         return response()->json(['success' => true]);
     }
 
     /**
+     * ===============================
      * OUTBOUND (START NEW CHAT)
+     * ===============================
      */
     public function outbound(Request $request)
     {
@@ -188,6 +242,11 @@ class ChatController extends Controller
             meta: ['phone' => $phone]
         );
 
+        /**
+         * 🔔 SLA — OUTBOUND = FIRST RESPONSE
+         */
+        SlaService::recordFirstResponse($session);
+
         MessageDeliveryService::send($msg);
 
         return response()->json([
@@ -197,11 +256,21 @@ class ChatController extends Controller
     }
 
     /**
+     * ===============================
      * Close chat
+     * ===============================
      */
     public function close(ChatSession $session)
     {
-        $session->update(['status' => 'closed']);
+        $session->update([
+            'status'    => 'closed',
+            'closed_at' => now(),
+        ]);
+
+        /**
+         * 🔔 SLA — RESOLUTION
+         */
+        SlaService::recordResolution($session);
 
         ChatLogService::log(
             event: 'chat_close',
