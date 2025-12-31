@@ -48,7 +48,6 @@ class ChatController extends Controller
 
                 /**
                  * 🔴🟡🟢 SLA BADGE
-                 * meet | warning | breach | null
                  */
                 'sla' => $this->getSlaBadge($session),
             ];
@@ -57,21 +56,19 @@ class ChatController extends Controller
 
     /**
      * ===============================
-     * SLA BADGE LOGIC (CHAT LIST)
+     * SLA BADGE LOGIC
      * ===============================
      */
     protected function getSlaBadge(ChatSession $session): ?string
     {
-        // Already evaluated
         if ($session->sla_status === 'breach') {
-            return 'breach'; // 🔴
+            return 'breach';
         }
 
         if ($session->sla_status === 'meet') {
-            return 'meet'; // 🟢
+            return 'meet';
         }
 
-        // Still open → check almost breach (first response)
         if (
             $session->status === 'open' &&
             $session->first_response_at === null
@@ -79,9 +76,8 @@ class ChatController extends Controller
             $limitSeconds = config('sla.first_response_minutes') * 60;
             $elapsed      = now()->diffInSeconds($session->created_at);
 
-            // 80% threshold → warning
             if ($elapsed >= ($limitSeconds * 0.8)) {
-                return 'warning'; // 🟡
+                return 'warning';
             }
         }
 
@@ -146,6 +142,16 @@ class ChatController extends Controller
             return response()->json(['success' => false], 401);
         }
 
+        /**
+         * 🚫 BLACKLIST ENFORCEMENT
+         */
+        if ($session->customer?->is_blacklisted) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer is blacklisted',
+            ], 403);
+        }
+
         if (!$session->assigned_to) {
             $session->update(['assigned_to' => $agent->id]);
         }
@@ -176,6 +182,16 @@ class ChatController extends Controller
             'is_outgoing'     => true,
             'is_bot'          => false,
         ]);
+
+        /**
+         * 📊 CONTACT STATS UPDATE
+         */
+        if ($session->customer) {
+            $session->customer->increment('total_messages');
+            $session->customer->update([
+                'last_contacted_at' => now(),
+            ]);
+        }
 
         ChatLogService::log(
             event: $isMedia ? 'chat_send_media' : 'chat_send_text',
@@ -218,10 +234,28 @@ class ChatController extends Controller
             ['name' => $data['name']]
         );
 
+        /**
+         * 🚫 BLACKLIST ENFORCEMENT
+         */
+        if ($customer->is_blacklisted) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer is blacklisted',
+            ], 403);
+        }
+
         $session = ChatSession::create([
             'customer_id' => $customer->id,
             'status'      => 'open',
             'assigned_to' => Auth::id(),
+        ]);
+
+        /**
+         * 📊 CONTACT STATS UPDATE
+         */
+        $customer->increment('total_chats');
+        $customer->update([
+            'last_contacted_at' => now(),
         ]);
 
         $msg = ChatMessage::create([

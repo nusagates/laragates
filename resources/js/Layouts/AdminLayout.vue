@@ -28,6 +28,7 @@ const menu = [
   { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets", roles: ["admin","superadmin","supervisor","agent"] },
   { label: "Agents", icon: "mdi-account-group", href: "/agents", roles: ["admin","superadmin"] },
   { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates", roles: ["admin","superadmin","supervisor"] },
+  { label: "Contacts", icon: "mdi-account-box", href: "/contacts-ui", roles: ["superadmin"] },
   { label: "Broadcast", icon: "mdi-send", href: "/broadcast", roles: ["admin","superadmin","supervisor"] },
   { label: "Analytics", icon: "mdi-finance", href: "/analytics", roles: ["admin","superadmin"] },
   { label: "System Logs", icon: "mdi-clipboard-text-clock-outline", href: "/system-logs", roles: ["superadmin"] },

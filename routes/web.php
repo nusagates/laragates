@@ -18,6 +18,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\Api\Chat\ChatSessionController;
 use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ContactController; // ✅ CONTACT CONTROLLER
 use App\Http\Controllers\WaMenuController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\AiSummaryController;
@@ -26,7 +27,6 @@ use App\Http\Controllers\Admin\AiReportController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Dashboard\CloseChatController;
-
 
 // Middleware
 use App\Http\Middleware\RoleMiddleware;
@@ -72,15 +72,31 @@ Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 */
 Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
+    /*
+    |--------------------------------------------------------------------------
+    | CONTACTS (CRM) ✅ ADDED
+    |--------------------------------------------------------------------------
+    */
+Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
+    ->name('contacts.ui');
+
+
+    Route::prefix('contacts')->group(function () {
+        Route::get('/', [ContactController::class, 'index'])->name('contacts.index');
+        Route::get('/{customer}', [ContactController::class, 'show'])->name('contacts.show');
+        Route::put('/{customer}', [ContactController::class, 'update'])->name('contacts.update');
+    });
+
     Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth'])
-    ->name('dashboard');
+        ->middleware(['auth'])
+        ->name('dashboard');
+
     Route::middleware(['auth'])->group(function () {
-    Route::post(
-        '/dashboard/take-chat/{session}',
-        [TakeChatController::class, 'take']
-    )->name('dashboard.take-chat');
-});
+        Route::post(
+            '/dashboard/take-chat/{session}',
+            [TakeChatController::class, 'take']
+        )->name('dashboard.take-chat');
+    });
 
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
@@ -119,48 +135,39 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
-        Route::post('/sessions/outbound', [ChatController::class, 'outbound'])
-            ->name('chat.outbound');
+        Route::post('/sessions/outbound', [ChatController::class, 'outbound'])->name('chat.outbound');
         Route::post('/chat/sessions/{session}/close', [CloseChatController::class, 'close'])
-    ->middleware(['auth'])
-    ->name('chat.close');
+            ->middleware(['auth'])
+            ->name('chat.close');
     });
 
-    // ===============================
-    // 🔹 AI SUMMARY (TARUH DI SINI)
-    // ===============================
+    /*
+    |--------------------------------------------------------------------------
+    | AI SUMMARY
+    |--------------------------------------------------------------------------
+    */
     Route::post('/ai/chat-summary', [AiSummaryController::class, 'generate'])
         ->name('ai.chat.summary')
         ->can('use-ai-summary');
 
-        Route::middleware(['auth:sanctum'])
-    ->prefix('admin/ai')
-    ->group(function () {
-        Route::get('/settings', [AiSettingController::class, 'show']);
-        Route::put('/settings', [AiSettingController::class, 'update']);
-    });
+    Route::middleware(['auth:sanctum'])
+        ->prefix('admin/ai')
+        ->group(function () {
+            Route::get('/settings', [AiSettingController::class, 'show']);
+            Route::put('/settings', [AiSettingController::class, 'update']);
+        });
 
     /*
-|--------------------------------------------------------------------------
-| TICKETS
-|--------------------------------------------------------------------------
-*/
-Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
-Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
-
-Route::post('/tickets', [TicketController::class, 'store'])
-    ->name('tickets.store');
-
-Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])
-    ->name('tickets.reply');
-
-Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])
-    ->name('tickets.status');
-
-Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
-    ->name('tickets.assign');
-
-
+    |--------------------------------------------------------------------------
+    | TICKETS
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/tickets', [TicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
+    Route::post('/tickets', [TicketController::class, 'store'])->name('tickets.store');
+    Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply'])->name('tickets.reply');
+    Route::post('/tickets/{ticket}/status', [TicketController::class, 'updateStatus'])->name('tickets.status');
+    Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])->name('tickets.assign');
 
     /*
     |--------------------------------------------------------------------------
@@ -180,48 +187,21 @@ Route::post('/tickets/{ticket}/assign', [TicketController::class, 'assign'])
     });
 
     /*
-|--------------------------------------------------------------------------
-| BROADCAST
-| Supervisor & Superadmin
-|--------------------------------------------------------------------------
-*/
-Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(function () {
-
-    // ===============================
-    // MAIN PAGE
-    // ===============================
-    Route::get('/broadcast', [BroadcastController::class, 'index'])
-        ->name('broadcast');
-
-    // ===============================
-    // CREATE CAMPAIGN
-    // ===============================
-    Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])
-        ->name('broadcast.store');
-
-    // ===============================
-    // UPLOAD TARGET CSV
-    // ===============================
-    Route::post(
-        '/broadcast/campaigns/{campaign}/upload-targets',
-        [BroadcastController::class, 'uploadTargets']
-    )->name('broadcast.upload-targets');
-
-    // ===============================
-    // REPORT PAGE 
-    // ===============================
-    Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])
-    ->name('broadcast.reports');
-
-    Route::get('/broadcast/reports/{campaign}', 
-    [BroadcastReportController::class, 'show']
-)->name('broadcast.report.show');
-
-
-
-});
-
-
+    |--------------------------------------------------------------------------
+    | BROADCAST
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(function () {
+        Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
+        Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
+        Route::post('/broadcast/campaigns/{campaign}/upload-targets',
+            [BroadcastController::class, 'uploadTargets']
+        )->name('broadcast.upload-targets');
+        Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])->name('broadcast.reports');
+        Route::get('/broadcast/reports/{campaign}',
+            [BroadcastReportController::class, 'show']
+        )->name('broadcast.report.show');
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -229,43 +209,24 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
     |--------------------------------------------------------------------------
     */
     Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
-
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
-
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
         Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
         Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
         Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
         Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-        Route::post('/agents/{user}/unlock', [AgentController::class, 'unlock'])
-        ->name('agents.unlock');
-        /*
-        |--------------------------------------------------------------------------
-        | SYSTEM LOG DASHBOARD ✅ TAMBAHAN
-        |--------------------------------------------------------------------------
-        */
-        Route::get('/system-logs', [SystemLogController::class, 'index'])
-            ->name('system.logs');
+        Route::post('/agents/{user}/unlock', [AgentController::class, 'unlock'])->name('agents.unlock');
 
-        Route::get('/system-logs/export', [SystemLogController::class, 'export'])
-            ->name('system.logs.export');
-
-            Route::get('/system-logs/export', [SystemLogController::class, 'export'])
-    ->name('system.logs.export');
-
+        Route::get('/system-logs', [SystemLogController::class, 'index'])->name('system.logs');
+        Route::get('/system-logs/export', [SystemLogController::class, 'export'])->name('system.logs.export');
     });
 
     Route::middleware(['auth:sanctum'])
-    ->prefix('admin/ai')
-    ->group(function () {
-        Route::get('/report/csv', [AiReportController::class, 'exportCsv']);
-    });
+        ->prefix('admin/ai')
+        ->group(function () {
+            Route::get('/report/csv', [AiReportController::class, 'exportCsv']);
+        });
 
-    /*
-    |--------------------------------------------------------------------------
-    | USER SECURITY / HARDENING
-    |--------------------------------------------------------------------------
-    */
     Route::post('/admin/users/{user}/unlock',
         [\App\Http\Controllers\Admin\AdminUserController::class, 'unlock']
     )->name('admin.users.unlock');
@@ -273,14 +234,12 @@ Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(fun
 
 /*
 |--------------------------------------------------------------------------
-| 🔥 AGENTS AJAX ACTIONS (NO INERTIA)
+| AGENTS AJAX ACTIONS (NO INERTIA)
 |--------------------------------------------------------------------------
-| INI KUNCI FIX REALTIME
 */
 Route::middleware(['auth'])
     ->withoutMiddleware([\App\Http\Middleware\HandleInertiaRequests::class])
     ->group(function () {
-
         Route::post('/agents', [AgentController::class, 'store']);
         Route::put('/agents/{user}', [AgentController::class, 'update']);
         Route::delete('/agents/{user}', [AgentController::class, 'destroy']);

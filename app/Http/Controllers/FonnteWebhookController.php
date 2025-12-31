@@ -10,6 +10,7 @@ use App\Services\MenuEngine;
 use App\Services\FonnteService;
 use App\Services\AgentRouter;
 use App\Services\System\FonnteLogService;
+use App\Services\System\ChatLogService;
 
 class FonnteWebhookController extends Controller
 {
@@ -52,6 +53,28 @@ class FonnteWebhookController extends Controller
             ['name' => $name ?: $phone]
         );
 
+        /**
+         * 🚫 BLACKLIST ENFORCEMENT (INBOUND)
+         * - stop sebelum buat session / message
+         * - tetap log ke system
+         * - return 200 (aman dari retry WA)
+         */
+        if ($customer->is_blacklisted) {
+
+            ChatLogService::log(
+                event: 'blacklist_blocked_inbound',
+                meta: [
+                    'customer_id' => $customer->id,
+                    'phone'       => $phone,
+                    'text'        => $message,
+                ]
+            );
+
+            return response()->json([
+                'blocked' => true,
+            ]);
+        }
+
         // ===============================
         // CHAT SESSION
         // ===============================
@@ -64,6 +87,9 @@ class FonnteWebhookController extends Controller
                 'customer_id' => $customer->id,
                 'status'      => 'open',
             ]);
+
+            // stats
+            $customer->increment('total_chats');
         }
 
         // ===============================
@@ -80,6 +106,15 @@ class FonnteWebhookController extends Controller
         ]);
 
         $session->touch();
+
+        // ===============================
+        // UPDATE CONTACT STATS
+        // ===============================
+        $customer->increment('total_messages');
+        $customer->update([
+            'last_message_at'   => now(),
+            'last_contacted_at' => now(),
+        ]);
 
         // ===============================
         // LOG INBOUND MESSAGE
