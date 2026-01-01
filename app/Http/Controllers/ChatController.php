@@ -7,7 +7,9 @@ use App\Models\ChatMessage;
 use App\Models\Customer;
 use App\Services\MessageDeliveryService;
 use App\Services\SlaService;
-use App\Services\System\ChatLogService;
+use App\Services\SystemLogService;
+use App\Services\ContactIntelligenceService;
+use App\Services\ContactScoringService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -15,13 +17,13 @@ class ChatController extends Controller
 {
     /**
      * ===============================
-     * Sidebar list chats
+     * SIDEBAR LIST CHATS
      * ===============================
      */
     public function index()
     {
-        ChatLogService::log(
-            event: 'chat_access',
+        SystemLogService::record(
+            event: 'chat_list_access',
             meta: [
                 'path'   => request()->path(),
                 'method'=> request()->method(),
@@ -45,11 +47,7 @@ class ChatController extends Controller
                 'time'          => $last?->created_at?->format('H:i'),
                 'unread_count'  => 0,
                 'status'        => $session->status,
-
-                /**
-                 * 🔴🟡🟢 SLA BADGE
-                 */
-                'sla' => $this->getSlaBadge($session),
+                'sla'           => $this->getSlaBadge($session),
             ];
         });
     }
@@ -61,13 +59,8 @@ class ChatController extends Controller
      */
     protected function getSlaBadge(ChatSession $session): ?string
     {
-        if ($session->sla_status === 'breach') {
-            return 'breach';
-        }
-
-        if ($session->sla_status === 'meet') {
-            return 'meet';
-        }
+        if ($session->sla_status === 'breach') return 'breach';
+        if ($session->sla_status === 'meet')   return 'meet';
 
         if (
             $session->status === 'open' &&
@@ -86,14 +79,15 @@ class ChatController extends Controller
 
     /**
      * ===============================
-     * Get chat detail
+     * CHAT DETAIL
      * ===============================
      */
     public function show(ChatSession $session)
     {
-        ChatLogService::log(
+        SystemLogService::record(
             event: 'chat_open_room',
-            sessionId: $session->id,
+            entityType: 'chat_session',
+            entityId: $session->id,
             meta: [
                 'customer_phone' => $session->customer?->phone,
             ]
@@ -146,6 +140,17 @@ class ChatController extends Controller
          * 🚫 BLACKLIST ENFORCEMENT
          */
         if ($session->customer?->is_blacklisted) {
+
+            SystemLogService::record(
+                event: 'chat_blocked_blacklist',
+                entityType: 'customer',
+                entityId: $session->customer->id,
+                meta: [
+                    'session_id' => $session->id,
+                    'attempt'    => 'send_message',
+                ]
+            );
+
             return response()->json([
                 'success' => false,
                 'message' => 'Customer is blacklisted',
@@ -191,11 +196,14 @@ class ChatController extends Controller
             $session->customer->update([
                 'last_contacted_at' => now(),
             ]);
+            ContactIntelligenceService::evaluate($session->customer);
+            ContactScoringService::evaluate($session->customer);
         }
 
-        ChatLogService::log(
+        SystemLogService::record(
             event: $isMedia ? 'chat_send_media' : 'chat_send_text',
-            sessionId: $session->id,
+            entityType: 'chat_session',
+            entityId: $session->id,
             meta: [
                 'media_type' => $mediaType,
                 'filename'   => $request->file('media')?->getClientOriginalName(),
@@ -238,6 +246,16 @@ class ChatController extends Controller
          * 🚫 BLACKLIST ENFORCEMENT
          */
         if ($customer->is_blacklisted) {
+
+            SystemLogService::record(
+                event: 'chat_outbound_blocked_blacklist',
+                entityType: 'customer',
+                entityId: $customer->id,
+                meta: [
+                    'phone' => $phone,
+                ]
+            );
+
             return response()->json([
                 'success' => false,
                 'message' => 'Customer is blacklisted',
@@ -251,12 +269,14 @@ class ChatController extends Controller
         ]);
 
         /**
-         * 📊 CONTACT STATS UPDATE
+         * 📊 CONTACT STATS
          */
         $customer->increment('total_chats');
         $customer->update([
             'last_contacted_at' => now(),
         ]);
+        ContactIntelligenceService::evaluate($customer);
+        ContactScoringService::evaluate($customer);
 
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
@@ -270,9 +290,10 @@ class ChatController extends Controller
             'is_bot'          => false,
         ]);
 
-        ChatLogService::log(
+        SystemLogService::record(
             event: 'chat_outbound_start',
-            sessionId: $session->id,
+            entityType: 'chat_session',
+            entityId: $session->id,
             meta: ['phone' => $phone]
         );
 
@@ -291,7 +312,7 @@ class ChatController extends Controller
 
     /**
      * ===============================
-     * Close chat
+     * CLOSE CHAT
      * ===============================
      */
     public function close(ChatSession $session)
@@ -301,19 +322,22 @@ class ChatController extends Controller
             'closed_at' => now(),
         ]);
 
-        /**
-         * 🔔 SLA — RESOLUTION
-         */
         SlaService::recordResolution($session);
 
-        ChatLogService::log(
-            event: 'chat_close',
-            sessionId: $session->id
+        SystemLogService::record(
+            event: 'chat_closed',
+            entityType: 'chat_session',
+            entityId: $session->id
         );
 
         return response()->json(['success' => true]);
     }
 
+    /**
+     * ===============================
+     * NORMALIZE PHONE
+     * ===============================
+     */
     protected function normalizePhone(string $phone): string
     {
         $clean = preg_replace('/[^0-9+]/', '', $phone);

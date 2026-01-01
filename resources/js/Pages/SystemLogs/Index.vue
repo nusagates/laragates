@@ -48,6 +48,7 @@ watch([source, q], () => {
   <select v-model="source" class="filter-select">
     <option value="">All Sources</option>
     <option value="system">System</option>
+    <option value="contact">Contact</option>
     <option value="iam">IAM</option>
     <option value="ticket">Ticket</option>
     <option value="sla">SLA</option>

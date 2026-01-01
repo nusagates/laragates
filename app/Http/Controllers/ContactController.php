@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Services\ContactTagService;
-use App\Services\System\ChatLogService;
+use App\Services\SystemLogService;
 
 class ContactController extends Controller
 {
@@ -56,6 +57,18 @@ class ContactController extends Controller
 
         /**
          * ===============================
+         * SNAPSHOT OLD VALUES (AUDIT)
+         * ===============================
+         */
+        $oldValues = [
+            'is_vip'         => $customer->is_vip,
+            'is_blacklisted' => $customer->is_blacklisted,
+            'notes'          => $customer->notes,
+            'tags'           => $customer->tags,
+        ];
+
+        /**
+         * ===============================
          * UPDATE BASIC FIELDS
          * ===============================
          */
@@ -70,8 +83,8 @@ class ContactController extends Controller
          * TAG HANDLING
          * ===============================
          */
-        if (isset($data['tags'])) {
-            // reset tags dulu
+        if (array_key_exists('tags', $data)) {
+            // reset dulu
             $customer->update(['tags' => []]);
 
             foreach ($data['tags'] as $tag) {
@@ -92,16 +105,47 @@ class ContactController extends Controller
 
         /**
          * ===============================
-         * SYSTEM LOG
+         * SYSTEM LOG — CONTACT UPDATED
          * ===============================
          */
-        ChatLogService::log(
+        SystemLogService::record(
             event: 'contact_updated',
+            entityType: 'customer',
+            entityId: $customer->id,
+            oldValues: $oldValues,
+            newValues: [
+                'is_vip'         => $customer->is_vip,
+                'is_blacklisted' => $customer->is_blacklisted,
+                'notes'          => $customer->notes,
+                'tags'           => $customer->tags,
+            ],
             meta: [
-                'customer_id' => $customer->id,
-                'changes'     => $data,
+                'source' => 'CONTACT',
             ]
         );
+
+        /**
+         * ===============================
+         * SYSTEM LOG — BLACKLIST CHANGE
+         * ===============================
+         */
+        if (
+            array_key_exists('is_blacklisted', $data) &&
+            $oldValues['is_blacklisted'] !== $customer->is_blacklisted
+        ) {
+            SystemLogService::record(
+                event: $customer->is_blacklisted
+                    ? 'contact_blacklisted'
+                    : 'contact_unblacklisted',
+                entityType: 'customer',
+                entityId: $customer->id,
+                oldValues: ['is_blacklisted' => $oldValues['is_blacklisted']],
+                newValues: ['is_blacklisted' => $customer->is_blacklisted],
+                meta: [
+                    'source' => 'SECURITY',
+                ]
+            );
+        }
 
         return response()->json([
             'success' => true,

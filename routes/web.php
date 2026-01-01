@@ -80,6 +80,13 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
     ->name('contacts.ui');
 
+    Route::middleware(['auth'])
+    ->get('/contacts/{customer}/timeline', [
+        \App\Http\Controllers\ContactTimelineController::class,
+        'index'
+    ])
+    ->name('contacts.timeline');
+
 
     Route::prefix('contacts')->group(function () {
         Route::get('/', [ContactController::class, 'index'])->name('contacts.index');
@@ -219,6 +226,8 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
 
         Route::get('/system-logs', [SystemLogController::class, 'index'])->name('system.logs');
         Route::get('/system-logs/export', [SystemLogController::class, 'export'])->name('system.logs.export');
+        Route::get('/system-logs/sources', [SystemLogController::class, 'sources']);
+
     });
 
     Route::middleware(['auth:sanctum'])

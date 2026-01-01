@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
+use App\Services\SystemLogService;
 
 class SlaService
 {
@@ -14,10 +15,12 @@ class SlaService
      */
     public static function recordFirstResponse(ChatSession $session): void
     {
+        // Anti spam / double record
         if ($session->first_response_at !== null) {
-            return; // anti spam
+            return;
         }
 
+        // Ambil pesan agent pertama
         $firstAgentMessage = ChatMessage::query()
             ->where('chat_session_id', $session->id)
             ->where('is_outgoing', true)
@@ -33,11 +36,22 @@ class SlaService
 
         $status = $seconds <= $threshold ? 'meet' : 'breach';
 
+        /**
+         * ===============================
+         * UPDATE SESSION (WAJIB)
+         * ===============================
+         */
         $session->update([
             'first_response_at'      => $firstAgentMessage->created_at,
             'first_response_seconds' => $seconds,
+            'sla_status'             => $status, // ✅ FIX PENTING
         ]);
 
+        /**
+         * ===============================
+         * SYSTEM LOG
+         * ===============================
+         */
         SystemLogService::record(
             event: $status === 'meet'
                 ? 'sla_first_response_meet'
@@ -69,8 +83,9 @@ class SlaService
             return;
         }
 
-        if ($session->sla_status !== null) {
-            return; // anti spam
+        // Anti spam
+        if ($session->resolution_seconds !== null) {
+            return;
         }
 
         $resolutionSeconds = $session->created_at->diffInSeconds($session->closed_at);
@@ -85,11 +100,21 @@ class SlaService
                 ? 'meet'
                 : 'breach';
 
+        /**
+         * ===============================
+         * UPDATE SESSION
+         * ===============================
+         */
         $session->update([
             'resolution_seconds' => $resolutionSeconds,
             'sla_status'         => $status,
         ]);
 
+        /**
+         * ===============================
+         * SYSTEM LOG
+         * ===============================
+         */
         SystemLogService::record(
             event: $status === 'meet'
                 ? 'sla_resolution_meet'

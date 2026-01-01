@@ -11,6 +11,10 @@ use App\Services\FonnteService;
 use App\Services\AgentRouter;
 use App\Services\System\FonnteLogService;
 use App\Services\System\ChatLogService;
+use App\Services\ContactIntelligenceService;
+use App\Services\ContactScoringService;
+
+
 
 class FonnteWebhookController extends Controller
 {
@@ -92,6 +96,8 @@ class FonnteWebhookController extends Controller
             $customer->increment('total_chats');
         }
 
+        ContactIntelligenceService::evaluate($customer);
+
         // ===============================
         // SIMPAN PESAN MASUK
         // ===============================
@@ -115,6 +121,7 @@ class FonnteWebhookController extends Controller
             'last_message_at'   => now(),
             'last_contacted_at' => now(),
         ]);
+        ContactScoringService::evaluate($customer);
 
         // ===============================
         // LOG INBOUND MESSAGE

@@ -5,13 +5,11 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import ContactDetail from './ContactDetail.vue'
 import axios from 'axios'
 
-/* ================= STATE ================= */
 const contacts = ref([])
 const query = ref('')
 const activeContactId = ref(null)
 const loading = ref(false)
 
-/* ================= FETCH ================= */
 async function loadContacts() {
   loading.value = true
   try {
@@ -24,10 +22,8 @@ async function loadContacts() {
 
 onMounted(loadContacts)
 
-/* ================= FILTER ================= */
 const filteredContacts = computed(() => {
   if (!query.value) return contacts.value
-
   const q = query.value.toLowerCase()
   return contacts.value.filter(c =>
     (c.name ?? '').toLowerCase().includes(q) ||
@@ -35,7 +31,6 @@ const filteredContacts = computed(() => {
   )
 })
 
-/* ================= ACTION ================= */
 function selectContact(contact) {
   activeContactId.value = contact.id
 }
@@ -49,15 +44,12 @@ function selectContact(contact) {
 
     <div class="contacts-layout">
 
-      <!-- ================= LEFT : LIST ================= -->
+      <!-- LEFT -->
       <aside class="contacts-sidebar">
         <div class="sidebar-inner">
 
           <div class="search-box">
-            <input
-              v-model="query"
-              placeholder="Search contact..."
-            />
+            <input v-model="query" placeholder="Search contact..." />
           </div>
 
           <div class="contact-list">
@@ -65,7 +57,11 @@ function selectContact(contact) {
               v-for="c in filteredContacts"
               :key="c.id"
               class="contact-item"
-              :class="{ active: c.id === activeContactId }"
+              :class="{
+                active: c.id === activeContactId,
+                frequent: c.tags?.includes('frequent'),
+                inactive: c.tags?.includes('inactive')
+              }"
               @click="selectContact(c)"
             >
               <div class="avatar">
@@ -75,13 +71,28 @@ function selectContact(contact) {
               <div class="meta">
                 <div class="name">
                   {{ c.name || c.phone }}
+
+                  <!-- EXISTING -->
                   <span v-if="c.is_vip" class="badge vip">VIP</span>
                   <span v-if="c.is_blacklisted" class="badge blacklist">BL</span>
+
+                  <!-- STEP 5 : INTELLIGENCE -->
+                  <span
+                    v-if="c.tags?.includes('frequent')"
+                    class="badge frequent"
+                  >
+                    HOT
+                  </span>
+
+                  <span
+                    v-if="c.tags?.includes('inactive')"
+                    class="badge inactive"
+                  >
+                    INACTIVE
+                  </span>
                 </div>
 
-                <div class="phone">
-                  {{ c.phone }}
-                </div>
+                <div class="phone">{{ c.phone }}</div>
               </div>
             </div>
 
@@ -93,7 +104,7 @@ function selectContact(contact) {
         </div>
       </aside>
 
-      <!-- ================= RIGHT : DETAIL ================= -->
+      <!-- RIGHT -->
       <section class="contacts-detail">
         <ContactDetail :contact-id="activeContactId" />
       </section>
@@ -114,16 +125,14 @@ function selectContact(contact) {
 .contacts-sidebar {
   width: 320px;
   min-width: 320px;
-  display: flex;
 }
 
 .sidebar-inner {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100%;
   background: radial-gradient(circle at top, #0f172a, #020617);
   border-radius: 14px;
-  overflow: hidden;
 }
 
 /* ================= SEARCH ================= */
@@ -164,6 +173,16 @@ function selectContact(contact) {
   border-left: 3px solid #6366f1;
 }
 
+/* STEP 5 : INTELLIGENCE VISUAL */
+.contact-item.frequent {
+  box-shadow: inset 4px 0 #22c55e;
+}
+
+.contact-item.inactive {
+  box-shadow: inset 4px 0 #ef4444;
+  opacity: .85;
+}
+
 /* ================= AVATAR ================= */
 .avatar {
   width: 36px;
@@ -173,7 +192,7 @@ function selectContact(contact) {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #6366f1, #3b82f6);
-  color: #fff;
+  color: white;
   font-weight: 600;
 }
 
@@ -188,6 +207,7 @@ function selectContact(contact) {
   font-weight: 600;
   color: #f8fafc;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -208,12 +228,22 @@ function selectContact(contact) {
 .vip {
   background: rgba(59,130,246,.15);
   color: #60a5fa;
-  border: 1px solid rgba(59,130,246,.35);
 }
 
 .blacklist {
   background: rgba(239,68,68,.15);
   color: #f87171;
+}
+
+.frequent {
+  background: rgba(34,197,94,.15);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,.35);
+}
+
+.inactive {
+  background: rgba(239,68,68,.15);
+  color: #ef4444;
   border: 1px solid rgba(239,68,68,.35);
 }
 
@@ -222,13 +252,12 @@ function selectContact(contact) {
   flex: 1;
   background: radial-gradient(circle at top, #0f172a, #020617);
   border-radius: 14px;
-  overflow: hidden;
 }
 
 /* ================= EMPTY ================= */
 .empty {
   text-align: center;
-  opacity: .6;
   padding: 20px;
+  opacity: .6;
 }
 </style>

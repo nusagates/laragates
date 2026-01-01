@@ -3,9 +3,15 @@
 namespace App\Services;
 
 use App\Models\SystemLog;
+use Illuminate\Support\Facades\Auth;
 
 class SystemLogService
 {
+    /**
+     * ==================================================
+     * MAIN LOGGER (COMPLIANCE & AUDIT SAFE)
+     * ==================================================
+     */
     public static function record(
         string $event,
         ?string $entityType = null,
@@ -16,36 +22,60 @@ class SystemLogService
     ): void {
         try {
 
-            // Disable noisy route access
+            /**
+             * ===============================
+             * SKIP NOISY LOGS
+             * ===============================
+             */
             if ($event === 'route_access') {
                 return;
             }
 
             /**
-             * SOURCE
+             * ===============================
+             * SOURCE CLASSIFICATION
+             * ===============================
              */
             $source = strtoupper(
                 $meta['source']
-                ?? (str_starts_with($event, 'sla_') ? 'SLA' : 'SYSTEM')
+                ?? match (true) {
+                    str_starts_with($event, 'sla_')        => 'SLA',
+                    str_starts_with($event, 'contact_')    => 'CONTACT',
+                    str_starts_with($event, 'chat_')       => 'CHAT',
+                    str_starts_with($event, 'security_')   => 'SECURITY',
+                    default                                => 'SYSTEM',
+                }
             );
 
             /**
-             * LEVEL
+             * ===============================
+             * LEVEL CLASSIFICATION
+             * ===============================
              */
-            $level = 'info';
-            if (str_contains($event, 'breach')) {
-                $level = 'critical';
-            } elseif (str_contains($event, 'warning')) {
-                $level = 'warning';
-            }
+            $level = match (true) {
+                str_contains($event, 'breach')     => 'critical',
+                str_contains($event, 'blacklist')  => 'warning',
+                str_contains($event, 'failed')     => 'warning',
+                str_contains($event, 'denied')     => 'warning',
+                default                             => 'info',
+            };
 
             /**
-             * DESCRIPTION (for UI)
+             * ===============================
+             * DESCRIPTION (UI FRIENDLY)
+             * ===============================
              */
-            $description = $meta['sla_type']
+            $description =
+                $meta['description']
+                ?? $meta['sla_type']
                 ?? $entityType
                 ?? null;
 
+            /**
+             * ===============================
+             * CREATE LOG
+             * ===============================
+             */
             SystemLog::create([
                 'source'       => $source,
                 'event'        => $event,
@@ -53,8 +83,8 @@ class SystemLogService
                 'description'  => $description,
                 'entity_type'  => $entityType,
                 'entity_id'    => $entityId,
-                'user_id'      => auth()->id(),
-                'user_role'    => auth()->user()->role ?? null,
+                'user_id'      => Auth::id(),
+                'user_role'    => Auth::user()->role ?? null,
                 'old_values'   => $oldValues,
                 'new_values'   => $newValues,
                 'meta'         => $meta,
@@ -63,7 +93,59 @@ class SystemLogService
             ]);
 
         } catch (\Throwable $e) {
-            // logging must never break business flow
+            /**
+             * ===============================
+             * FAIL SILENTLY (MANDATORY)
+             * ===============================
+             * Logging must NEVER break business flow
+             */
         }
     }
+
+    /**
+     * ==================================================
+     * SHORTCUT HELPERS (OPTIONAL)
+     * ==================================================
+     */
+
+    public static function info(
+        string $event,
+        ?string $entityType = null,
+        ?int $entityId = null,
+        array $meta = []
+    ): void {
+        self::record($event, $entityType, $entityId, null, null, $meta);
+    }
+
+    public static function warning(
+        string $event,
+        ?string $entityType = null,
+        ?int $entityId = null,
+        array $meta = []
+    ): void {
+        self::record($event, $entityType, $entityId, null, null, array_merge($meta, [
+            'forced_level' => 'warning',
+        ]));
+    }
+
+    public static function critical(
+        string $event,
+        ?string $entityType = null,
+        ?int $entityId = null,
+        array $meta = []
+    ): void {
+        self::record($event, $entityType, $entityId, null, null, array_merge($meta, [
+            'forced_level' => 'critical',
+        ]));
+    }
+
+    public function sources()
+{
+    return \App\Models\SystemLog::query()
+        ->select('source')
+        ->distinct()
+        ->orderBy('source')
+        ->pluck('source');
+}
+
 }
