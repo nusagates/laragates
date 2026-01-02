@@ -15,8 +15,10 @@ use Maatwebsite\Excel\Facades\Excel;
 class BroadcastController extends Controller
 {
     /**
+     * ===============================
      * MAIN PAGE (Broadcast Create)
      * AUDIT: access
+     * ===============================
      */
     public function index()
     {
@@ -53,7 +55,7 @@ class BroadcastController extends Controller
                 ],
                 'risk' => [
                     'level' => 'low',
-                ]
+                ],
             ]
         );
 
@@ -64,8 +66,10 @@ class BroadcastController extends Controller
     }
 
     /**
+     * ===============================
      * CREATE CAMPAIGN (DRAFT)
      * AUDIT: data creation
+     * ===============================
      */
     public function store(Request $request)
     {
@@ -118,7 +122,7 @@ class BroadcastController extends Controller
                     ],
                     'risk' => [
                         'level' => 'low',
-                    ]
+                    ],
                 ]
             );
 
@@ -130,8 +134,10 @@ class BroadcastController extends Controller
     }
 
     /**
+     * ===============================
      * UPLOAD TARGETS (CSV / XLSX)
      * AUDIT: data import + anomaly detection
+     * ===============================
      */
     public function uploadTargets(Request $request, BroadcastCampaign $campaign)
     {
@@ -200,7 +206,6 @@ class BroadcastController extends Controller
             $campaign->save();
         }
 
-        // Compliance rule
         $riskLevel = $count > 10000 ? 'high' : ($count > 3000 ? 'medium' : 'low');
 
         SystemLogService::record(
@@ -223,7 +228,7 @@ class BroadcastController extends Controller
                 'risk' => [
                     'level'  => $riskLevel,
                     'reason' => $riskLevel !== 'low' ? 'Large target upload' : null,
-                ]
+                ],
             ]
         );
 
@@ -235,8 +240,10 @@ class BroadcastController extends Controller
     }
 
     /**
+     * ===============================
      * REPORT PAGE
      * AUDIT: access
+     * ===============================
      */
     public function report(Request $request)
     {
@@ -267,7 +274,7 @@ class BroadcastController extends Controller
                 'filters' => $request->only('search', 'status'),
                 'risk' => [
                     'level' => 'low',
-                ]
+                ],
             ]
         );
 

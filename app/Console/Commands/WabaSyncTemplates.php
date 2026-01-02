@@ -19,7 +19,7 @@ class WabaSyncTemplates extends Command
 
         if (!$businessId) {
             $this->error('WABA business_id not provided.');
-            return 1;
+            return Command::FAILURE;
         }
 
         $this->info("Fetching templates from WABA business_id={$businessId} ...");
@@ -29,7 +29,6 @@ class WabaSyncTemplates extends Command
 
             DB::transaction(function () use ($templates, $waba) {
                 foreach ($templates as $t) {
-
                     $payload = $waba->normalizeTemplatePayload($t);
 
                     WhatsappTemplate::updateOrCreate(
@@ -40,11 +39,11 @@ class WabaSyncTemplates extends Command
             });
 
             $this->info('Sync completed successfully.');
-            return 0;
+            return Command::SUCCESS;
 
         } catch (Throwable $e) {
             $this->error('Sync failed: ' . $e->getMessage());
-            return 1;
+            return Command::FAILURE;
         }
     }
 }

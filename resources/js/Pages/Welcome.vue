@@ -1,6 +1,5 @@
 <script setup>
 import { Head } from '@inertiajs/vue3'
-import PublicLayout from '@/Layouts/PublicLayout.vue'
 </script>
 
 <template>
@@ -8,13 +7,31 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
 
   <PublicLayout>
 
+    <!-- ================= TOP ACTION (LOGIN / REGISTER ONLY) ================= -->
+    <div class="top-action">
+      <v-container class="d-flex justify-space-between align-center">
+        <div class="logo">WABA</div>
+
+        <div class="actions">
+          <v-btn variant="text" href="/login">
+            Sign In
+          </v-btn>
+          <v-btn color="primary" href="/register">
+            Register
+          </v-btn>
+        </div>
+      </v-container>
+    </div>
+
     <!-- ================= HERO ================= -->
     <section class="hero">
       <v-container>
         <v-row align="center">
           <!-- LEFT -->
           <v-col cols="12" md="6">
-            <span class="eyebrow primary fade-up">WhatsApp Customer Service Platform</span>
+            <span class="eyebrow primary fade-up">
+              WhatsApp Customer Service Platform
+            </span>
 
             <h1 class="hero-title fade-up delay-1">
               Customer Service WhatsApp<br />
@@ -30,20 +47,19 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
             <ul class="hero-points fade-up delay-3">
               <li>✔ Multi-agent tanpa konflik</li>
               <li>✔ Workflow & ticketing profesional</li>
-              <li>✔ AI-assisted routing & reply</li>
+              <li>✔ Audit log & SLA terukur</li>
             </ul>
 
             <div class="hero-cta fade-up delay-4">
               <v-btn size="large" color="primary" href="/register">
-                Mulai Gratis
+                Register
               </v-btn>
-              <v-btn size="large" variant="outlined" href="/pricing">
-                Lihat Harga
+              <v-btn size="large" variant="outlined" href="/login">
+                Sign In
               </v-btn>
             </div>
 
             <small class="hero-note fade-up delay-5">
-              Gratis tanpa kartu kredit • Upgrade kapan saja
             </small>
           </v-col>
 
@@ -69,7 +85,7 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
     <section class="trust">
       <v-container class="text-center">
         <p class="trust-text fade-up">
-          Dipercaya oleh tim customer service yang ingin bekerja lebih
+          Digunakan oleh tim customer service yang ingin bekerja lebih
           <strong>rapi</strong>, <strong>cepat</strong>, dan <strong>terukur</strong>.
         </p>
       </v-container>
@@ -79,13 +95,12 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
     <section class="section-soft">
       <v-container>
         <div class="section-head center">
-          <span class="eyebrow fade-up">Masalah</span>
+          <span class="eyebrow fade-up">Masalah Umum</span>
           <h2 class="section-title fade-up delay-1">
-            Customer Service WhatsApp Tanpa Sistem = Masalah
+            WhatsApp Tanpa Sistem Akan Menjadi Beban Operasional
           </h2>
           <p class="section-subtitle fade-up delay-2">
-            WhatsApp efektif untuk komunikasi, tapi tanpa sistem
-            akan menjadi bottleneck operasional.
+            Tanpa manajemen yang tepat, WhatsApp justru memperlambat tim customer service.
           </p>
         </div>
 
@@ -97,17 +112,17 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
           </v-col>
           <v-col cols="12" md="3">
             <div class="card-hover fade-up delay-2">
-              Agent menjawab chat yang sama
+              Tidak jelas agent penanggung jawab
             </div>
           </v-col>
           <v-col cols="12" md="3">
             <div class="card-hover fade-up delay-3">
-              Tidak ada ownership & SLA
+              Tidak ada SLA & audit trail
             </div>
           </v-col>
           <v-col cols="12" md="3">
             <div class="card-hover fade-up delay-4">
-              Tidak ada data & evaluasi
+              Sulit evaluasi performa tim
             </div>
           </v-col>
         </v-row>
@@ -120,7 +135,7 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
         <div class="section-head center">
           <span class="eyebrow primary fade-up">Solusi</span>
           <h2 class="section-title fade-up delay-1">
-            WABA Mengubah WhatsApp Menjadi Sistem Operasional
+            WABA Menjadikan WhatsApp Sebagai Sistem Kerja
           </h2>
         </div>
 
@@ -128,87 +143,24 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
           <v-col cols="12" md="4">
             <div class="feature-card fade-up delay-1">
               <h4>Multi-Agent Terpusat</h4>
-              <p>Satu nomor WhatsApp dilayani banyak agent tanpa konflik.</p>
+              <p>Satu nomor WhatsApp dilayani banyak agent secara aman.</p>
             </div>
           </v-col>
 
           <v-col cols="12" md="4">
             <div class="feature-card fade-up delay-2">
-              <h4>Workflow & Ticketing</h4>
-              <p>Setiap chat tercatat, terstruktur, dan mudah ditindaklanjuti.</p>
+              <h4>Ticketing & SLA</h4>
+              <p>Setiap chat tercatat, terukur, dan dapat diaudit.</p>
             </div>
           </v-col>
 
           <v-col cols="12" md="4">
             <div class="feature-card fade-up delay-3">
-              <h4>Monitoring & Analytics</h4>
-              <p>Keputusan berbasis data real-time, bukan asumsi.</p>
+              <h4>AI Assistance</h4>
+              <p>AI membantu routing, ringkasan, dan efisiensi agent.</p>
             </div>
           </v-col>
         </v-row>
-      </v-container>
-    </section>
-
-    <!-- ================= AI SECTION ================= -->
-    <section class="section-soft">
-      <v-container>
-        <div class="section-head center">
-          <span class="eyebrow primary fade-up">AI Assistance</span>
-          <h2 class="section-title fade-up delay-1">
-            AI yang Membantu Agent, Bukan Menggantikan
-          </h2>
-          <p class="section-subtitle fade-up delay-2">
-            WABA AI bekerja di belakang layar untuk mempercepat respon,
-            merapikan workflow, dan memberikan insight.
-          </p>
-        </div>
-
-        <v-row class="mt-14">
-          <v-col cols="12" md="4">
-            <div class="ai-card fade-up delay-1">
-              <h4>Smart Chat Routing</h4>
-              <p>
-                AI membaca konteks chat dan
-                mengarahkan ke agent paling relevan.
-              </p>
-            </div>
-          </v-col>
-
-          <v-col cols="12" md="4">
-            <div class="ai-card fade-up delay-2">
-              <h4>AI Reply Suggestion</h4>
-              <p>
-                Rekomendasi balasan untuk agent,
-                tetap bisa diedit sebelum dikirim.
-              </p>
-            </div>
-          </v-col>
-
-          <v-col cols="12" md="4">
-            <div class="ai-card fade-up delay-3">
-              <h4>AI Summary & Insight</h4>
-              <p>
-                Ringkasan otomatis dan insight
-                untuk laporan & training tim.
-              </p>
-            </div>
-          </v-col>
-        </v-row>
-      </v-container>
-    </section>
-
-    <!-- ================= CTA ================= -->
-    <section class="cta-premium">
-      <v-container class="text-center">
-        <h2 class="fade-up">Bangun Customer Service yang Siap Tumbuh</h2>
-        <p class="fade-up delay-1">
-          Mulai dari gratis, upgrade kapan saja,
-          dan scale tanpa batas bersama WABA.
-        </p>
-
-        <v-btn size="large" color="primary" href="/register" class="fade-up delay-2">
-          Buat Akun Gratis
-        </v-btn>
       </v-container>
     </section>
 
@@ -237,6 +189,20 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
   }
 }
 
+/* ================= TOP ACTION ================= */
+.top-action {
+  padding: 24px 0;
+}
+.logo {
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: .02em;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
 /* ================= GLOBAL ================= */
 .eyebrow {
   font-size: 12px;
@@ -251,7 +217,7 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
 
 /* HERO */
 .hero {
-  padding: 140px 0;
+  padding: 120px 0;
 }
 .hero-title {
   font-size: 46px;
@@ -326,8 +292,7 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
 
 /* CARDS */
 .card-hover,
-.feature-card,
-.ai-card {
+.feature-card {
   background: white;
   padding: 32px;
   border-radius: 20px;
@@ -335,8 +300,7 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
   transition: all .25s ease;
 }
 .card-hover:hover,
-.feature-card:hover,
-.ai-card:hover {
+.feature-card:hover {
   transform: translateY(-6px);
   box-shadow: 0 30px 60px rgba(0,0,0,.12);
 }
@@ -347,12 +311,5 @@ import PublicLayout from '@/Layouts/PublicLayout.vue'
 }
 .trust-text {
   color: #64748b;
-}
-
-/* CTA */
-.cta-premium {
-  padding: 140px 0;
-  background: linear-gradient(135deg, #2563eb, #1e40af);
-  color: white;
 }
 </style>
