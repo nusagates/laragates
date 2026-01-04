@@ -14,6 +14,10 @@ const timeline = ref([])
 const loading = ref(false)
 const loadingTimeline = ref(false)
 
+/* ===== SUMMARY (INLINE STATUS BAR) ===== */
+const summary = ref(null)
+const loadingSummary = ref(false)
+
 const newTag = ref('')
 const showBlacklistConfirm = ref(false)
 
@@ -47,10 +51,29 @@ async function loadTimeline() {
   }
 }
 
-watch(() => props.contactId, async () => {
-  await loadContact()
-  await loadTimeline()
-}, { immediate: true })
+/* ================= LOAD SUMMARY ================= */
+async function loadSummary() {
+  if (!props.contactId) return
+  loadingSummary.value = true
+  try {
+    const res = await axios.get(`/customers/${props.contactId}/summary`)
+    summary.value = res.data
+  } catch {
+    summary.value = null
+  } finally {
+    loadingSummary.value = false
+  }
+}
+
+watch(
+  () => props.contactId,
+  async () => {
+    await loadContact()
+    await loadTimeline()
+    await loadSummary()
+  },
+  { immediate: true }
+)
 
 /* ================= SAVE ================= */
 async function saveContact() {
@@ -125,22 +148,15 @@ function formatTime(t) {
     <div v-else-if="contact" class="detail-wrapper">
 
       <!-- STATUS BANNER -->
-<div
-  v-if="contact.is_blacklisted"
-  class="status-banner danger"
->
-  🚫 <b>Blacklist Contact</b>
-  <span>Agent tidak dapat mengirim pesan ke nomor ini</span>
-</div>
+      <div v-if="contact.is_blacklisted" class="status-banner danger">
+        🚫 <b>Blacklist Contact</b>
+        <span>Agent tidak dapat mengirim pesan ke nomor ini</span>
+      </div>
 
-<div
-  v-else-if="contact.is_vip"
-  class="status-banner vip"
->
-  ⭐ <b>VIP Customer</b>
-  <span>Prioritaskan respon dan layanan</span>
-</div>
-
+      <div v-else-if="contact.is_vip" class="status-banner vip">
+        ⭐ <b>VIP Customer</b>
+        <span> | Prioritaskan respon dan layanan</span>
+      </div>
 
       <!-- HEADER -->
       <div class="header">
@@ -153,13 +169,48 @@ function formatTime(t) {
         </div>
       </div>
 
+      <!-- ===== INLINE SUMMARY STATUS BAR ===== -->
+      <div
+        v-if="summary && !loadingSummary"
+        class="contact-status-bar"
+      >
+        <span class="status-pill" :class="summary.status">
+  <span class="dot-indicator"></span>
+  {{ summary.status.toUpperCase() }}
+</span>
+
+
+        <span class="dot">•</span>
+
+        <span class="activity">
+          {{ summary.last_activity?.text ?? 'No recent activity' }}
+        </span>
+
+        <span class="dot">•</span>
+
+        <span class="messages">
+          {{ summary.counters.messages_today }} msg today
+        </span>
+
+        <template v-if="summary.flags.length">
+          <span class="dot">•</span>
+          <span class="flags">
+            {{ summary.flags.join(', ') }}
+          </span>
+        </template>
+      </div>
+
+      <div v-else-if="loadingSummary" class="contact-status-bar muted">
+        Loading contact status...
+      </div>
+
       <!-- STATS -->
       <div class="stats">
-        <div><b>{{ contact.total_chats }}</b><span>Chats</span></div>
-        <div><b>{{ contact.total_messages }}</b><span>Messages</span></div>
+        <div><b>{{ contact.total_chats }}</b><span> Chats |</span></div>
+        <div><b>{{ contact.total_messages }}</b><span> Messages |</span></div>
         <div>
           <b>{{ formatTime(contact.last_contacted_at) }}</b>
-          <span>Last Contact</span>
+          <span> Last Contact</span>
         </div>
       </div>
 
@@ -176,7 +227,8 @@ function formatTime(t) {
         </label>
 
         <label>
-          <input type="checkbox"
+          <input
+            type="checkbox"
             :checked="contact.is_blacklisted"
             @change="toggleBlacklist"
           />
@@ -283,6 +335,43 @@ function formatTime(t) {
 .phone {
   font-size: 13px;
   color: #94a3b8;
+}
+
+/* ===== INLINE STATUS BAR ===== */
+.contact-status-bar {
+  margin: 8px 0 14px;
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.contact-status-bar .status {
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+
+.contact-status-bar .status.active {
+  color: #4ade80;
+}
+
+.contact-status-bar .status.inactive {
+  color: #facc15;
+}
+
+.contact-status-bar .status.blocked {
+  color: #f87171;
+}
+
+.contact-status-bar .dot {
+  opacity: .5;
+}
+
+.contact-status-bar .activity,
+.contact-status-bar .messages,
+.contact-status-bar .flags {
+  color: #cbd5f5;
 }
 
 /* ===== BADGE ===== */
@@ -440,133 +529,56 @@ input, textarea {
   background: linear-gradient(135deg,#ef4444,#dc2626);
 }
 
-/* ================= GLOBAL TEXT FIX ================= */
+/* ===== GLOBAL TEXT ===== */
 .contact-detail,
 .contact-detail * {
   color: #e5e7eb;
 }
-
-/* ================= HEADINGS ================= */
-.contact-detail h2,
-.contact-detail h4 {
-  color: #f8fafc;
-}
-
-/* ================= TOGGLES ================= */
-.toggles {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 18px;
-}
-
-.toggles label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  color: #e5e7eb;
-}
-
-/* ================= CUSTOM CHECKBOX ================= */
-.toggles input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1.5px solid rgba(255,255,255,.35);
-  background: transparent;
-  position: relative;
-  cursor: pointer;
-}
-
-.toggles input[type="checkbox"]:checked {
-  background: linear-gradient(135deg,#6366f1,#3b82f6);
-  border-color: #6366f1;
-}
-
-.toggles input[type="checkbox"]:checked::after {
-  content: "✓";
-  position: absolute;
-  top: -2px;
-  left: 3px;
-  font-size: 12px;
-  color: white;
-}
-
-.toggles input[type="checkbox"]:focus-visible {
-  outline: 2px solid rgba(99,102,241,.6);
-  outline-offset: 2px;
-}
-
-/* ================= INPUT / TEXTAREA ================= */
-input::placeholder,
-textarea::placeholder {
-  color: #64748b;
-}
-
-/* ================= STATS ================= */
-.stats b {
-  color: #f8fafc;
-}
-
-/* ================= TIMELINE TEXT ================= */
-.timeline-item .event {
-  color: #e5e7eb;
-}
-
-.timeline-item .meta {
-  color: #94a3b8;
-}
-
-/* ================= EMPTY / MUTED ================= */
 .empty,
 .muted {
   color: #94a3b8;
 }
 
-/* ================= ALERT ================= */
-.alert {
-  color: #fca5a5;
-}
-
-/* ================= STATUS BANNER ================= */
-.status-banner {
-  padding: 12px 14px;
-  border-radius: 12px;
-  margin-bottom: 14px;
-  display: flex;
-  gap: 8px;
+.status-pill {
+  display: inline-flex;
   align-items: center;
-  font-size: 13px;
-  line-height: 1.4;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  background: rgba(255,255,255,.06);
 }
 
-.status-banner span {
-  opacity: .85;
+.status-pill .dot-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
-.status-banner.vip {
-  background: linear-gradient(
-    135deg,
-    rgba(59,130,246,.25),
-    rgba(59,130,246,.1)
-  );
-  border: 1px solid rgba(59,130,246,.35);
-  color: #bfdbfe;
+.status-pill.active {
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,.35);
+}
+.status-pill.active .dot-indicator {
+  background: #4ade80;
 }
 
-.status-banner.danger {
-  background: linear-gradient(
-    135deg,
-    rgba(239,68,68,.25),
-    rgba(239,68,68,.1)
-  );
-  border: 1px solid rgba(239,68,68,.35);
-  color: #fecaca;
+.status-pill.inactive {
+  color: #facc15;
+  border: 1px solid rgba(250,204,21,.35);
+}
+.status-pill.inactive .dot-indicator {
+  background: #facc15;
 }
 
+.status-pill.blocked {
+  color: #f87171;
+  border: 1px solid rgba(248,113,113,.35);
+}
+.status-pill.blocked .dot-indicator {
+  background: #f87171;
+}
 
 </style>

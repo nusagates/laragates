@@ -73,6 +73,7 @@ Route::post('/chat-messages/{message}/status', [
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+
     /*
     |--------------------------------------------------------------------------
     | WHATSAPP TEMPLATE

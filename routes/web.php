@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\AiReportController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Dashboard\CloseChatController;
+use App\Http\Controllers\Api\CustomerSummaryController;
 
 // Middleware
 use App\Http\Middleware\RoleMiddleware;
@@ -86,6 +87,13 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
         'index'
     ])
     ->name('contacts.timeline');
+
+    Route::middleware(['auth'])->group(function () {
+    Route::get('/customers/{id}/summary', [
+        CustomerSummaryController::class,
+        'show'
+    ]);
+});
 
 
     Route::prefix('contacts')->group(function () {
