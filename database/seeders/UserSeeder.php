@@ -10,6 +10,8 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(SuperAdminSeeder::class);
+        
         User::create([
             'name'     => 'Administrator',
             'email'    => 'admin@waba-biz.com',
