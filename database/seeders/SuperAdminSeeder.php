@@ -17,8 +17,10 @@ class SuperAdminSeeder extends Seeder
             'email' => 'superadmin@waba-biz.com',
             'password' => Hash::make('Admin123!'),
             'role' => 'superadmin',
-            'status' => 'offline',
+            'status' => 'online',
             'is_active' => true,
+            'email_verified_at' => now(),
+            'approved_at' => now(),
         ]);
     }
 }

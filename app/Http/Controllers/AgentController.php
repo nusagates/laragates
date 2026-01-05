@@ -78,6 +78,7 @@ class AgentController extends Controller
             'role'     => strtolower($data['role']),
             'password' => Hash::make($password),
             'status'   => 'pending',
+            'email_verified_at' => now(),
         ]);
 
         IamLogger::log('CREATE_USER', $user->id, null, $user->only('email','role'));

@@ -59,17 +59,28 @@ function openRoom(id) {
 /* ================= SEND MESSAGE ================= */
 async function sendMessage() {
   if (!activeRoomId.value) return
-  if (!tempMessage.value && !selectedFile.value) return
+  if (!tempMessage.value && !selectedFile.value) {
+    toast.warning('Pesan atau file harus diisi')
+    return
+  }
 
   const form = new FormData()
   form.append('message', tempMessage.value || '')
   if (selectedFile.value) form.append('media', selectedFile.value)
 
+  const messageText = tempMessage.value
   tempMessage.value = ''
   selectedFile.value = null
   if (filePicker.value) filePicker.value.value = ''
 
-  await axios.post(`/chat/sessions/${activeRoomId.value}/messages`, form)
+  try {
+    await axios.post(`/chat/sessions/${activeRoomId.value}/messages`, form)
+    toast.success('Pesan berhasil dikirim')
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Gagal mengirim pesan')
+    // Restore message on error
+    tempMessage.value = messageText
+  }
 }
 
 /* ================= NEW CHAT ================= */

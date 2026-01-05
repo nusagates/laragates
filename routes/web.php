@@ -41,6 +41,7 @@ use App\Models\Template;
 | PUBLIC ROUTES
 |--------------------------------------------------------------------------
 */
+
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin'       => Route::has('login'),
@@ -55,16 +56,16 @@ Route::get('/', function () {
 | PUBLIC PAGES
 |--------------------------------------------------------------------------
 */
-Route::get('/pricing', fn () => Inertia::render('Pricing'))->name('pricing');
-Route::get('/solutions', fn () => Inertia::render('Solutions'))->name('solutions');
-Route::get('/docs', fn () => Inertia::render('Docs'))->name('docs');
+Route::get('/pricing', fn() => Inertia::render('Pricing'))->name('pricing');
+Route::get('/solutions', fn() => Inertia::render('Solutions'))->name('solutions');
+Route::get('/docs', fn() => Inertia::render('Docs'))->name('docs');
 
 /*
 |--------------------------------------------------------------------------
 | EXTRA ROUTE
 |--------------------------------------------------------------------------
 */
-Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
+Route::get('/templates-list', fn() => Template::orderBy('id', 'desc')->get());
 
 /*
 |--------------------------------------------------------------------------
@@ -78,22 +79,22 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     | CONTACTS (CRM) ✅ ADDED
     |--------------------------------------------------------------------------
     */
-Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
-    ->name('contacts.ui');
+    Route::get('/contacts-ui', fn() => Inertia::render('Contacts/Index'))
+        ->name('contacts.ui');
 
     Route::middleware(['auth'])
-    ->get('/contacts/{customer}/timeline', [
-        \App\Http\Controllers\ContactTimelineController::class,
-        'index'
-    ])
-    ->name('contacts.timeline');
+        ->get('/contacts/{customer}/timeline', [
+            \App\Http\Controllers\ContactTimelineController::class,
+            'index'
+        ])
+        ->name('contacts.timeline');
 
     Route::middleware(['auth'])->group(function () {
-    Route::get('/customers/{id}/summary', [
-        CustomerSummaryController::class,
-        'show'
-    ]);
-});
+        Route::get('/customers/{id}/summary', [
+            CustomerSummaryController::class,
+            'show'
+        ]);
+    });
 
 
     Route::prefix('contacts')->group(function () {
@@ -113,7 +114,7 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
         )->name('dashboard.take-chat');
     });
 
-    Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
+    Route::get('/chat', fn() => Inertia::render('Chat/Index'))->name('chat');
 
     Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
     Route::post('/agent/offline', [AgentController::class, 'offline']);
@@ -123,7 +124,7 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
     | ANALYTICS
     |--------------------------------------------------------------------------
     */
-    Route::get('/analytics', fn () => Inertia::render('Analytics/AnalyticsDashboard'))
+    Route::get('/analytics', fn() => Inertia::render('Analytics/AnalyticsDashboard'))
         ->name('analytics');
 
     Route::prefix('analytics')->group(function () {
@@ -209,11 +210,13 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
     Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(function () {
         Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
         Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
-        Route::post('/broadcast/campaigns/{campaign}/upload-targets',
+        Route::post(
+            '/broadcast/campaigns/{campaign}/upload-targets',
             [BroadcastController::class, 'uploadTargets']
         )->name('broadcast.upload-targets');
         Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])->name('broadcast.reports');
-        Route::get('/broadcast/reports/{campaign}',
+        Route::get(
+            '/broadcast/reports/{campaign}',
             [BroadcastReportController::class, 'show']
         )->name('broadcast.report.show');
     });
@@ -241,7 +244,6 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
         Route::get('/system-logs', [SystemLogController::class, 'index'])->name('system.logs');
         Route::get('/system-logs/export', [SystemLogController::class, 'export'])->name('system.logs.export');
         Route::get('/system-logs/sources', [SystemLogController::class, 'sources']);
-
     });
 
     Route::middleware(['auth:sanctum'])
@@ -250,7 +252,8 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
             Route::get('/report/csv', [AiReportController::class, 'exportCsv']);
         });
 
-    Route::post('/admin/users/{user}/unlock',
+    Route::post(
+        '/admin/users/{user}/unlock',
         [\App\Http\Controllers\Admin\AdminUserController::class, 'unlock']
     )->name('admin.users.unlock');
 });

@@ -4,6 +4,16 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import axios from 'axios'
 
 /* =========================
+   PROPS
+========================= */
+const props = defineProps({
+  settings: {
+    type: Object,
+    default: () => ({})
+  }
+})
+
+/* =========================
    TAB STATE
 ========================= */
 const activeTab = ref('general')
@@ -12,19 +22,19 @@ const activeTab = ref('general')
    FORM STATES
 ========================= */
 const general = ref({
-  company_name: 'WABA',
-  timezone: 'Asia/Jakarta',
+  company_name: props.settings?.company_name || 'WABA',
+  timezone: props.settings?.timezone || 'Asia/Jakarta',
 })
 
 const whatsapp = ref({
   provider: 'Fonnte',
-  api_key: '',
-  webhook_url: '',
+  api_key: props.settings?.wa_api_key || '',
+  webhook_url: props.settings?.wa_webhook || '',
 })
 
 const preferences = ref({
-  auto_assign: true,
-  notify_sound: true,
+  auto_assign: props.settings?.auto_assign_ticket ?? true,
+  notify_sound: props.settings?.notif_sound ?? true,
 })
 
 /* =========================
