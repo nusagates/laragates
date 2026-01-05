@@ -12,14 +12,12 @@ return new class extends Migration
 
             if (! Schema::hasColumn('users', 'skills')) {
                 $table->json('skills')
-                    ->nullable()
-                    ->after('idle_timeout_minutes');
+                    ->nullable();
             }
 
             if (! Schema::hasColumn('users', 'is_active')) {
                 $table->boolean('is_active')
-                    ->default(true)
-                    ->after('skills');
+                    ->default(true);
             }
 
         });
