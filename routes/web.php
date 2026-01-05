@@ -225,6 +225,12 @@ Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
     */
     Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings/save', [SettingController::class, 'save'])->name('settings.save');
+        Route::post('/settings/general', [SettingController::class, 'saveGeneral'])->name('settings.general');
+        Route::post('/settings/waba', [SettingController::class, 'saveWaba'])->name('settings.waba');
+        Route::post('/settings/preferences', [SettingController::class, 'savePreferences'])->name('settings.preferences');
+        Route::post('/settings/test-webhook', [SettingController::class, 'testWebhook'])->name('settings.test-webhook');
+        
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
         Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
         Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
