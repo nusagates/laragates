@@ -28,6 +28,10 @@ class Customer extends Model
         'total_chats',
         'total_messages',
         'last_contacted_at',
+
+        // CRM enrichment
+        'source',
+        'priority',
     ];
 
     /**
@@ -40,6 +44,10 @@ class Customer extends Model
         'is_blacklisted'    => 'boolean',
         'is_vip'            => 'boolean',
         'last_contacted_at' => 'datetime',
+
+        // CRM enrichment
+        'source'            => 'string',
+        'priority'          => 'string',
     ];
 
     /**
@@ -54,7 +62,7 @@ class Customer extends Model
 
     /**
      * ==================================================
-     * HELPER METHODS (OPTIONAL BUT USEFUL)
+     * HELPER METHODS
      * ==================================================
      */
 
@@ -85,5 +93,16 @@ class Customer extends Model
         );
 
         $this->update(['tags' => $tags]);
+    }
+
+    // Optional helpers (nice to have)
+    public function isHighPriority(): bool
+    {
+        return $this->priority === 'high';
+    }
+
+    public function isLowPriority(): bool
+    {
+        return $this->priority === 'low';
     }
 }

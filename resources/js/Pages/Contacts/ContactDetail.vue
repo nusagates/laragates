@@ -21,6 +21,9 @@ const loadingSummary = ref(false)
 const newTag = ref('')
 const showBlacklistConfirm = ref(false)
 
+/* === SOURCE OPTIONS === */
+const sources = ['WhatsApp', 'Website', 'Instagram', 'Manual']
+
 /* ================= LOAD CONTACT ================= */
 async function loadContact() {
   if (!props.contactId) {
@@ -32,8 +35,12 @@ async function loadContact() {
   try {
     const res = await axios.get(`/contacts/${props.contactId}`)
     contact.value = res.data
+
+    if (!contact.value.priority) {
+      contact.value.priority = 'normal'
+    }
   } catch {
-    toast.error('Gagal memuat contact')
+    toast.error('Failed to load contact')
   } finally {
     loading.value = false
   }
@@ -83,11 +90,13 @@ async function saveContact() {
       is_vip: contact.value.is_vip,
       is_blacklisted: contact.value.is_blacklisted,
       tags: contact.value.tags,
+      source: contact.value.source,
+      priority: contact.value.priority,
     })
-    toast.success('Contact updated')
+    toast.success('Contact updated successfully')
     loadTimeline()
   } catch {
-    toast.error('Gagal update contact')
+    toast.error('Failed to update contact')
   }
 }
 
@@ -142,20 +151,20 @@ function formatTime(t) {
   <div class="contact-detail">
 
     <div v-if="!contact && !loading" class="empty">
-      Select a contact
+      Select a contact to view details
     </div>
 
     <div v-else-if="contact" class="detail-wrapper">
 
       <!-- STATUS BANNER -->
       <div v-if="contact.is_blacklisted" class="status-banner danger">
-        🚫 <b>Blacklist Contact</b>
-        <span>Agent tidak dapat mengirim pesan ke nomor ini</span>
+        🚫 <b>Blacklisted Contact</b>
+        <span> — Agents can no longer send messages to this number</span>
       </div>
 
       <div v-else-if="contact.is_vip" class="status-banner vip">
         ⭐ <b>VIP Customer</b>
-        <span> | Prioritaskan respon dan layanan</span>
+        <span> — Prioritized response and service</span>
       </div>
 
       <!-- HEADER -->
@@ -170,26 +179,20 @@ function formatTime(t) {
       </div>
 
       <!-- ===== INLINE SUMMARY STATUS BAR ===== -->
-      <div
-        v-if="summary && !loadingSummary"
-        class="contact-status-bar"
-      >
+      <div v-if="summary && !loadingSummary" class="contact-status-bar">
         <span class="status-pill" :class="summary.status">
-  <span class="dot-indicator"></span>
-  {{ summary.status.toUpperCase() }}
-</span>
-
-
-        <span class="dot">•</span>
-
-        <span class="activity">
-          {{ summary.last_activity?.text ?? 'No recent activity' }}
+          <span class="dot-indicator"></span>
+          {{ summary.status.toUpperCase() }}
         </span>
 
         <span class="dot">•</span>
+        <span class="activity">
+          {{ summary.last_activity?.text ?? 'No recent activity recorded' }}
+        </span>
 
+        <span class="dot">•</span>
         <span class="messages">
-          {{ summary.counters.messages_today }} msg today
+          Messages today: {{ summary.counters.messages_today }}
         </span>
 
         <template v-if="summary.flags.length">
@@ -206,8 +209,8 @@ function formatTime(t) {
 
       <!-- STATS -->
       <div class="stats">
-        <div><b>{{ contact.total_chats }}</b><span> Chats |</span></div>
-        <div><b>{{ contact.total_messages }}</b><span> Messages |</span></div>
+        <div><b>{{ contact.total_chats }}</b><span> Total Chats</span></div>
+        <div><b>{{ contact.total_messages }}</b><span> Total Messages</span></div>
         <div>
           <b>{{ formatTime(contact.last_contacted_at) }}</b>
           <span> Last Contact</span>
@@ -216,14 +219,14 @@ function formatTime(t) {
 
       <!-- BLACKLIST ALERT -->
       <div v-if="contact.is_blacklisted" class="alert">
-        ⚠️ Contact ini diblacklist. Agent tidak dapat mengirim pesan.
+        ⚠️ This contact is blacklisted. Messaging is disabled.
       </div>
 
       <!-- TOGGLES -->
       <div class="toggles">
         <label>
           <input type="checkbox" v-model="contact.is_vip" @change="saveContact" />
-          VIP Customer
+          Mark as VIP Customer
         </label>
 
         <label>
@@ -232,13 +235,37 @@ function formatTime(t) {
             :checked="contact.is_blacklisted"
             @change="toggleBlacklist"
           />
-          Blacklist Contact
+          Blacklist this contact
         </label>
+      </div>
+
+      <!-- CONTACT PROFILE -->
+      <div class="section">
+        <h4>Contact Profile</h4>
+
+        <div class="row">
+          <label>Contact Source</label>
+          <select v-model="contact.source" @change="saveContact">
+            <option value="">— Select source —</option>
+            <option v-for="s in sources" :key="s" :value="s">
+              {{ s }}
+            </option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Priority Level</label>
+          <select v-model="contact.priority" @change="saveContact">
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+          </select>
+        </div>
       </div>
 
       <!-- TAGS -->
       <div class="section">
-        <h4>Tags</h4>
+        <h4>Customer Tags</h4>
         <div class="tags">
           <span v-for="tag in contact.tags || []" :key="tag" class="tag">
             {{ tag }}
@@ -248,7 +275,7 @@ function formatTime(t) {
         <input
           v-model="newTag"
           @keyup.enter="addTag"
-          placeholder="Type tag and press Enter"
+          placeholder="Add tag and press Enter"
         />
       </div>
 
@@ -258,17 +285,19 @@ function formatTime(t) {
         <textarea
           v-model="contact.notes"
           rows="4"
-          placeholder="Notes internal untuk agent / supervisor..."
+          placeholder="Visible only to agents and supervisors"
           @blur="saveContact"
         />
       </div>
 
       <!-- TIMELINE -->
       <div class="section timeline-box">
-        <h4>Activity Timeline</h4>
+        <h4>Customer Activity Timeline</h4>
 
         <div v-if="loadingTimeline" class="muted">Loading activity...</div>
-        <div v-else-if="!timeline.length" class="muted">No activity</div>
+        <div v-else-if="!timeline.length" class="muted">
+          No recorded activity yet
+        </div>
 
         <div class="timeline-scroll">
           <div
@@ -298,8 +327,8 @@ function formatTime(t) {
     <!-- BLACKLIST CONFIRM -->
     <div v-if="showBlacklistConfirm" class="confirm">
       <div class="confirm-box">
-        <h4>Blacklist contact?</h4>
-        <p>Agent tidak akan bisa mengirim pesan.</p>
+        <h4>Blacklist this contact?</h4>
+        <p>Agents will no longer be able to send messages to this number.</p>
         <div class="confirm-actions">
           <button class="btn ghost" @click="showBlacklistConfirm=false">Cancel</button>
           <button class="btn danger" @click="confirmBlacklist">Blacklist</button>
@@ -309,6 +338,7 @@ function formatTime(t) {
 
   </div>
 </template>
+
 
 <style scoped>
 /* ===== CONTAINER ===== */
@@ -347,23 +377,6 @@ function formatTime(t) {
   align-items: center;
 }
 
-.contact-status-bar .status {
-  font-weight: 600;
-  letter-spacing: .3px;
-}
-
-.contact-status-bar .status.active {
-  color: #4ade80;
-}
-
-.contact-status-bar .status.inactive {
-  color: #facc15;
-}
-
-.contact-status-bar .status.blocked {
-  color: #f87171;
-}
-
 .contact-status-bar .dot {
   opacity: .5;
 }
@@ -390,9 +403,6 @@ function formatTime(t) {
   display: flex;
   gap: 16px;
   margin: 16px 0;
-}
-.stats div {
-  text-align: center;
 }
 .stats span {
   font-size: 11px;
@@ -467,28 +477,6 @@ input, textarea {
   border-left: 2px solid rgba(255,255,255,.08);
 }
 
-.timeline-item {
-  position: relative;
-  margin-bottom: 14px;
-}
-.timeline-item .dot {
-  position: absolute;
-  left: -9px;
-  top: 4px;
-  width: 8px;
-  height: 8px;
-  background: #6366f1;
-  border-radius: 50%;
-}
-.event {
-  font-weight: 600;
-  font-size: 13px;
-}
-.meta {
-  font-size: 11px;
-  color: #94a3b8;
-}
-
 /* ===== ACTION ===== */
 .actions {
   margin-top: 20px;
@@ -501,84 +489,144 @@ input, textarea {
   text-decoration: none;
 }
 
-/* ===== CONFIRM ===== */
-.confirm {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
+/* ============================= */
+/* === ADDITION: CONTACT INFO === */
+/* ============================= */
+.row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.confirm-box {
-  background: linear-gradient(180deg,#020617,#0f172a);
-  padding: 20px;
-  border-radius: 16px;
-  width: 360px;
-}
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-.btn.ghost {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,.2);
-}
-.btn.danger {
-  background: linear-gradient(135deg,#ef4444,#dc2626);
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
-/* ===== GLOBAL TEXT ===== */
-.contact-detail,
-.contact-detail * {
-  color: #e5e7eb;
+.row label {
+  font-size: 13px;
+  color: #cbd5f5;
 }
-.empty,
-.muted {
+
+.row select {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 10px;
+  color: #f8fafc;
+}
+
+.row select option {
+  color: #020617;
+}
+
+/* ===================================================
+   FIX DARK MODE TEXT (SELECT, OPTION, LABEL)
+   =================================================== */
+
+/* FORCE text color inside select */
+.contact-detail select {
+  color: #f8fafc !important;
+}
+
+/* FORCE selected value */
+.contact-detail select:focus,
+.contact-detail select:active {
+  color: #f8fafc !important;
+}
+
+/* FORCE option text (dropdown list) */
+.contact-detail select option {
+  color: #020617 !important; /* dropdown background putih */
+  background: #f8fafc;
+}
+
+/* FIX label that still black */
+.contact-detail label {
+  color: #e5e7eb !important;
+}
+
+/* FIX headings inside section */
+.contact-detail h4 {
+  color: #f8fafc !important;
+}
+
+/* FIX stray spans (stats, small text) */
+.contact-detail span,
+.contact-detail small,
+.contact-detail p {
+  color: #cbd5f5;
+}
+
+/* FIX placeholder text */
+.contact-detail input::placeholder,
+.contact-detail textarea::placeholder {
   color: #94a3b8;
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .3px;
-  background: rgba(255,255,255,.06);
+/* ===================================================
+   FINAL VISIBILITY FIX (TIMELINE + NOTES)
+   =================================================== */
+
+/* Internal Notes text */
+.contact-detail textarea {
+  color: #f8fafc !important;
+  background: rgba(255,255,255,0.08);
 }
 
-.status-pill .dot-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+/* Timeline container */
+.contact-detail .timeline-box {
+  background: rgba(255,255,255,0.02);
 }
 
-.status-pill.active {
-  color: #4ade80;
-  border: 1px solid rgba(74,222,128,.35);
-}
-.status-pill.active .dot-indicator {
-  background: #4ade80;
-}
-
-.status-pill.inactive {
-  color: #facc15;
-  border: 1px solid rgba(250,204,21,.35);
-}
-.status-pill.inactive .dot-indicator {
-  background: #facc15;
+/* Timeline scroll area */
+.contact-detail .timeline-scroll {
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.04),
+    rgba(255,255,255,0.01)
+  );
 }
 
-.status-pill.blocked {
-  color: #f87171;
-  border: 1px solid rgba(248,113,113,.35);
+/* Timeline event title */
+.contact-detail .timeline-item .event {
+  color: #f8fafc !important;
+  opacity: 1 !important;
 }
-.status-pill.blocked .dot-indicator {
-  background: #f87171;
+
+/* Timeline meta text (actor + time) */
+.contact-detail .timeline-item .meta {
+  color: #cbd5f5 !important;
+  opacity: 1 !important;
+}
+
+/* Timeline empty / muted text */
+.contact-detail .timeline-box .muted {
+  color: #94a3b8 !important;
+}
+
+/* Safety: kill opacity inheritance */
+.contact-detail .timeline-box * {
+  opacity: 1;
+}
+
+/* ===================================================
+   ABSOLUTE FINAL FIX — TEXT FILL OVERRIDE
+   =================================================== */
+
+/* Force ALL text rendering to light color */
+.contact-detail,
+.contact-detail * {
+  color: #e5e7eb !important;
+  -webkit-text-fill-color: #e5e7eb !important;
+}
+
+/* Exception: dropdown option list (must stay dark on light bg) */
+.contact-detail select option {
+  color: #020617 !important;
+  -webkit-text-fill-color: #020617 !important;
+  background: #f8fafc;
+}
+
+/* Checkbox accent (visual only) */
+.contact-detail input[type="checkbox"] {
+  accent-color: #60a5fa;
 }
 
 </style>

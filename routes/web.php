@@ -74,26 +74,48 @@ Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
     /*
-    |--------------------------------------------------------------------------
-    | CONTACTS (CRM) ✅ ADDED
-    |--------------------------------------------------------------------------
-    */
-Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
-    ->name('contacts.ui');
+|--------------------------------------------------------------------------
+| CONTACTS (CRM)
+|--------------------------------------------------------------------------
+*/
 
-    Route::middleware(['auth'])
-    ->get('/contacts/{customer}/timeline', [
+Route::middleware(['auth'])->group(function () {
+
+    // UI
+    Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
+        ->name('contacts.ui');
+
+    // List contacts
+    Route::get('/contacts', [
+        \App\Http\Controllers\ContactController::class,
+        'index'
+    ])->name('contacts.index');
+
+    // Contact detail
+    Route::get('/contacts/{customer}', [
+        \App\Http\Controllers\ContactController::class,
+        'show'
+    ])->name('contacts.show');
+
+    // Update contact (VIP, blacklist, notes, tags, source, priority)
+    Route::put('/contacts/{customer}', [
+        \App\Http\Controllers\ContactController::class,
+        'update'
+    ])->name('contacts.update');
+
+    // Contact timeline
+    Route::get('/contacts/{customer}/timeline', [
         \App\Http\Controllers\ContactTimelineController::class,
         'index'
-    ])
-    ->name('contacts.timeline');
+    ])->name('contacts.timeline');
 
-    Route::middleware(['auth'])->group(function () {
+    // Customer summary (status bar)
     Route::get('/customers/{id}/summary', [
-        CustomerSummaryController::class,
+        \App\Http\Controllers\CustomerSummaryController::class,
         'show'
-    ]);
+    ])->name('customers.summary');
 });
+
 
 
     Route::prefix('contacts')->group(function () {

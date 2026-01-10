@@ -53,6 +53,12 @@ class ContactController extends Controller
             'notes'          => 'nullable|string|max:2000',
             'tags'           => 'nullable|array',
             'tags.*'         => 'string|max:50',
+
+            // ===============================
+            // CRM ENRICHMENT (NEW)
+            // ===============================
+            'source'         => 'nullable|string|max:50',
+            'priority'       => 'nullable|in:low,normal,high',
         ]);
 
         /**
@@ -65,6 +71,10 @@ class ContactController extends Controller
             'is_blacklisted' => $customer->is_blacklisted,
             'notes'          => $customer->notes,
             'tags'           => $customer->tags,
+
+            // CRM enrichment
+            'source'         => $customer->source,
+            'priority'       => $customer->priority,
         ];
 
         /**
@@ -76,6 +86,10 @@ class ContactController extends Controller
             'is_vip'         => $data['is_vip']         ?? $customer->is_vip,
             'is_blacklisted' => $data['is_blacklisted'] ?? $customer->is_blacklisted,
             'notes'          => $data['notes']          ?? $customer->notes,
+
+            // CRM enrichment
+            'source'         => $data['source']         ?? $customer->source,
+            'priority'       => $data['priority']       ?? $customer->priority,
         ]);
 
         /**
@@ -118,6 +132,10 @@ class ContactController extends Controller
                 'is_blacklisted' => $customer->is_blacklisted,
                 'notes'          => $customer->notes,
                 'tags'           => $customer->tags,
+
+                // CRM enrichment
+                'source'         => $customer->source,
+                'priority'       => $customer->priority,
             ],
             meta: [
                 'source' => 'CONTACT',
@@ -143,6 +161,27 @@ class ContactController extends Controller
                 newValues: ['is_blacklisted' => $customer->is_blacklisted],
                 meta: [
                     'source' => 'SECURITY',
+                ]
+            );
+        }
+
+        /**
+         * ===============================
+         * SYSTEM LOG — PRIORITY CHANGE (NEW)
+         * ===============================
+         */
+        if (
+            array_key_exists('priority', $data) &&
+            $oldValues['priority'] !== $customer->priority
+        ) {
+            SystemLogService::record(
+                event: 'contact_priority_changed',
+                entityType: 'customer',
+                entityId: $customer->id,
+                oldValues: ['priority' => $oldValues['priority']],
+                newValues: ['priority' => $customer->priority],
+                meta: [
+                    'source' => 'CRM',
                 ]
             );
         }
