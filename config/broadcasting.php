@@ -37,11 +37,6 @@ return [
             'options' => [
                 'cluster' => env('PUSHER_APP_CLUSTER', 'ap1'),
                 'useTLS'  => true,
-
-                // 🌐 Agar kompatibel dengan Pusher Cloud dan Self-Host
-                'host'    => env('PUSHER_HOST'),
-                'port'    => env('PUSHER_PORT', 443),
-                'scheme'  => env('PUSHER_SCHEME', 'https'),
             ],
         ],
 

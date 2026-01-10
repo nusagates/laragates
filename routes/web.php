@@ -28,6 +28,7 @@ use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Dashboard\CloseChatController;
 use App\Http\Controllers\Api\CustomerSummaryController;
+use App\Http\Controllers\TestBroadcastController;
 
 // Middleware
 use App\Http\Middleware\RoleMiddleware;
@@ -115,6 +116,16 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     });
 
     Route::get('/chat', fn() => Inertia::render('Chat/Index'))->name('chat');
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEST BROADCAST (DEBUG ONLY)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/test/broadcast', [TestBroadcastController::class, 'index'])
+        ->name('test.broadcast.index');
+    Route::post('/test/broadcast/trigger', [TestBroadcastController::class, 'trigger'])
+        ->name('test.broadcast.trigger');
 
     Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
     Route::post('/agent/offline', [AgentController::class, 'offline']);

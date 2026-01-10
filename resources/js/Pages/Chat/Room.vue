@@ -9,6 +9,7 @@ const props = defineProps({
 const loading = ref(false)
 const messages = ref([])
 const panel = ref(null)
+let echoChannel = null
 
 /* ===============================
    LOAD MESSAGES
@@ -36,8 +37,40 @@ function scrollBottom() {
   }
 }
 
-watch(() => props.roomId, () => loadMessages())
-onMounted(() => loadMessages())
+/* ===============================
+   REALTIME LISTENER
+   =============================== */
+function setupRealtimeListener() {
+  // Leave previous channel
+  if (echoChannel) {
+    window.Echo.leave(`chat-session.${echoChannel}`)
+  }
+
+  if (!props.roomId) return
+
+  // Subscribe to new channel
+  echoChannel = props.roomId
+  window.Echo.private(`chat-session.${props.roomId}`)
+    .listen('.MessageSent', (e) => {
+      // Check if message already exists
+      const exists = messages.value.find(m => m.id === e.message.id)
+      if (!exists) {
+        messages.value.push(e.message)
+        nextTick(() => scrollBottom())
+      }
+    })
+}
+
+watch(() => props.roomId, () => {
+  loadMessages()
+  setupRealtimeListener()
+})
+
+onMounted(() => {
+  loadMessages()
+  setupRealtimeListener()
+  console.log('mounted')
+})
 
 /* ===============================
    BUBBLE CLASS

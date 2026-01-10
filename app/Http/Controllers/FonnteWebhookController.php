@@ -2,24 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\ChatSession;
-use App\Models\ChatMessage;
 use App\Models\Customer;
+use App\Models\ChatMessage;
+use App\Models\ChatSession;
 use App\Services\MenuEngine;
-use App\Services\FonnteService;
+use Illuminate\Http\Request;
 use App\Services\AgentRouter;
-use App\Services\System\FonnteLogService;
-use App\Services\System\ChatLogService;
-use App\Services\ContactIntelligenceService;
+use App\Services\FonnteService;
+use Illuminate\Support\Facades\Log;
 use App\Services\ContactScoringService;
-
-
+use App\Services\System\ChatLogService;
+use App\Services\System\FonnteLogService;
+use App\Services\ContactIntelligenceService;
 
 class FonnteWebhookController extends Controller
 {
     public function handle(Request $request)
     {
+        Log::info('[FONNTE WEBHOOK RECEIVED]:1', [
+            'payload' => $request->all()
+        ]);
         // ===============================
         // LOG RAW WEBHOOK
         // ===============================
