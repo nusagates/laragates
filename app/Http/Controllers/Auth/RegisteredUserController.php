@@ -9,18 +9,23 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    /**
+     * Show the registration view.
+     */
     public function create(): Response
     {
         return Inertia::render('Auth/Register');
     }
 
+    /**
+     * Handle an incoming registration request.
+     */
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
@@ -46,7 +51,13 @@ class RegisteredUserController extends Controller
             'is_active' => 1,
         ]);
 
+        /**
+         *  WAJIB untuk Email Verification Laravel Native
+         * Akan otomatis mengirim email verifikasi
+         * JIKA User implements MustVerifyEmail
+         */
         event(new Registered($user));
+
         Auth::login($user);
 
         return redirect(route('dashboard', absolute: false));

@@ -8,7 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -35,18 +35,25 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'last_seen'         => 'datetime',
         'approved_at'       => 'datetime',
+        'locked_until'      => 'datetime',
         'skills'            => 'array',
-        'email_verified_at' => 'datetime',
-        'last_seen'         => 'datetime',
-        'locked_until'      => 'datetime'
     ];
 
     /* =======================
      | Relationships
      ======================= */
+
     public function sessions()
     {
         return $this->hasMany(\App\Models\ChatSession::class, 'assigned_to');
+    }
+
+    public function chatSessions()
+    {
+        return $this->hasMany(
+            \App\Models\ChatSession::class,
+            'assigned_to'
+        );
     }
 
     public function tickets()
@@ -57,6 +64,7 @@ class User extends Authenticatable
     /* =======================
      | Scopes
      ======================= */
+
     public function scopeAgents($query)
     {
         return $query->whereIn('role', ['agent', 'admin', 'superadmin']);
@@ -90,17 +98,10 @@ class User extends Authenticatable
     /* =======================
      | Helper
      ======================= */
+
     public function isOnline(): bool
     {
-        return $this->last_seen && $this->last_seen->gt(now()->subMinutes(3));
+        return $this->last_seen
+            && $this->last_seen->gt(now()->subMinutes(3));
     }
-
-    public function chatSessions()
-{
-    return $this->hasMany(
-        \App\Models\ChatSession::class,
-        'assigned_to'
-    );
-}
-
 }

@@ -2,6 +2,8 @@
 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 // Controllers
@@ -49,6 +51,31 @@ Route::get('/', function () {
         'phpVersion'     => PHP_VERSION,
     ]);
 });
+
+/*
+|--------------------------------------------------------------------------
+| EMAIL VERIFICATION ROUTES
+|--------------------------------------------------------------------------
+*/
+
+// Halaman notice (kalau user belum verify)
+Route::get('/email/verify', function () {
+    return Inertia::render('Auth/VerifyEmail');
+})->middleware('auth')->name('verification.notice');
+
+// Link dari email verifikasi
+Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+    $request->fulfill(); // set email_verified_at
+
+    return redirect()->route('dashboard');
+})->middleware(['auth', 'signed'])->name('verification.verify');
+
+// Resend email verifikasi
+Route::post('/email/verification-notification', function (Request $request) {
+    $request->user()->sendEmailVerificationNotification();
+
+    return back()->with('status', 'verification-link-sent');
+})->middleware(['auth', 'throttle:6,1'])->name('verification.send');
 
 /*
 |--------------------------------------------------------------------------
