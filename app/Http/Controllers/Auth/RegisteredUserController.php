@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
+use Carbon\Carbon;
+
 
 class RegisteredUserController extends Controller
 {
@@ -50,6 +52,33 @@ class RegisteredUserController extends Controller
             'status'    => 'offline',
             'is_active' => 1,
         ]);
+
+        $user = User::create([
+    'name'      => $request->name,
+    'email'     => $request->email,
+    'password'  => Hash::make($request->password),
+    'role'      => $request->role,
+    'status'    => 'offline',
+    'is_active' => 1,
+
+    // 🔥 GRACE PERIOD 24 JAM
+    'email_verify_grace_until' => now()->addHours(24),
+]);
+
+$user = User::create([
+    'name'      => $request->name,
+    'email'     => $request->email,
+    'password'  => Hash::make($request->password),
+    'role'      => $request->role,
+    'status'    => 'offline',
+    'is_active' => 1,
+
+    // grace + resend tracking
+    'email_verify_grace_until'   => now()->addHours(24),
+    'last_verification_sent_at'  => now(),
+]);
+
+
 
         /**
          *  WAJIB untuk Email Verification Laravel Native

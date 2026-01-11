@@ -298,6 +298,17 @@ Route::middleware(['auth'])->group(function () {
     )->name('admin.users.unlock');
 });
 
+Route::post('/agents/{user}/resend-verification', [
+    \App\Http\Controllers\Admin\UserVerificationController::class,
+    'resend'
+])->name('agents.resend-verification');
+
+Route::post('/agents/{user}/force-verify', [
+    \App\Http\Controllers\Admin\UserVerificationController::class,
+    'forceVerify'
+])->name('agents.force-verify');
+
+
 /*
 |--------------------------------------------------------------------------
 | AGENTS AJAX ACTIONS (NO INERTIA)

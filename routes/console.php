@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Schedule;
 use App\Services\TicketSlaService;
 use App\Jobs\SendScheduledBroadcastJob;
 
+
 /*
 |--------------------------------------------------------------------------
 | DEFAULT COMMAND
@@ -42,3 +43,6 @@ Schedule::call(function () {
 ->everyMinute()
 ->name('ticket-sla-check')
 ->withoutOverlapping();
+
+Schedule::command('email:auto-resend-verification')
+    ->hourly();

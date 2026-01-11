@@ -92,4 +92,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
     $app->routeMiddleware([
     'quota' => CheckQuota::class,
+
+    withMiddleware(function ($middleware) {
+    $middleware->alias([
+        'verified_or_grace' => \App\Http\Middleware\EnsureVerifiedOrInGracePeriod::class,
+    ]);
+})
 ]);

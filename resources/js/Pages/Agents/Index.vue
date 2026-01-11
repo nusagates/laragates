@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Head, usePage } from '@inertiajs/vue3'
+import { Head, usePage, router } from '@inertiajs/vue3'
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import axios from 'axios'
 
@@ -51,6 +51,34 @@ function isLocked(agent) {
 }
 
 /* ======================
+   EMAIL VERIFICATION HELPERS (BARU)
+====================== */
+function verificationStatus(agent) {
+  if (agent.email_verified_at) {
+    return { label: 'Verified', color: 'green-darken-2' }
+  }
+
+  if (
+    agent.email_verify_grace_until &&
+    new Date(agent.email_verify_grace_until) > new Date()
+  ) {
+    return { label: 'In Grace', color: 'amber-darken-2' }
+  }
+
+  return { label: 'Unverified', color: 'red-darken-2' }
+}
+
+function resendVerification(agent) {
+  if (!confirm(`Resend verification email to ${agent.email}?`)) return
+  router.post(route('agents.resend-verification', agent.id))
+}
+
+function forceVerify(agent) {
+  if (!confirm(`Force verify email for ${agent.email}?`)) return
+  router.post(route('agents.force-verify', agent.id))
+}
+
+/* ======================
    FILTER
 ====================== */
 const filteredAgents = computed(() => {
@@ -72,7 +100,7 @@ const filteredAgents = computed(() => {
 })
 
 /* ======================
-   ACTIONS
+   ACTIONS (EXISTING)
 ====================== */
 function openCreate() {
   isEdit.value = false
@@ -190,25 +218,6 @@ async function deleteAgent(agent) {
           </v-btn>
         </div>
 
-        <!-- FILTER -->
-        <div class="d-flex justify-space-between mb-4">
-          <div class="d-flex gap-2">
-            <v-btn size="small" color="primary" :variant="tab==='all'?'flat':'text'" @click="tab='all'">All</v-btn>
-            <v-btn size="small" color="primary" :variant="tab==='online'?'flat':'text'" @click="tab='online'">Online</v-btn>
-            <v-btn size="small" color="primary" :variant="tab==='offline'?'flat':'text'" @click="tab='offline'">Offline</v-btn>
-            <v-btn size="small" color="primary" :variant="tab==='pending'?'flat':'text'" @click="tab='pending'">Pending</v-btn>
-          </div>
-
-          <v-text-field
-            v-model="search"
-            density="compact"
-            prepend-inner-icon="mdi-magnify"
-            placeholder="Search agent..."
-            hide-details
-            style="max-width:260px"
-          />
-        </div>
-
         <!-- TABLE -->
         <v-table>
           <thead>
@@ -216,6 +225,7 @@ async function deleteAgent(agent) {
               <th>Agent</th>
               <th>Role</th>
               <th>Status</th>
+              <th>Email Verification</th>
               <th class="text-center">Approval</th>
               <th class="text-center">Action</th>
             </tr>
@@ -252,6 +262,35 @@ async function deleteAgent(agent) {
                 </v-chip>
               </td>
 
+              <!-- EMAIL VERIFICATION -->
+              <td>
+                <v-chip size="small" :color="verificationStatus(agent).color">
+                  {{ verificationStatus(agent).label }}
+                </v-chip>
+
+                <div
+                  v-if="!agent.email_verified_at"
+                  class="d-flex gap-1 mt-1"
+                >
+                  <v-btn
+                    size="x-small"
+                    variant="text"
+                    color="primary"
+                    @click="resendVerification(agent)"
+                  >
+                    Resend
+                  </v-btn>
+                  <v-btn
+                    size="x-small"
+                    variant="text"
+                    color="green"
+                    @click="forceVerify(agent)"
+                  >
+                    Force
+                  </v-btn>
+                </div>
+              </td>
+
               <td class="text-center">
                 <v-btn
                   v-if="!agent.approved_at"
@@ -282,22 +321,9 @@ async function deleteAgent(agent) {
         </v-table>
       </v-card>
     </div>
-
-    <!-- DIALOG -->
-    <v-dialog v-model="dialog" max-width="480" content-class="agents-dialog-dark">
-      <v-card class="pa-4">
-        <h3 class="mb-4 text-white">{{ isEdit ? 'Edit Agent' : 'Add Agent' }}</h3>
-        <v-text-field v-model="form.name" label="Full Name" />
-        <v-text-field v-model="form.email" label="Email" />
-        <v-select v-model="form.role" :items="['Admin','Supervisor','Agent']" label="Role" />
-        <div class="d-flex justify-end mt-4 gap-2">
-          <v-btn variant="text" @click="dialog=false">Cancel</v-btn>
-          <v-btn color="primary" :loading="formLoading" @click="submitForm">Save</v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
   </AdminLayout>
 </template>
+
 
 <style scoped>
 .agents-dark { color:#e5e7eb; }

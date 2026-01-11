@@ -17,7 +17,6 @@ use App\Http\Controllers\ChatSimulationController;
 |--------------------------------------------------------------------------
 | Semua endpoint API aplikasi (WABA + CRM)
 | Quota hanya dipasang pada user-triggered action
-|
 */
 
 /*
@@ -40,8 +39,6 @@ Broadcast::routes();
 |--------------------------------------------------------------------------
 | WEBHOOK & SYSTEM ROUTES (NO AUTH, NO QUOTA)
 |--------------------------------------------------------------------------
-| Jangan dikasih quota karena bukan user action
-|
 */
 
 // 🔔 Webhook Fonnte
@@ -69,62 +66,69 @@ Route::post('/chat-messages/{message}/status', [
 | Semua di bawah ini:
 | - auth:sanctum
 | - boleh kena quota
-|
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+    /*
+    |--------------------------------------------------------------------------
+    | VERIFIED OR GRACE PERIOD USERS (ANTI ABUSE)
+    |--------------------------------------------------------------------------
+    | - verified ✅
+    | - belum verified tapi masih grace period ✅
+    | - grace habis → 403 ❌
+    */
+    Route::middleware('verified_or_grace')->group(function () {
+
+        /*
+        |-------------------------------
+        | WHATSAPP TEMPLATE
+        |-------------------------------
+        */
+        Route::post('/templates/{template}/sync', [
+            WhatsappTemplateController::class,
+            'sync'
+        ])->middleware('quota:automation,1');
+
+        /*
+        |-------------------------------
+        | WABA ACTION
+        |-------------------------------
+        */
+        Route::post('/waba/send-main-menu', [
+            WabaMenuController::class,
+            'sendMainMenu'
+        ])->middleware('quota:messages,1');
+
+        /*
+        |-------------------------------
+        | AI
+        |-------------------------------
+        */
+        Route::get('/ai/metrics', [
+            AiMetricsController::class,
+            'index'
+        ])->middleware('quota:ai_request,1');
+    });
 
     /*
     |--------------------------------------------------------------------------
-    | WHATSAPP TEMPLATE
+    | SAFE ROUTES (BOLEH UNTUK UNVERIFIED USER)
     |--------------------------------------------------------------------------
+    | Tidak berisiko spam / abuse
     */
 
-    // Sync template (automation quota)
-    Route::post('/templates/{template}/sync', [
-        WhatsappTemplateController::class,
-        'sync'
-    ])->middleware('quota:automation,1');
-
     /*
-    |--------------------------------------------------------------------------
-    | WABA ACTION
-    |--------------------------------------------------------------------------
-    */
-
-    // Send WABA main menu (message quota)
-    Route::post('/waba/send-main-menu', [
-        WabaMenuController::class,
-        'sendMainMenu'
-    ])->middleware('quota:messages,1');
-
-    /*
-    |--------------------------------------------------------------------------
+    |-------------------------------
     | CHAT SESSION CONTROL
-    |--------------------------------------------------------------------------
+    |-------------------------------
     */
-
-    // Agent take chat session
     Route::post('/chat-sessions/{session}/take', [
         ChatSessionController::class,
         'take'
     ])->middleware('quota:messages,1');
 
-    // Agent close chat session
     Route::post('/chat-sessions/{session}/close', [
         ChatSessionController::class,
         'close'
     ])->middleware('quota:messages,1');
-
-    /*
-    |--------------------------------------------------------------------------
-    | AI
-    |--------------------------------------------------------------------------
-    */
-
-    // AI metrics / AI usage
-    Route::get('/ai/metrics', [
-        AiMetricsController::class,
-        'index'
-    ])->middleware('quota:ai_request,1');
 });

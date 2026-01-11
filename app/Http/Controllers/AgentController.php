@@ -22,43 +22,53 @@ class AgentController extends Controller
     }
 
     public function index(Request $request)
-{
-    $this->ensureCanManageAgents();
+    {
+        $this->ensureCanManageAgents();
 
-    $agents = User::whereIn('role', ['agent','supervisor','admin'])
-        ->orderBy('name')
-        ->get()
-        ->map(function ($user) {
+        $agents = User::whereIn('role', ['agent','supervisor','admin'])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($user) {
 
-            $isOnline = $user->last_seen && $user->last_seen->diffInMinutes(now()) <= 5;
+                $isOnline = $user->last_seen
+                    && $user->last_seen->diffInMinutes(now()) <= 5;
 
-            return [
-                'id'          => $user->id,
-                'name'        => $user->name,
-                'email'       => $user->email,
-                'role'        => $user->role,
-                'status'      => $isOnline ? 'online' : 'offline',
-                'approved_at' => $user->approved_at,
-                'last_seen'   => $user->last_seen,
+                return [
+                    'id'          => $user->id,
+                    'name'        => $user->name,
+                    'email'       => $user->email,
+                    'role'        => $user->role,
+                    'status'      => $isOnline ? 'online' : 'offline',
+                    'approved_at' => $user->approved_at,
+                    'last_seen'   => $user->last_seen,
 
-                // 🔐 HARDENING FIELDS (INI YANG HILANG)
-                'locked_until'          => $user->locked_until,
-                'failed_login_attempts' => $user->failed_login_attempts,
-                'is_locked'             => $user->locked_until && $user->locked_until->isFuture(),
-            ];
-        });
+                    /* =========================
+                     | HARDENING (EXISTING)
+                     ========================= */
+                    'locked_until'          => $user->locked_until,
+                    'failed_login_attempts' => $user->failed_login_attempts,
+                    'is_locked'             => $user->locked_until
+                        && $user->locked_until->isFuture(),
 
-    return Inertia::render('Agents/Index', [
-        'agents' => $agents,
-        'counts' => [
-            'all'     => $agents->count(),
-            'online'  => $agents->where('status','online')->count(),
-            'offline' => $agents->where('status','offline')->count(),
-            'pending' => $agents->whereNull('approved_at')->count(),
-        ]
-    ]);
-}
+                    /* =========================
+                     | EMAIL VERIFICATION (BARU)
+                     ========================= */
+                    'email_verified_at'          => $user->email_verified_at,
+                    'email_verify_grace_until'  => $user->email_verify_grace_until,
+                    'verification_resend_count' => $user->verification_resend_count,
+                ];
+            });
 
+        return Inertia::render('Agents/Index', [
+            'agents' => $agents,
+            'counts' => [
+                'all'     => $agents->count(),
+                'online'  => $agents->where('status','online')->count(),
+                'offline' => $agents->where('status','offline')->count(),
+                'pending' => $agents->whereNull('approved_at')->count(),
+            ]
+        ]);
+    }
 
     public function store(Request $request)
     {
@@ -80,7 +90,12 @@ class AgentController extends Controller
             'status'   => 'pending',
         ]);
 
-        IamLogger::log('CREATE_USER', $user->id, null, $user->only('email','role'));
+        IamLogger::log(
+            'CREATE_USER',
+            $user->id,
+            null,
+            $user->only('email','role')
+        );
 
         return response()->json($user);
     }
@@ -103,9 +118,13 @@ class AgentController extends Controller
             'role'  => strtolower($data['role']),
         ]);
 
-        IamLogger::log('UPDATE_ROLE', $user->id, $before, $user->only(['name','email','role']));
+        IamLogger::log(
+            'UPDATE_ROLE',
+            $user->id,
+            $before,
+            $user->only(['name','email','role'])
+        );
 
-        // ✅ FIX REALTIME
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
@@ -127,9 +146,13 @@ class AgentController extends Controller
             'status'      => 'offline',
         ]);
 
-        IamLogger::log('APPROVE_USER', $user->id, $before, $user->only(['status','approved_at']));
+        IamLogger::log(
+            'APPROVE_USER',
+            $user->id,
+            $before,
+            $user->only(['status','approved_at'])
+        );
 
-        // ✅ FIX REALTIME
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
@@ -145,32 +168,39 @@ class AgentController extends Controller
         $this->ensureCanManageAgents();
 
         if (auth()->id() === $user->id) {
-            return response()->json(['message'=>'Cannot delete yourself'],422);
+            return response()->json([
+                'message' => 'Cannot delete yourself'
+            ], 422);
         }
 
         $before = $user->toArray();
         $user->delete();
 
-        IamLogger::log('DELETE_USER', $user->id, $before, null);
+        IamLogger::log(
+            'DELETE_USER',
+            $user->id,
+            $before,
+            null
+        );
 
         return response()->json(['success'=>true]);
     }
 
     public function unlock(User $user)
-{
-    AccountLockService::unlock($user);
+    {
+        AccountLockService::unlock($user);
 
-    SystemLogService::record(
-        'admin_unlock_account',
-        'user',
-        $user->id,
-        null,
-        null,
-        ['by_admin' => auth()->id()]
-    );
+        SystemLogService::record(
+            'admin_unlock_account',
+            'user',
+            $user->id,
+            null,
+            null,
+            ['by_admin' => auth()->id()]
+        );
 
-    return response()->json([
-        'message' => 'Account unlocked',
-    ]);
-}
+        return response()->json([
+            'message' => 'Account unlocked',
+        ]);
+    }
 }

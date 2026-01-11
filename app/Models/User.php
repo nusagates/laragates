@@ -104,4 +104,36 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->last_seen
             && $this->last_seen->gt(now()->subMinutes(3));
     }
+
+    public function isInEmailVerificationGracePeriod(): bool
+{
+    return
+        !$this->hasVerifiedEmail()
+        && $this->email_verify_grace_until
+        && now()->lessThan($this->email_verify_grace_until);
+}
+
+public function canAutoResendVerification(): bool
+{
+    if ($this->hasVerifiedEmail()) {
+        return false;
+    }
+
+    if (!$this->email_verify_grace_until || now()->greaterThan($this->email_verify_grace_until)) {
+        return false;
+    }
+
+    if ($this->verification_resend_count >= 2) {
+        return false;
+    }
+
+    if (!$this->last_verification_sent_at) {
+        return true;
+    }
+
+    // resend minimal tiap 6 jam
+    return $this->last_verification_sent_at->diffInHours(now()) >= 6;
+}
+
+
 }
