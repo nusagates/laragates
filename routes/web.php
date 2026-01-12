@@ -77,6 +77,8 @@ Route::post('/email/verification-notification', function (Request $request) {
     return back()->with('status', 'verification-link-sent');
 })->middleware(['auth', 'throttle:6,1'])->name('verification.send');
 
+
+
 /*
 |--------------------------------------------------------------------------
 | PUBLIC PAGES
@@ -99,6 +101,9 @@ Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
+    Route::middleware(['auth', 'active'])->group(function () {
+    // dashboard, agents, chat, dll
+});
 
     /*
 |--------------------------------------------------------------------------
@@ -322,6 +327,12 @@ Route::middleware(['auth'])
         Route::delete('/agents/{user}', [AgentController::class, 'destroy']);
         Route::post('/agents/{user}/approve', [AgentController::class, 'approve']);
     });
+
+    Route::post('/agents/{user}/activate', [
+    \App\Http\Controllers\AgentController::class,
+    'activate'
+])->name('agents.activate');
+
 
 /*
 |--------------------------------------------------------------------------

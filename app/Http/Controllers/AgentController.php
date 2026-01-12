@@ -203,4 +203,25 @@ class AgentController extends Controller
             'message' => 'Account unlocked',
         ]);
     }
+
+    public function activate(User $user)
+{
+    $this->ensureCanManageAgents();
+
+    $user->update([
+        'is_active' => true,
+    ]);
+
+    \App\Support\IamLogger::log(
+        'admin_unsuspend_user',
+        $user->id,
+        null,
+        ['by_admin' => auth()->id()]
+    );
+
+    return response()->json([
+        'message' => 'User activated',
+    ]);
+}
+
 }

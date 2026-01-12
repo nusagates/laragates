@@ -21,47 +21,46 @@ return Application::configure(basePath: dirname(__DIR__))
 
     /*
     |--------------------------------------------------------------------------
-    | MIDDLEWARE CONFIG
+    | MIDDLEWARE CONFIGURATION
     |--------------------------------------------------------------------------
     */
     ->withMiddleware(function (Middleware $middleware): void {
 
-        /**
-         * ==================================================
-         * GLOBAL WEB MIDDLEWARE STACK
-         * ==================================================
-         * Urutan penting:
-         * - Inertia dulu
-         * - Asset preload
-         * - Baru behavior log
-         */
+        /*
+        |--------------------------------------------------
+        | GLOBAL WEB MIDDLEWARE STACK
+        |--------------------------------------------------
+        */
         $middleware->web(append: [
 
-            // Inertia
+            // Inertia.js
             \App\Http\Middleware\HandleInertiaRequests::class,
 
             // Laravel default
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
 
-            /**
-             * ==================================================
-             * USER BEHAVIOR & SYSTEM LOGGING
-             * ==================================================
-             * Aman:
-             * - read-only
-             * - no side effect
-             * - failure silent
-             */
+            // User behavior & system logging (read-only)
             \App\Http\Middleware\LogUserBehavior::class,
         ]);
 
-        /**
-         * ==================================================
-         * MIDDLEWARE ALIAS
-         * ==================================================
-         */
+        /*
+        |--------------------------------------------------
+        | MIDDLEWARE ALIAS (SEMUA ALIAS HARUS DI SINI)
+        |--------------------------------------------------
+        */
         $middleware->alias([
+
+            // Role & access control
             'role' => \App\Http\Middleware\CheckRole::class,
+
+            // Quota limiter (API)
+            'quota' => CheckQuota::class,
+
+            // Email verification (verified OR grace period)
+            'verified_or_grace' => \App\Http\Middleware\EnsureVerifiedOrInGracePeriod::class,
+
+            // 🔒 Soft suspend (block inactive users)
+            'active' => \App\Http\Middleware\EnsureUserIsActive::class,
         ]);
     })
 
@@ -72,11 +71,11 @@ return Application::configure(basePath: dirname(__DIR__))
     */
     ->withSchedule(function ($schedule) {
 
-        // contoh existing scheduler
+        // Existing scheduler
         $schedule->command('waba:sync-templates')->hourly();
 
-        // (kalau ada SLA, scheduler lain masuk sini)
-        // $schedule->call(fn () => TicketSlaService::run())->everyMinute();
+        // 🔒 Auto suspend unverified users (grace expired)
+        $schedule->command('users:auto-suspend-unverified')->hourly();
     })
 
     /*
@@ -85,17 +84,7 @@ return Application::configure(basePath: dirname(__DIR__))
     |--------------------------------------------------------------------------
     */
     ->withExceptions(function (Exceptions $exceptions): void {
-        // default, biarin kosong
+        // default handler (biarkan kosong)
     })
 
     ->create();
-
-    $app->routeMiddleware([
-    'quota' => CheckQuota::class,
-
-    withMiddleware(function ($middleware) {
-    $middleware->alias([
-        'verified_or_grace' => \App\Http\Middleware\EnsureVerifiedOrInGracePeriod::class,
-    ]);
-})
-]);

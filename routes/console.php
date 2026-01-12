@@ -46,3 +46,6 @@ Schedule::call(function () {
 
 Schedule::command('email:auto-resend-verification')
     ->hourly();
+
+    Schedule::command('users:auto-suspend-unverified')
+    ->hourly();

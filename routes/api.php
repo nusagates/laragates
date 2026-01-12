@@ -131,4 +131,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ChatSessionController::class,
         'close'
     ])->middleware('quota:messages,1');
+
+    Route::middleware(['auth:sanctum', 'active'])->group(function () {
+    // seluruh API user action yang harus diblokir jika suspended
+});
 });
