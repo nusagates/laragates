@@ -3,8 +3,10 @@ import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head, usePage, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import { useToast } from 'vue-toastification'
 
 const page = usePage()
+const toast = useToast()
 
 /* ================= PROPS ================= */
 const templates = computed(() => page.props.templates || [])
@@ -14,7 +16,7 @@ const history   = computed(() => page.props.history || [])
 const form = ref({
   name: '',
   template_id: null,
-  audience_type: 'csv',
+  audience_type: 'upload',
   schedule_type: 'now',
   send_at: null,
   csv_file: null,
@@ -67,43 +69,52 @@ function highlightVars(text) {
 async function startBroadcast() {
   loading.value = true
   errors.value = {}
+  uploading.value = true
 
   try {
     const fd = new FormData()
-    Object.entries(form.value).forEach(([k, v]) => {
-      if (v !== null) fd.append(k, v)
-    })
+    fd.append('name', form.value.name)
+    fd.append('template_id', form.value.template_id)
+    fd.append('audience_type', form.value.audience_type)
+    fd.append('schedule_type', form.value.schedule_type)
 
-    const res = await axios.post(route('broadcast.store'), fd)
-    const id = res.data.id || res.data.campaign?.id
-
-    if (form.value.csv_file) {
-      await uploadTargets(id)
+    if (form.value.send_at) {
+      fd.append('send_at', form.value.send_at)
     }
 
-    await axios.post(route('broadcast.request-approval', { campaign: id }))
+    if (form.value.csv_file) {
+      fd.append('csv_file', form.value.csv_file)
+    }
+
+    const res = await axios.post(route('broadcast.store'), fd, {
+      onUploadProgress(e) {
+        if (e.lengthComputable) {
+          uploadProgress.value = Math.round((e.loaded * 100) / e.total)
+        }
+      }
+    })
+
+    const campaign = res.data.campaign
+    const targetCount = campaign?.total_targets || 0
+
+    toast.success(`Broadcast campaign "${form.value.name}" berhasil dibuat!${targetCount > 0 ? ` (${targetCount} targets)` : ''}`)
+
     router.visit(route('broadcast'))
 
   } catch (e) {
-    if (e.response?.status === 422) errors.value = e.response.data.errors
-    else alert('Gagal membuat broadcast')
+    console.error(e)
+    if (e.response?.status === 422) {
+      errors.value = e.response.data.errors
+      toast.error('Terdapat kesalahan pada form. Mohon periksa kembali.')
+    } else {
+      const errorMsg = e.response?.data?.message || 'Gagal membuat broadcast campaign'
+      toast.error(errorMsg)
+    }
   } finally {
     loading.value = false
+    uploading.value = false
+    uploadProgress.value = 0
   }
-}
-
-async function uploadTargets(id) {
-  uploading.value = true
-  const fd = new FormData()
-  fd.append('file', form.value.csv_file)
-
-  await axios.post(`/broadcast/campaigns/${id}/upload-targets`, fd, {
-    onUploadProgress(e) {
-      uploadProgress.value = Math.round((e.loaded * 100) / e.total)
-    }
-  })
-
-  uploading.value = false
 }
 </script>
 
@@ -153,7 +164,7 @@ async function uploadTargets(id) {
 
           <h4 class="section">Audience</h4>
           <v-radio-group v-model="form.audience_type" inline>
-            <v-radio label="Upload CSV" value="csv" />
+            <v-radio label="Upload CSV" value="upload" />
           </v-radio-group>
 
           <!-- CSV -->
@@ -166,13 +177,26 @@ async function uploadTargets(id) {
             <v-icon size="32">mdi-upload</v-icon>
             <p>Drag CSV atau klik</p>
 
-            <v-btn
-              size="small"
-              variant="tonal"
-              @click="$refs.csv.click()"
-            >
-              Choose File
-            </v-btn>
+            <div class="dropzone-actions">
+              <v-btn
+                size="small"
+                variant="tonal"
+                @click="$refs.csv.click()"
+              >
+                Choose File
+              </v-btn>
+
+              <v-btn
+                size="small"
+                variant="text"
+                color="primary"
+                prepend-icon="mdi-download"
+                :href="route('broadcast.download-sample-csv')"
+                download
+              >
+                Download Sample
+              </v-btn>
+            </div>
 
             <input
               ref="csv"
@@ -182,7 +206,7 @@ async function uploadTargets(id) {
               @change="onCsvChange"
             />
 
-            <small v-if="csvFileName">{{ csvFileName }}</small>
+            <small v-if="csvFileName" class="filename-display">{{ csvFileName }}</small>
           </div>
 
           <h4 class="section">Schedule</h4>
@@ -311,6 +335,17 @@ async function uploadTargets(id) {
 .dropzone:hover {
   border-color: var(--blue-strong);
   background: var(--blue-soft);
+}
+.dropzone-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.filename-display {
+  display: block;
+  margin-top: 12px;
+  color: var(--blue-strong);
 }
 
 /* preview */

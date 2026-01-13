@@ -1,41 +1,38 @@
 <?php
 
-use Illuminate\Foundation\Application;
-use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
-
-// Controllers
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\WabaWebhookController;
-use App\Http\Controllers\AgentController;
-use App\Http\Controllers\TicketController;
-use App\Http\Controllers\TemplateController;
-use App\Http\Controllers\SettingController;
-use App\Http\Controllers\BroadcastController;
-use App\Http\Controllers\BroadcastApprovalController;
-use App\Http\Controllers\BroadcastReportController;
-use App\Http\Controllers\AnalyticsController;
-use App\Http\Controllers\Api\Chat\ChatSessionController;
-use App\Http\Controllers\Api\Chat\ChatMessageController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\ContactController; // ✅ CONTACT CONTROLLER
-use App\Http\Controllers\WaMenuController;
-use App\Http\Controllers\SystemLogController;
-use App\Http\Controllers\AiSummaryController;
-use App\Http\Controllers\Admin\AiSettingController;
 use App\Http\Controllers\Admin\AiReportController;
+use App\Http\Controllers\Admin\AiSettingController;
+use App\Http\Controllers\AgentController;
+// Controllers
+use App\Http\Controllers\AiSummaryController;
+use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\Api\Chat\ChatMessageController;
+use App\Http\Controllers\Api\Chat\ChatSessionController;
+use App\Http\Controllers\Api\CustomerSummaryController;
+use App\Http\Controllers\BroadcastApprovalController;
+use App\Http\Controllers\BroadcastController;
+use App\Http\Controllers\BroadcastReportController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ContactController;
+use App\Http\Controllers\Dashboard\CloseChatController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\Dashboard\CloseChatController;
-use App\Http\Controllers\Api\CustomerSummaryController;
+use App\Http\Controllers\ProfileController; // ✅ CONTACT CONTROLLER
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\SystemLogController;
+use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TestBroadcastController;
-
-// Middleware
-use App\Http\Middleware\RoleMiddleware;
+use App\Http\Controllers\TicketController;
+use App\Http\Controllers\WabaWebhookController;
+use App\Http\Controllers\WaMenuController;
 use App\Http\Middleware\IdleTimeout;
-
-// Models
+use App\Http\Middleware\RoleMiddleware;
 use App\Models\Template;
+// Middleware
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Route;
+// Models
+use Inertia\Inertia;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,10 +42,10 @@ use App\Models\Template;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
-        'canLogin'       => Route::has('login'),
-        'canRegister'    => Route::has('register'),
+        'canLogin' => Route::has('login'),
+        'canRegister' => Route::has('register'),
         'laravelVersion' => Application::VERSION,
-        'phpVersion'     => PHP_VERSION,
+        'phpVersion' => PHP_VERSION,
     ]);
 });
 
@@ -57,16 +54,16 @@ Route::get('/', function () {
 | PUBLIC PAGES
 |--------------------------------------------------------------------------
 */
-Route::get('/pricing', fn() => Inertia::render('Pricing'))->name('pricing');
-Route::get('/solutions', fn() => Inertia::render('Solutions'))->name('solutions');
-Route::get('/docs', fn() => Inertia::render('Docs'))->name('docs');
+Route::get('/pricing', fn () => Inertia::render('Pricing'))->name('pricing');
+Route::get('/solutions', fn () => Inertia::render('Solutions'))->name('solutions');
+Route::get('/docs', fn () => Inertia::render('Docs'))->name('docs');
 
 /*
 |--------------------------------------------------------------------------
 | EXTRA ROUTE
 |--------------------------------------------------------------------------
 */
-Route::get('/templates-list', fn() => Template::orderBy('id', 'desc')->get());
+Route::get('/templates-list', fn () => Template::orderBy('id', 'desc')->get());
 
 /*
 |--------------------------------------------------------------------------
@@ -80,23 +77,22 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     | CONTACTS (CRM) ✅ ADDED
     |--------------------------------------------------------------------------
     */
-    Route::get('/contacts-ui', fn() => Inertia::render('Contacts/Index'))
+    Route::get('/contacts-ui', fn () => Inertia::render('Contacts/Index'))
         ->name('contacts.ui');
 
     Route::middleware(['auth'])
         ->get('/contacts/{customer}/timeline', [
             \App\Http\Controllers\ContactTimelineController::class,
-            'index'
+            'index',
         ])
         ->name('contacts.timeline');
 
     Route::middleware(['auth'])->group(function () {
         Route::get('/customers/{id}/summary', [
             CustomerSummaryController::class,
-            'show'
+            'show',
         ]);
     });
-
 
     Route::prefix('contacts')->group(function () {
         Route::get('/', [ContactController::class, 'index'])->name('contacts.index');
@@ -115,7 +111,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         )->name('dashboard.take-chat');
     });
 
-    Route::get('/chat', fn() => Inertia::render('Chat/Index'))->name('chat');
+    Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
 
     /*
     |--------------------------------------------------------------------------
@@ -135,7 +131,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     | ANALYTICS
     |--------------------------------------------------------------------------
     */
-    Route::get('/analytics', fn() => Inertia::render('Analytics/AnalyticsDashboard'))
+    Route::get('/analytics', fn () => Inertia::render('Analytics/AnalyticsDashboard'))
         ->name('analytics');
 
     Route::prefix('analytics')->group(function () {
@@ -218,13 +214,18 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     | BROADCAST
     |--------------------------------------------------------------------------
     */
-    Route::middleware([RoleMiddleware::class . ':superadmin,supervisor'])->group(function () {
+    Route::middleware([RoleMiddleware::class.':superadmin,supervisor'])->group(function () {
         Route::get('/broadcast', [BroadcastController::class, 'index'])->name('broadcast');
         Route::post('/broadcast/campaigns', [BroadcastController::class, 'store'])->name('broadcast.store');
         Route::post(
             '/broadcast/campaigns/{campaign}/upload-targets',
             [BroadcastController::class, 'uploadTargets']
         )->name('broadcast.upload-targets');
+        Route::post(
+            '/broadcast/campaigns/{campaign}/request-approval',
+            [BroadcastApprovalController::class, 'requestApproval']
+        )->name('broadcast.request-approval');
+        Route::get('/broadcast/download-sample-csv', [BroadcastController::class, 'downloadSampleCsv'])->name('broadcast.download-sample-csv');
         Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])->name('broadcast.reports');
         Route::get(
             '/broadcast/reports/{campaign}',
@@ -237,7 +238,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     | SUPERADMIN ONLY
     |--------------------------------------------------------------------------
     */
-    Route::middleware([RoleMiddleware::class . ':superadmin'])->group(function () {
+    Route::middleware([RoleMiddleware::class.':superadmin'])->group(function () {
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::post('/settings/save', [SettingController::class, 'save'])->name('settings.save');
         Route::post('/settings/general', [SettingController::class, 'saveGeneral'])->name('settings.general');
@@ -316,4 +317,4 @@ Route::middleware('auth')->group(function () {
 Route::get('/webhook/whatsapp', [WabaWebhookController::class, 'verify']);
 Route::post('/webhook/whatsapp', [WabaWebhookController::class, 'receive']);
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';
