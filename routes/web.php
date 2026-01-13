@@ -226,6 +226,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
             [BroadcastApprovalController::class, 'requestApproval']
         )->name('broadcast.request-approval');
         Route::get('/broadcast/download-sample-csv', [BroadcastController::class, 'downloadSampleCsv'])->name('broadcast.download-sample-csv');
+        Route::post('/broadcast/targets/{target}/retry', [BroadcastReportController::class, 'retryTarget'])->name('broadcast.target.retry');
         Route::get('/broadcast/reports', [BroadcastReportController::class, 'index'])->name('broadcast.reports');
         Route::get(
             '/broadcast/reports/{campaign}',

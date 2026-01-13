@@ -1,13 +1,23 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head, usePage, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import axios from 'axios'
+import { useToast } from 'vue-toastification'
 
-const props = usePage().props.value
-const campaign = ref(props.campaign)
-const targets = ref(props.targets)
-const filters = ref(props.filters || { q: '', status: '' })
+const toast = useToast()
+const page = usePage()
+const campaign = computed(() => page.props.campaign)
+const targets = computed(() => page.props.targets)
+const filters = ref(page.props.filters || { q: '', status: '' })
+const retrying = ref(false)
+
+const successRate = computed(() => {
+  const total = campaign.value.total_targets || 0
+  const sent = campaign.value.sent_count || 0
+  if (total === 0) return 0
+  return Math.round((sent / total) * 100)
+})
 
 function applyFilter() {
   router.get(
@@ -18,12 +28,23 @@ function applyFilter() {
 }
 
 async function retryTarget(targetId) {
+  if (retrying.value) return
+  
   try {
+    retrying.value = true
     await axios.post(`/broadcast/targets/${targetId}/retry`)
-    router.reload()
+    toast.success('Target queued for retry')
+    router.reload({ only: ['targets'] })
   } catch (e) {
-    alert('Retry failed')
+    const msg = e.response?.data?.message || 'Failed to retry target'
+    toast.error(msg)
+  } finally {
+    retrying.value = false
   }
+}
+
+function goBack() {
+  router.visit(route('broadcast.reports'))
 }
 </script>
 
@@ -31,28 +52,54 @@ async function retryTarget(targetId) {
   <Head :title="`Campaign - ${campaign.name}`" />
 
   <AdminLayout>
-    <template #title>Campaign Detail</template>
+    <template #title>
+      <div class="d-flex align-center" style="gap: 12px">
+        <v-btn
+          icon="mdi-arrow-left"
+          variant="text"
+          @click="goBack"
+        />
+        <span>Campaign Detail</span>
+      </div>
+    </template>
 
     <div class="report-dark">
 
       <!-- SUMMARY -->
       <div class="header-card mb-6">
-        <div>
+        <div class="summary-left">
           <h3>{{ campaign.name }}</h3>
-          <p>
-            Template: {{ campaign.template?.name || '-' }} •
-            Status: <strong>{{ campaign.status }}</strong>
+          <p class="template-info">
+            <v-icon size="small">mdi-message-text</v-icon>
+            {{ campaign.template?.name || '-' }}
           </p>
+          <v-chip
+            size="small"
+            :color="campaign.status === 'completed' ? 'green' : campaign.status === 'failed' ? 'red' : 'blue'"
+            class="mt-2"
+          >
+            {{ campaign.status }}
+          </v-chip>
         </div>
 
         <div class="stats">
-          <div>
-            <span>Sent</span>
-            <strong class="success">{{ campaign.sent_count }}</strong>
+          <div class="stat-box">
+            <span>Total Targets</span>
+            <strong>{{ campaign.total_targets || 0 }}</strong>
           </div>
-          <div>
+          <div class="stat-box">
+            <span>Sent</span>
+            <strong class="success">{{ campaign.sent_count || 0 }}</strong>
+          </div>
+          <div class="stat-box">
             <span>Failed</span>
-            <strong class="danger">{{ campaign.failed_count }}</strong>
+            <strong class="danger">{{ campaign.failed_count || 0 }}</strong>
+          </div>
+          <div class="stat-box">
+            <span>Success Rate</span>
+            <strong :class="successRate >= 80 ? 'success' : successRate >= 50 ? 'warning' : 'danger'">
+              {{ successRate }}%
+            </strong>
           </div>
         </div>
       </div>
@@ -61,30 +108,50 @@ async function retryTarget(targetId) {
       <v-card class="card pa-4">
         <div class="targets-header">
           <div>
-            <h4>Targets</h4>
-            <p class="muted">Per-target delivery log</p>
+            <h4>Delivery Targets</h4>
+            <p class="muted">{{ targets.total || 0 }} total records</p>
           </div>
 
           <div class="filters">
             <v-text-field
               v-model="filters.q"
               placeholder="Search phone / name / error"
+              prepend-inner-icon="mdi-magnify"
               density="compact"
               hide-details
+              class="filter-input"
               @keyup.enter="applyFilter"
             />
 
             <v-select
               v-model="filters.status"
-              :items="['pending','sent','failed']"
-              placeholder="Status"
+              :items="[
+                { title: 'Pending', value: 'pending' },
+                { title: 'Sent', value: 'sent' },
+                { title: 'Failed', value: 'failed' }
+              ]"
+              placeholder="All Status"
               clearable
               density="compact"
               hide-details
+              class="filter-select"
+              @update:modelValue="applyFilter"
             />
 
-            <v-btn color="primary" @click="applyFilter">
-              Filter
+            <v-btn 
+              color="primary" 
+              prepend-icon="mdi-filter"
+              @click="applyFilter"
+            >
+              Apply
+            </v-btn>
+            
+            <v-btn 
+              v-if="filters.q || filters.status"
+              variant="text"
+              @click="filters = { q: '', status: '' }; applyFilter()"
+            >
+              Clear
             </v-btn>
           </div>
         </div>
@@ -143,8 +210,10 @@ async function retryTarget(targetId) {
                   size="small"
                   variant="tonal"
                   color="orange"
+                  prepend-icon="mdi-refresh"
                   @click="retryTarget(t.id)"
-                  :disabled="t.status === 'sent'"
+                  :disabled="t.status === 'sent' || retrying"
+                  :loading="retrying"
                 >
                   Retry
                 </v-btn>
@@ -159,15 +228,19 @@ async function retryTarget(targetId) {
           </tbody>
         </v-table>
 
-        <div class="d-flex justify-end mt-4">
+        <div class="pagination-wrapper">
+          <div class="pagination-info">
+            Showing {{ targets.from || 0 }} to {{ targets.to || 0 }} of {{ targets.total || 0 }}
+          </div>
           <v-pagination
             v-model="targets.current_page"
             :length="targets.last_page"
+            :total-visible="7"
             @update:modelValue="p =>
               router.get(
                 route('broadcast.report.show', campaign.id),
-                { page: p },
-                { preserveState:true, preserveScroll:true }
+                { page: p, ...filters },
+                { preserveState:true, preserveScroll:false }
               )
             "
           />
@@ -203,33 +276,58 @@ async function retryTarget(targetId) {
 
 /* HEADER SUMMARY */
 .header-card {
-  background: linear-gradient(180deg, var(--bg-main), var(--bg-soft));
-  padding: 20px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 24px;
   border-radius: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
 }
 
-.header-card p {
+.summary-left h3 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.template-info {
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 /* STATS */
 .stats {
   display: flex;
-  gap: 20px;
+  gap: 24px;
 }
-.stats span {
+.stat-box {
+  text-align: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  min-width: 100px;
+  border: 1px solid var(--border-soft);
+}
+.stat-box span {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
 }
-.stats strong {
-  font-size: 20px;
+.stat-box strong {
+  font-size: 24px;
+  display: block;
 }
 .success { color: var(--success); }
-.danger  { color: var(--danger); }
+.danger { color: var(--danger); }
+.warning { color: #facc15; }
 
 /* CARD */
 .card {
@@ -243,17 +341,50 @@ async function retryTarget(targetId) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.targets-header h4 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 
 .muted {
   color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* FILTERS */
 .filters {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.filter-input {
+  min-width: 250px;
+}
+
+.filter-select {
+  min-width: 150px;
+}
+
+/* PAGINATION */
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.pagination-info {
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* TABLE DARK FORCE */
