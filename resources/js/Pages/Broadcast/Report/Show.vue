@@ -29,7 +29,7 @@ function applyFilter() {
 
 async function retryTarget(targetId) {
   if (retrying.value) return
-  
+
   try {
     retrying.value = true
     await axios.post(`/broadcast/targets/${targetId}/retry`)
@@ -138,15 +138,15 @@ function goBack() {
               @update:modelValue="applyFilter"
             />
 
-            <v-btn 
-              color="primary" 
+            <v-btn
+              color="primary"
               prepend-icon="mdi-filter"
               @click="applyFilter"
             >
               Apply
             </v-btn>
-            
-            <v-btn 
+
+            <v-btn
               v-if="filters.q || filters.status"
               variant="text"
               @click="filters = { q: '', status: '' }; applyFilter()"
