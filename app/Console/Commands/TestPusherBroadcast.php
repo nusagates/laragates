@@ -33,7 +33,7 @@ class TestPusherBroadcast extends Command
         try {
             // Attempt to broadcast
             broadcast(new MessageSent($message))->toOthers();
-            
+
             $this->info('✅ Broadcast dispatched successfully!');
             $this->newLine();
             $this->info('📋 Check the following:');
@@ -41,7 +41,7 @@ class TestPusherBroadcast extends Command
             $this->line('  2. Pusher credentials are correct');
             $this->line('  3. Queue worker is running (php artisan queue:work)');
             $this->line('  4. Frontend Echo is listening on the correct channel');
-            
+
             Log::info('[TEST PUSHER] Broadcast sent', [
                 'message_id' => $message->id,
                 'session_id' => $message->chat_session_id,

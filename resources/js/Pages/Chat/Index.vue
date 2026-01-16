@@ -219,10 +219,10 @@ async function submitNewChat() {
           </div>
 
           <div class="chat-input">
-            <input 
-              type="file" 
-              ref="filePicker" 
-              hidden 
+            <input
+              type="file"
+              ref="filePicker"
+              hidden
               @change="e => selectedFile = e.target.files[0]"
             />
             <v-btn icon @click="filePicker?.click()" :disabled="sendingMessage">
@@ -240,8 +240,8 @@ async function submitNewChat() {
               @keyup.enter="sendMessage"
             />
 
-            <v-btn 
-              class="btn-primary" 
+            <v-btn
+              class="btn-primary"
               @click="sendMessage"
               :disabled="sendingMessage"
               :loading="sendingMessage"
