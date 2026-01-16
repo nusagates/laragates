@@ -3,34 +3,44 @@
 namespace App\Events\Chat;
 
 use App\Models\ChatMessage;
-use Illuminate\Queue\SerializesModels;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
 
 class MessageSent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public ChatMessage $message) {}
+    public $payload;
 
-    public function broadcastOn(): array
+    public $sessionId;
+
+    public function __construct(ChatMessage $message)
     {
-        return [
-            new PrivateChannel('chat-session.' . $this->message->chat_session_id),
+        $this->sessionId = $message->chat_session_id;
+
+        $this->payload = [
+            'id' => $message->id,
+            'sender' => $message->sender,
+            'text' => $message->message,
+            'time' => $message->created_at->format('H:i'),
         ];
     }
 
-    public function broadcastAs(): string
+    public function broadcastOn()
+    {
+        return new PrivateChannel('chat-session.'.$this->sessionId);
+    }
+
+    public function broadcastAs()
     {
         return 'MessageSent';
     }
 
-    public function broadcastWith(): array
+    public function broadcastWith()
     {
-        return [
-            'message' => $this->message->fresh(),
-        ];
+        return $this->payload;
     }
 }

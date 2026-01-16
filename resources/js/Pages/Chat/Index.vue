@@ -17,6 +17,8 @@ const activeRoomId = ref(null)
 const tempMessage = ref('')
 const selectedFile = ref(null)
 const filePicker = ref(null)
+const sendingMessage = ref(false)
+const chatRoomRef = ref(null)
 
 /* NEW CHAT */
 const newChatDialog = ref(false)
@@ -64,22 +66,37 @@ async function sendMessage() {
     return
   }
 
-  const form = new FormData()
-  form.append('message', tempMessage.value || '')
-  if (selectedFile.value) form.append('media', selectedFile.value)
-
   const messageText = tempMessage.value
+  const file = selectedFile.value
+  const mediaUrl = file ? URL.createObjectURL(file) : null
+
+  // Add optimistic message immediately
+  if (chatRoomRef.value) {
+    chatRoomRef.value.addOptimisticMessage(messageText, mediaUrl)
+  }
+
+  const form = new FormData()
+  form.append('message', messageText || '')
+  if (file) form.append('media', file)
+
+  // Clear input immediately
   tempMessage.value = ''
   selectedFile.value = null
   if (filePicker.value) filePicker.value.value = ''
 
+  sendingMessage.value = true
+
   try {
     await axios.post(`/chat/sessions/${activeRoomId.value}/messages`, form)
-    toast.success('Pesan berhasil dikirim')
+    // Backend will broadcast MessageSent event with real message data
+    // WebSocket listener will replace optimistic message
   } catch (error) {
     toast.error(error.response?.data?.message || 'Gagal mengirim pesan')
     // Restore message on error
     tempMessage.value = messageText
+    selectedFile.value = file
+  } finally {
+    sendingMessage.value = false
   }
 }
 
@@ -198,12 +215,17 @@ async function submitNewChat() {
           </div>
 
           <div class="chat-body">
-            <ChatRoom :room-id="activeRoomId" />
+            <ChatRoom ref="chatRoomRef" :room-id="activeRoomId" />
           </div>
 
           <div class="chat-input">
-            <input type="file" ref="filePicker" hidden />
-            <v-btn icon @click="filePicker?.click()">
+            <input 
+              type="file" 
+              ref="filePicker" 
+              hidden 
+              @change="e => selectedFile = e.target.files[0]"
+            />
+            <v-btn icon @click="filePicker?.click()" :disabled="sendingMessage">
               <v-icon>mdi-paperclip</v-icon>
             </v-btn>
 
@@ -214,9 +236,16 @@ async function submitNewChat() {
               density="compact"
               hide-details
               class="message-input"
+              :disabled="sendingMessage"
+              @keyup.enter="sendMessage"
             />
 
-            <v-btn class="btn-primary" @click="sendMessage">
+            <v-btn 
+              class="btn-primary" 
+              @click="sendMessage"
+              :disabled="sendingMessage"
+              :loading="sendingMessage"
+            >
               SEND
             </v-btn>
           </div>

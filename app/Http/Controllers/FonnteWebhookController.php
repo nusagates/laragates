@@ -169,7 +169,7 @@ class FonnteWebhookController extends Controller
             ]);
 
             $menuText = MenuEngine::mainMenu();
-            FonnteService::send($phone, $menuText);
+            app(FonnteService::class)->sendText($phone, $menuText);
 
             ChatMessage::create([
                 'chat_session_id' => $session->id,
@@ -210,7 +210,7 @@ class FonnteWebhookController extends Controller
                     "👩‍💼 *Menghubungkan ke Customer Service*\n\n" .
                     "Mohon tunggu, agent kami akan segera membantu Anda 🙏";
 
-                FonnteService::send($phone, $reply);
+                app(FonnteService::class)->sendText($phone, $reply);
 
                 ChatMessage::create([
                     'chat_session_id' => $session->id,

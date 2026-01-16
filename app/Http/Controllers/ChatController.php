@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ChatSession;
 use App\Models\ChatMessage;
+use App\Models\ChatSession;
 use App\Models\Customer;
+use App\Services\ContactIntelligenceService;
+use App\Services\ContactScoringService;
 use App\Services\MessageDeliveryService;
 use App\Services\SlaService;
 use App\Services\SystemLogService;
-use App\Services\ContactIntelligenceService;
-use App\Services\ContactScoringService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -25,8 +25,8 @@ class ChatController extends Controller
         SystemLogService::record(
             event: 'chat_list_access',
             meta: [
-                'path'   => request()->path(),
-                'method'=> request()->method(),
+                'path' => request()->path(),
+                'method' => request()->method(),
             ]
         );
 
@@ -39,15 +39,15 @@ class ChatController extends Controller
             $last = $session->lastMessage;
 
             return [
-                'session_id'    => $session->id,
+                'session_id' => $session->id,
                 'customer_name' => $session->customer->name ?? $session->customer->phone,
-                'last_message'  => $last?->message
+                'last_message' => $last?->message
                     ? mb_strimwidth($last->message, 0, 35, '...')
                     : '',
-                'time'          => $last?->created_at?->format('H:i'),
-                'unread_count'  => 0,
-                'status'        => $session->status,
-                'sla'           => $this->getSlaBadge($session),
+                'time' => $last?->created_at?->format('H:i'),
+                'unread_count' => 0,
+                'status' => $session->status,
+                'sla' => $this->getSlaBadge($session),
             ];
         });
     }
@@ -59,15 +59,19 @@ class ChatController extends Controller
      */
     protected function getSlaBadge(ChatSession $session): ?string
     {
-        if ($session->sla_status === 'breach') return 'breach';
-        if ($session->sla_status === 'meet')   return 'meet';
+        if ($session->sla_status === 'breach') {
+            return 'breach';
+        }
+        if ($session->sla_status === 'meet') {
+            return 'meet';
+        }
 
         if (
             $session->status === 'open' &&
             $session->first_response_at === null
         ) {
             $limitSeconds = config('sla.first_response_minutes') * 60;
-            $elapsed      = now()->diffInSeconds($session->created_at);
+            $elapsed = now()->diffInSeconds($session->created_at);
 
             if ($elapsed >= ($limitSeconds * 0.8)) {
                 return 'warning';
@@ -101,20 +105,20 @@ class ChatController extends Controller
 
         return [
             'session_id' => $session->id,
-            'status'     => $session->status,
-            'customer'   => [
-                'id'    => $session->customer->id,
-                'name'  => $session->customer->name ?? $session->customer->phone,
+            'status' => $session->status,
+            'customer' => [
+                'id' => $session->customer->id,
+                'name' => $session->customer->name ?? $session->customer->phone,
                 'phone' => $session->customer->phone,
             ],
             'messages' => $session->messages->map(fn ($m) => [
-                'id'     => $m->id,
+                'id' => $m->id,
                 'sender' => $m->sender,
-                'type'   => $m->type,
-                'text'   => $m->message,
-                'media'  => $m->media_url,
-                'time'   => $m->created_at->format('H:i'),
-                'is_me'  => $m->sender === 'agent' && $m->user_id === Auth::id(),
+                'type' => $m->type,
+                'text' => $m->message,
+                'media' => $m->media_url,
+                'time' => $m->created_at->format('H:i'),
+                'is_me' => $m->sender === 'agent' && $m->user_id === Auth::id(),
             ]),
         ];
     }
@@ -128,11 +132,11 @@ class ChatController extends Controller
     {
         $request->validate([
             'message' => 'nullable|string',
-            'media'   => 'nullable|file|max:10240',
+            'media' => 'nullable|file|max:10240',
         ]);
 
         $agent = Auth::user();
-        if (!$agent) {
+        if (! $agent) {
             return response()->json(['success' => false], 401);
         }
 
@@ -147,7 +151,7 @@ class ChatController extends Controller
                 entityId: $session->customer->id,
                 meta: [
                     'session_id' => $session->id,
-                    'attempt'    => 'send_message',
+                    'attempt' => 'send_message',
                 ]
             );
 
@@ -157,35 +161,35 @@ class ChatController extends Controller
             ], 403);
         }
 
-        if (!$session->assigned_to) {
+        if (! $session->assigned_to) {
             $session->update(['assigned_to' => $agent->id]);
         }
 
-        $mediaUrl  = null;
+        $mediaUrl = null;
         $mediaType = null;
-        $isMedia   = false;
+        $isMedia = false;
 
         if ($request->hasFile('media')) {
             $file = $request->file('media');
             $path = $file->store('chat_media', 'public');
 
-            $mediaUrl  = asset('storage/' . $path);
+            $mediaUrl = asset('storage/'.$path);
             $mediaType = $file->getMimeType();
-            $isMedia   = true;
+            $isMedia = true;
         }
 
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
-            'sender'          => 'agent',
-            'user_id'         => $agent->id,
-            'message'         => $request->message ?? '',
-            'media_url'       => $mediaUrl,
-            'media_type'      => $mediaType,
-            'type'            => $isMedia ? 'media' : 'text',
-            'status'          => 'pending',
+            'sender' => 'agent',
+            'user_id' => $agent->id,
+            'message' => $request->message ?? '',
+            'media_url' => $mediaUrl,
+            'media_type' => $mediaType,
+            'type' => $isMedia ? 'media' : 'text',
+            'status' => 'pending',
             'delivery_status' => 'queued',
-            'is_outgoing'     => true,
-            'is_bot'          => false,
+            'is_outgoing' => true,
+            'is_bot' => false,
         ]);
 
         /**
@@ -206,7 +210,7 @@ class ChatController extends Controller
             entityId: $session->id,
             meta: [
                 'media_type' => $mediaType,
-                'filename'   => $request->file('media')?->getClientOriginalName(),
+                'filename' => $request->file('media')?->getClientOriginalName(),
             ]
         );
 
@@ -230,8 +234,8 @@ class ChatController extends Controller
     public function outbound(Request $request)
     {
         $data = $request->validate([
-            'phone'   => 'required|string|max:30',
-            'name'    => 'nullable|string|max:150',
+            'phone' => 'required|string|max:30',
+            'name' => 'nullable|string|max:150',
             'message' => 'required|string|max:4000',
         ]);
 
@@ -264,7 +268,7 @@ class ChatController extends Controller
 
         $session = ChatSession::create([
             'customer_id' => $customer->id,
-            'status'      => 'open',
+            'status' => 'open',
             'assigned_to' => Auth::id(),
         ]);
 
@@ -280,14 +284,14 @@ class ChatController extends Controller
 
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
-            'sender'          => 'agent',
-            'user_id'         => Auth::id(),
-            'message'         => $data['message'],
-            'type'            => 'text',
-            'status'          => 'pending',
+            'sender' => 'agent',
+            'user_id' => Auth::id(),
+            'message' => $data['message'],
+            'type' => 'text',
+            'status' => 'pending',
             'delivery_status' => 'queued',
-            'is_outgoing'     => true,
-            'is_bot'          => false,
+            'is_outgoing' => true,
+            'is_bot' => false,
         ]);
 
         SystemLogService::record(
@@ -305,7 +309,7 @@ class ChatController extends Controller
         MessageDeliveryService::send($msg);
 
         return response()->json([
-            'success'    => true,
+            'success' => true,
             'session_id' => $session->id,
         ]);
     }
@@ -318,7 +322,7 @@ class ChatController extends Controller
     public function close(ChatSession $session)
     {
         $session->update([
-            'status'    => 'closed',
+            'status' => 'closed',
             'closed_at' => now(),
         ]);
 
@@ -335,6 +339,86 @@ class ChatController extends Controller
 
     /**
      * ===============================
+     * WEBHOOK: UPDATE MESSAGE STATUS
+     * ===============================
+     * Menerima status update dari Fonnte untuk delivery tracking
+     */
+    public function updateStatus(Request $request)
+    {
+        $data = $request->validate([
+            'device' => 'nullable|string',
+            'id' => 'required|string',
+            'stateid' => 'nullable|string',
+            'status' => 'required|string',
+            'state' => 'nullable|string',
+        ]);
+
+        if (! $data) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid JSON payload',
+            ], 400);
+        }
+
+        $device = $data['device'] ?? null;
+        $id = $data['id'] ?? null;
+        $stateid = $data['stateid'] ?? null;
+        $status = $data['status'] ?? null;
+        $state = $data['state'] ?? null;
+
+        // Log webhook untuk debugging
+        SystemLogService::record(
+            event: 'webhook_status_update',
+            meta: [
+                'device' => $device,
+                'id' => $id,
+                'stateid' => $stateid,
+                'status' => $status,
+                'state' => $state,
+            ]
+        );
+
+        // Cari message berdasarkan wa_message_id
+        $message = ChatMessage::where('wa_message_id', $id)->first();
+
+        if (! $message) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Message not found',
+            ], 404);
+        }
+
+        // Map status dari Fonnte ke status internal
+        $statusMap = [
+            'sent' => ['status' => 'sent', 'delivery_status' => 'sent'],
+            'delivered' => ['status' => 'delivered', 'delivery_status' => 'delivered'],
+            'read' => ['status' => 'read', 'delivery_status' => 'read'],
+            'failed' => ['status' => 'failed', 'delivery_status' => 'failed'],
+        ];
+
+        if (isset($statusMap[$status])) {
+            $message->update($statusMap[$status]);
+
+            // Broadcast status update ke frontend via WebSocket
+            broadcast(new \App\Events\Chat\MessageUpdated($message))->toOthers();
+
+            SystemLogService::record(
+                event: 'message_status_updated',
+                entityType: 'chat_message',
+                entityId: $message->id,
+                meta: [
+                    'wa_message_id' => $id,
+                    'old_status' => $message->status,
+                    'new_status' => $status,
+                ]
+            );
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * ===============================
      * NORMALIZE PHONE
      * ===============================
      */
@@ -342,10 +426,16 @@ class ChatController extends Controller
     {
         $clean = preg_replace('/[^0-9+]/', '', $phone);
 
-        if (str_starts_with($clean, '+')) return $clean;
-        if (str_starts_with($clean, '0')) return '+62' . substr($clean, 1);
-        if (str_starts_with($clean, '62')) return '+' . $clean;
+        if (str_starts_with($clean, '+')) {
+            return $clean;
+        }
+        if (str_starts_with($clean, '0')) {
+            return '+62'.substr($clean, 1);
+        }
+        if (str_starts_with($clean, '62')) {
+            return '+'.$clean;
+        }
 
-        return '+' . $clean;
+        return '+'.$clean;
     }
 }

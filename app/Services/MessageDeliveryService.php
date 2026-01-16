@@ -23,7 +23,7 @@ class MessageDeliveryService
                 sessionId: $message->chat_session_id,
                 meta: [
                     'message_id' => $message->id,
-                    'has_media'  => (bool) $message->media_url,
+                    'has_media' => (bool) $message->media_url,
                 ]
             );
 
@@ -52,9 +52,9 @@ class MessageDeliveryService
             // ===============================
             $message->update([
                 'delivery_status' => 'sent',
-                'wa_message_id'   => $result['id'] ?? null,
-                'status'          => 'sent',
-                'last_error'      => null,
+                'wa_message_id' => $result['id'] ?? null,
+                'status' => 'sent',
+                'last_error' => null,
             ]);
 
             FonnteLogService::log(
@@ -63,9 +63,12 @@ class MessageDeliveryService
                 sessionId: $message->chat_session_id,
                 meta: [
                     'message_id' => $message->id,
-                    'wa_id'      => $result['id'] ?? null,
+                    'wa_id' => $result['id'] ?? null,
                 ]
             );
+
+            // Broadcast status update ke frontend
+            broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()))->toOthers();
 
             return true;
 
@@ -73,7 +76,7 @@ class MessageDeliveryService
 
             Log::error('WA send failed', [
                 'chat_message_id' => $message->id,
-                'error'           => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             FonnteLogService::log(
@@ -82,12 +85,13 @@ class MessageDeliveryService
                 sessionId: $message->chat_session_id,
                 meta: [
                     'message_id' => $message->id,
-                    'error'      => $e->getMessage(),
-                    'retry'      => $message->retry_count,
+                    'error' => $e->getMessage(),
+                    'retry' => $message->retry_count,
                 ]
             );
 
             self::handleFailure($message, $e->getMessage());
+
             return false;
         }
     }
@@ -99,18 +103,22 @@ class MessageDeliveryService
         if ($nextRetry >= self::MAX_RETRY) {
             $message->update([
                 'delivery_status' => 'failed_final',
-                'status'          => 'failed',
-                'retry_count'     => $nextRetry,
-                'last_error'      => $error,
+                'status' => 'failed',
+                'retry_count' => $nextRetry,
+                'last_error' => $error,
             ]);
+
+            // Broadcast failure status ke frontend
+            broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()))->toOthers();
+
             return;
         }
 
         $message->update([
             'delivery_status' => 'failed',
-            'retry_count'     => $nextRetry,
-            'last_retry_at'   => now(),
-            'last_error'      => $error,
+            'retry_count' => $nextRetry,
+            'last_retry_at' => now(),
+            'last_error' => $error,
         ]);
     }
 }

@@ -310,12 +310,4 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-/*
-|--------------------------------------------------------------------------
-| WEBHOOK WA
-|--------------------------------------------------------------------------
-*/
-Route::get('/webhook/whatsapp', [WabaWebhookController::class, 'verify']);
-Route::post('/webhook/whatsapp', [WabaWebhookController::class, 'receive']);
-
 require __DIR__.'/auth.php';

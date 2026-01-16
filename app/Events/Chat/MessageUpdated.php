@@ -21,7 +21,7 @@ class MessageUpdated implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        return new Channel('chat.' . $this->message->chat_session_id);
+        return new Channel('chat-session.'.$this->message->chat_session_id);
     }
 
     public function broadcastAs()

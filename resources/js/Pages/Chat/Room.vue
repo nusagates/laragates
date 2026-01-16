@@ -52,11 +52,30 @@ function setupRealtimeListener() {
   echoChannel = props.roomId
   window.Echo.private(`chat-session.${props.roomId}`)
     .listen('.MessageSent', (e) => {
-      // Check if message already exists
-      const exists = messages.value.find(m => m.id === e.message.id)
-      if (!exists) {
-        messages.value.push(e.message)
-        nextTick(() => scrollBottom())
+      // Replace optimistic message with real message
+      const optimisticIndex = messages.value.findIndex(m =>
+        typeof m.id === 'string' && m.id.startsWith('temp-')
+      )
+
+      console.log('Received MessageSent event:', e)
+
+      if (optimisticIndex !== -1) {
+        // Replace optimistic with real message
+        messages.value[optimisticIndex] = e.message
+      } else  {
+        // Check if message already exists
+        const exists = messages.value.find(m => m.id === e.id)
+        if (!exists) {
+          messages.value.push(e.message)
+          nextTick(() => scrollBottom())
+        }
+      }
+    })
+    .listen('.message-updated', (e) => {
+      // Update existing message status
+      const index = messages.value.findIndex(m => m.id === e.id)
+      if (index !== -1) {
+        messages.value[index] = { ...messages.value[index], ...e.message }
       }
     })
 }
@@ -76,7 +95,43 @@ onMounted(() => {
    BUBBLE CLASS
    =============================== */
 function bubbleClass(m) {
+    if(!m) return ''
   return m.is_outgoing ? 'bubble-me' : 'bubble-you'
+}
+
+/* ===============================
+   STATUS ICON HELPER
+   =============================== */
+function getStatusIcon(message) {
+  if (!message.is_outgoing) return null
+
+  const status = message.status || message.delivery_status
+
+  switch (status) {
+    case 'pending':
+    case 'queued':
+      return '🕐' // Clock icon
+    case 'sending':
+      return '⏳' // Hourglass
+    case 'sent':
+      return '✓' // Single check
+    case 'delivered':
+      return '✓✓' // Double check
+    case 'read':
+      return '✓✓' // Double check (will be blue in CSS)
+    case 'failed':
+    case 'failed_final':
+      return '⚠️' // Warning
+    default:
+      return '✓' // Default single check
+  }
+}
+
+function getStatusClass(message) {
+  if (!message.is_outgoing) return ''
+
+  const status = message.status || message.delivery_status
+  return status === 'read' ? 'status-read' : ''
 }
 
 /* ===============================
@@ -94,7 +149,10 @@ function formatDate(date) {
 }
 
 function shouldShowDate(index) {
+  const exists = messages.value[index]
+  if (!exists) return false
   if (index === 0) return true
+
   const cur = formatDate(messages.value[index].created_at)
   const prev = formatDate(messages.value[index - 1].created_at)
   return cur !== prev
@@ -114,6 +172,30 @@ watch(messages, (newVal, oldVal) => {
     }
   }
 })
+
+/* ===============================
+   OPTIMISTIC MESSAGE
+   =============================== */
+function addOptimisticMessage(message, mediaUrl = null) {
+  const optimisticMsg = {
+    id: 'temp-' + Date.now(),
+    message: message,
+    media_url: mediaUrl,
+    media_type: mediaUrl ? (mediaUrl.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image/jpeg' : 'file') : null,
+    is_outgoing: true,
+    status: 'sending',
+    delivery_status: 'sending',
+    created_at: new Date().toISOString(),
+    sender: 'agent',
+  }
+
+  messages.value.push(optimisticMsg)
+  nextTick(() => scrollBottom())
+}
+
+defineExpose({
+  addOptimisticMessage
+})
 </script>
 
 <template>
@@ -130,11 +212,11 @@ watch(messages, (newVal, oldVal) => {
       </div>
 
       <!-- MESSAGES -->
-      <template v-for="(m, index) in messages" :key="m.id">
+      <template v-for="(m, index) in messages">
 
         <!-- DATE SEPARATOR -->
         <div
-          v-if="shouldShowDate(index)"
+          v-if="shouldShowDate(index) && m"
           class="date-separator"
         >
           {{ formatDate(m.created_at) }}
@@ -166,9 +248,9 @@ watch(messages, (newVal, oldVal) => {
             <span
               v-if="m.is_outgoing"
               class="status"
-              :class="{ seen: m.is_seen }"
+              :class="getStatusClass(m)"
             >
-              ✔✔
+              {{ getStatusIcon(m) }}
             </span>
           </div>
 
@@ -288,7 +370,8 @@ watch(messages, (newVal, oldVal) => {
   opacity: 0.8;
 }
 
-.status.seen {
+.status.seen,
+.status.status-read {
   color: #60a5fa;
 }
 

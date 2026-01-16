@@ -63,6 +63,10 @@ FONNTE_ENDPOINT=https://api.fonnte.com
 FONNTE_TOKEN=k7NDAVboVHqNKAR9yHPN
 ```
 
+### F. Create URL tunnel
+```
+ngrok http https://laragates.test --host-header=rewrite
+```
 ---
 
 ## 🔔 2. Pusher Setup (Realtime Broadcasting)

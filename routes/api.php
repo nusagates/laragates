@@ -1,15 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Broadcast;
-
+use App\Http\Controllers\AiMetricsController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ChatSessionController;
-use App\Http\Controllers\FonnteWebhookController;
-use App\Http\Controllers\WhatsappTemplateController;
-use App\Http\Controllers\WabaMenuController;
-use App\Http\Controllers\AiMetricsController;
 use App\Http\Controllers\ChatSimulationController;
+use App\Http\Controllers\FonnteWebhookController;
+use App\Http\Controllers\WabaMenuController;
+use App\Http\Controllers\WhatsappTemplateController;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,7 +25,7 @@ use App\Http\Controllers\ChatSimulationController;
 |--------------------------------------------------------------------------
 */
 Route::get('/ping', fn () => response()->json([
-    'message' => 'API is running'
+    'message' => 'API is running',
 ]));
 
 /*
@@ -47,19 +46,21 @@ Broadcast::routes();
 // 🔔 Webhook Fonnte
 Route::match(['GET', 'POST'], '/webhook/fonnte', [
     FonnteWebhookController::class,
-    'handle'
+    'handle',
+]);
+
+
+
+// 📦 Update WA delivery status
+Route::match(['GET', 'POST'], '/webhook/message/update-status', [
+    ChatController::class,
+    'updateStatus',
 ]);
 
 // 🧪 Simulate inbound WhatsApp (DEV ONLY)
 Route::post('/simulate-inbound', [
     ChatSimulationController::class,
-    'simulate'
-]);
-
-// 📦 Update WA delivery status
-Route::post('/chat-messages/{message}/status', [
-    ChatController::class,
-    'updateStatus'
+    'simulate',
 ]);
 
 /*
@@ -73,7 +74,6 @@ Route::post('/chat-messages/{message}/status', [
 */
 Route::middleware('auth:sanctum')->group(function () {
 
-
     /*
     |--------------------------------------------------------------------------
     | WHATSAPP TEMPLATE
@@ -83,7 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Sync template (automation quota)
     Route::post('/templates/{template}/sync', [
         WhatsappTemplateController::class,
-        'sync'
+        'sync',
     ])->middleware('quota:automation,1');
 
     /*
@@ -92,11 +92,11 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    // Send WABA main menu (message quota)
-    Route::post('/waba/send-main-menu', [
-        WabaMenuController::class,
-        'sendMainMenu'
-    ])->middleware('quota:messages,1');
+    // // Send WABA main menu (message quota)
+    // Route::post('/waba/send-main-menu', [
+    //     WabaMenuController::class,
+    //     'sendMainMenu',
+    // ])->middleware('quota:messages,1');
 
     /*
     |--------------------------------------------------------------------------
@@ -107,13 +107,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Agent take chat session
     Route::post('/chat-sessions/{session}/take', [
         ChatSessionController::class,
-        'take'
+        'take',
     ])->middleware('quota:messages,1');
 
     // Agent close chat session
     Route::post('/chat-sessions/{session}/close', [
         ChatSessionController::class,
-        'close'
+        'close',
     ])->middleware('quota:messages,1');
 
     /*
@@ -125,6 +125,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // AI metrics / AI usage
     Route::get('/ai/metrics', [
         AiMetricsController::class,
-        'index'
+        'index',
     ])->middleware('quota:ai_request,1');
 });
