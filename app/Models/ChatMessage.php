@@ -41,13 +41,17 @@ class ChatMessage extends Model
         'file_name',
         'file_size',
         'mime_type',
+
+        // reactions
+        'reactions',
     ];
 
     protected $casts = [
-        'is_outgoing'   => 'boolean',
-        'is_internal'   => 'boolean',
-        'is_bot'        => 'boolean',
+        'is_outgoing' => 'boolean',
+        'is_internal' => 'boolean',
+        'is_bot' => 'boolean',
         'last_retry_at' => 'datetime',
+        'reactions' => 'array',
     ];
 
     /**

@@ -13,20 +13,14 @@ class MessageSent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $payload;
+    public $message;
 
     public $sessionId;
 
     public function __construct(ChatMessage $message)
     {
         $this->sessionId = $message->chat_session_id;
-
-        $this->payload = [
-            'id' => $message->id,
-            'sender' => $message->sender,
-            'text' => $message->message,
-            'time' => $message->created_at->format('H:i'),
-        ];
+        $this->message = $message;
     }
 
     public function broadcastOn()
@@ -41,6 +35,18 @@ class MessageSent implements ShouldBroadcast
 
     public function broadcastWith()
     {
-        return $this->payload;
+        return [
+            'message' => [
+                'id' => $this->message->id,
+                'session_id' => $this->message->chat_session_id,
+                'sender' => $this->message->sender,
+                'message' => $this->message->message,
+                'media_url' => $this->message->media_url,
+                'media_type' => $this->message->media_type,
+                'delivery_status' => $this->message->delivery_status,
+                'created_at' => $this->message->created_at->toISOString(),
+                'reactions' => $this->message->reactions ?? [],
+            ],
+        ];
     }
 }
