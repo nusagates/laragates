@@ -19,7 +19,7 @@ class ChatSessionController extends Controller
         // ❌ session sudah ditutup
         if ($session->status === 'closed') {
             return response()->json([
-                'error' => 'Session sudah ditutup'
+                'error' => 'Session sudah ditutup',
             ], 409);
         }
 
@@ -29,20 +29,20 @@ class ChatSessionController extends Controller
             $session->assigned_to !== $user->id
         ) {
             return response()->json([
-                'error' => 'Session sudah diambil agent lain'
+                'error' => 'Session sudah diambil agent lain',
             ], 409);
         }
 
         $session->update([
             'assigned_to' => $user->id,
             'is_handover' => true,
-            'bot_state'   => null,
+            'bot_state' => null,
             'bot_context' => null,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Chat berhasil diambil'
+            'message' => 'Chat berhasil diambil',
         ]);
     }
 
@@ -54,16 +54,35 @@ class ChatSessionController extends Controller
     public function close(ChatSession $session)
     {
         $session->update([
-            'status'      => 'closed',
+            'status' => 'closed',
             'is_handover' => false,
             'assigned_to' => null,
-            'bot_state'   => null,
+            'bot_state' => null,
             'bot_context' => null,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Chat ditutup'
+            'message' => 'Chat ditutup',
+        ]);
+    }
+
+    /**
+     * ======================================
+     * MARK SESSION AS READ
+     * ======================================
+     */
+    public function markRead(ChatSession $session)
+    {
+        // Mark all unread messages in this session as read
+        $session->messages()
+            ->where('sender', 'customer')
+            ->where('delivery_status', '!=', 'read')
+            ->update(['delivery_status' => 'read']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Marked as read',
         ]);
     }
 }

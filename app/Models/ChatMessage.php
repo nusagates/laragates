@@ -26,6 +26,7 @@ class ChatMessage extends Model
         // delivery & status
         'status',          // pending | sent | delivered | read | failed
         'delivery_status', // queued | sending | sent | delivered | read | failed | failed_final
+        'state_id',
         'retry_count',
         'last_retry_at',
         'last_error',
@@ -41,13 +42,17 @@ class ChatMessage extends Model
         'file_name',
         'file_size',
         'mime_type',
+
+        // reactions
+        'reactions',
     ];
 
     protected $casts = [
-        'is_outgoing'   => 'boolean',
-        'is_internal'   => 'boolean',
-        'is_bot'        => 'boolean',
+        'is_outgoing' => 'boolean',
+        'is_internal' => 'boolean',
+        'is_bot' => 'boolean',
         'last_retry_at' => 'datetime',
+        'reactions' => 'array',
     ];
 
     /**

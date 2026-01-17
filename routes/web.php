@@ -23,7 +23,6 @@ use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TestBroadcastController;
 use App\Http\Controllers\TicketController;
-use App\Http\Controllers\WabaWebhookController;
 use App\Http\Controllers\WaMenuController;
 use App\Http\Middleware\IdleTimeout;
 use App\Http\Middleware\RoleMiddleware;
@@ -158,6 +157,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
+        Route::post('/messages/{message}/reaction', [ChatMessageController::class, 'addReaction']);
         Route::post('/sessions/outbound', [ChatController::class, 'outbound'])->name('chat.outbound');
         Route::post('/chat/sessions/{session}/close', [CloseChatController::class, 'close'])
             ->middleware(['auth'])

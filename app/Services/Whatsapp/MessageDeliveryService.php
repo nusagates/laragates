@@ -1,49 +1,18 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Whatsapp;
 
-use App\Models\ChatMessage;
-use App\Services\System\FonnteLogService;
-use Illuminate\Support\Facades\Log;
 use Throwable;
+use App\Models\ChatMessage;
+use App\Services\FonnteService;
+use Illuminate\Support\Facades\Log;
+use App\Services\System\FonnteLogService;
 
 class MessageDeliveryService
 {
     const MAX_RETRY = 3;
 
     public static function send(ChatMessage $message): bool
-    {
-        try {
-            switch ($message->session->channel) {
-                case 'fonnte':
-                    return self::send0($message);
-                default:
-                    throw new \Exception('Unsupported channel: ' . $message->session->channel);
-            }
-        } catch (Throwable $e) {
-            Log::error('Message delivery failed', [
-                'chat_message_id' => $message->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            FonnteLogService::log(
-                event: 'message_delivery_failed',
-                phone: $message->session->customer->phone,
-                sessionId: $message->chat_session_id,
-                meta: [
-                    'message_id' => $message->id,
-                    'error' => $e->getMessage(),
-                    'retry' => $message->retry_count,
-                ]
-            );
-
-            self::handleFailure($message, $e->getMessage());
-
-            return false;
-        }
-    }
-
-    public static function send0(ChatMessage $message): bool
     {
         try {
             // ===============================
@@ -58,10 +27,6 @@ class MessageDeliveryService
                     'has_media' => (bool) $message->media_url,
                 ]
             );
-
-            $message->update([
-                'delivery_status' => 'sending',
-            ]);
 
             /** @var FonnteService $fonnte */
             $fonnte = app(FonnteService::class);
@@ -98,10 +63,10 @@ class MessageDeliveryService
             $stateId = $result['stateid'] ?? null;
 
             $message->update([
-                'delivery_status' => 'sent',
+                'delivery_status' => 'pending',
                 'wa_message_id' => $waMessageId,
                 'state_id' => $stateId,
-                'status' => 'sent',
+                'status' => 'pending',
                 'last_error' => null,
             ]);
 

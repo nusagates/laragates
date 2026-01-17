@@ -347,10 +347,10 @@ class ChatController extends Controller
     {
         $data = $request->validate([
             'device' => 'nullable|string',
-            'id' => 'required|string',
+            'id' => 'nullable|string',  // Optional: only present in "sent" status
             'stateid' => 'nullable|string',
-            'status' => 'required|string',
-            'state' => 'nullable|string',
+            'status' => 'nullable|string',  // Optional: only present in "sent" status
+            'state' => 'nullable|string',  // Present in all statuses
         ]);
 
         if (! $data) {
@@ -378,8 +378,18 @@ class ChatController extends Controller
             ]
         );
 
-        // Cari message berdasarkan wa_message_id
-        $message = ChatMessage::where('wa_message_id', $id)->first();
+        // Cari message berdasarkan wa_message_id atau state_id
+        // Payload "sent" memiliki "id", sedangkan "delivered"/"read" hanya memiliki "stateid"
+        $message = null;
+
+        if ($id) {
+            // Handle both formats: "139314661" and "[139314661]"
+            $message = ChatMessage::whereIn('wa_message_id', [$id, "[$id]"])->first();
+        }
+        elseif ($stateid) {
+            $message = ChatMessage::where('state_id', $stateid)->first();
+        }
+
 
         if (! $message) {
             return response()->json([
@@ -389,6 +399,9 @@ class ChatController extends Controller
         }
 
         // Map status dari Fonnte ke status internal
+        // Gunakan "state" sebagai primary indicator karena selalu ada
+        $finalStatus = $state ?? $status;
+
         $statusMap = [
             'sent' => ['status' => 'sent', 'delivery_status' => 'sent'],
             'delivered' => ['status' => 'delivered', 'delivery_status' => 'delivered'],
@@ -396,11 +409,11 @@ class ChatController extends Controller
             'failed' => ['status' => 'failed', 'delivery_status' => 'failed'],
         ];
 
-        if (isset($statusMap[$status])) {
-            $message->update($statusMap[$status]);
+        if (isset($statusMap[$finalStatus])) {
+            $message->update($statusMap[$finalStatus]);
 
             // Broadcast status update ke frontend via WebSocket
-            broadcast(new \App\Events\Chat\MessageUpdated($message))->toOthers();
+            broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()));
 
             SystemLogService::record(
                 event: 'message_status_updated',

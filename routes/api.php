@@ -1,10 +1,9 @@
 <?php
 
 use App\Http\Controllers\AiMetricsController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ChatSessionController;
 use App\Http\Controllers\ChatSimulationController;
-use App\Http\Controllers\FonnteWebhookController;
+use App\Http\Controllers\Api\Chat\FonnteWebhookController;
 use App\Http\Controllers\WabaMenuController;
 use App\Http\Controllers\WhatsappTemplateController;
 use Illuminate\Support\Facades\Broadcast;
@@ -53,7 +52,7 @@ Route::match(['GET', 'POST'], '/webhook/fonnte', [
 
 // 📦 Update WA delivery status
 Route::match(['GET', 'POST'], '/webhook/message/update-status', [
-    ChatController::class,
+    FonnteWebhookController::class,
     'updateStatus',
 ]);
 
