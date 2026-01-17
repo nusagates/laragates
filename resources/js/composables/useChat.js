@@ -119,20 +119,20 @@ export function useChat() {
    */
   function handleMessageUpdated(event) {
     console.log('📩 MessageUpdated event received:', event)
-    
+
     const message = event.message || event
     const sessionId = message.session_id || message.chat_session_id
-    
+
     if (!sessionId) {
       console.warn('⚠️ MessageUpdated: no session_id found', message)
       return
     }
-    
+
     console.log(`✅ Updating message ${message.id} in session ${sessionId}`, {
       delivery_status: message.delivery_status,
       status: message.status
     })
-    
+
     chatStore.updateMessage(sessionId, message)
   }
 

@@ -271,7 +271,7 @@ class FonnteWebhookController extends Controller
                         'wa_message_id' => $id,
                         'state_id' => $stateId,
                     ]);
-                    
+
                     $message->update([
                         'delivery_status' => 'sent',
                         'wa_message_id'   => trim($id, '[]'),
@@ -282,7 +282,7 @@ class FonnteWebhookController extends Controller
 
                     // Refresh message to get updated data
                     $message->refresh();
-                    
+
                     Log::info('[WEBHOOK] Broadcasting MessageUpdated (sent)', [
                         'message_id' => $message->id,
                         'delivery_status' => $message->delivery_status,
@@ -304,21 +304,21 @@ class FonnteWebhookController extends Controller
                         'new_status' => $state,
                         'state_id' => $stateId,
                     ]);
-                    
+
                     $message->update([
                         'delivery_status' => $state,
                         'status'          => $state,
                     ]);
-                    
+
                     // Refresh message to get updated data
                     $message->refresh();
-                    
+
                     Log::info('[WEBHOOK] Broadcasting MessageUpdated', [
                         'message_id' => $message->id,
                         'delivery_status' => $message->delivery_status,
                         'session_id' => $message->chat_session_id,
                     ]);
-                    
+
                     broadcast(new \App\Events\Chat\MessageUpdated($message));
                 } else {
                     Log::warning('Fonnte status update: message not found for state_id '.$stateId);

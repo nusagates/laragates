@@ -163,7 +163,7 @@ export const useChatStore = defineStore('chat', {
           old_status: this.messages[sessionId][index].delivery_status,
           new_status: updatedMessage.delivery_status,
         })
-        
+
         this.messages[sessionId][index] = { ...this.messages[sessionId][index], ...updatedMessage }
       } else {
         console.warn('⚠️ updateMessage: message not found', updatedMessage.id)
@@ -238,12 +238,12 @@ export const useChatStore = defineStore('chat', {
         is_outgoing: true,
         is_optimistic: false,
       }
-      
+
       this.addMessage(sessionId, messageToAdd)
 
       // Clean up
       delete this.optimisticMessages[tempId]
-      
+
       console.log('✅ Optimistic message replaced successfully')
     },
 
