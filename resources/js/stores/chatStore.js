@@ -122,27 +122,51 @@ export const useChatStore = defineStore('chat', {
       }
 
       // Check if message already exists (prevent duplicates)
-      const exists = this.messages[sessionId].find(m => m.id === message.id)
-      if (!exists) {
-        this.messages[sessionId].push(message)
-        this.updateSessionLastMessage(sessionId, message)
+      // But allow replacement if existing message is optimistic
+      const existingIndex = this.messages[sessionId].findIndex(m => m.id === message.id)
 
-        // Increment unread count if message is from customer and not in active room
-        if (message.sender === 'customer' && sessionId !== this.activeRoomId) {
-          const session = this.sessions.find(s => s.session_id === sessionId)
-          if (session) {
-            session.unread_count = (session.unread_count || 0) + 1
-          }
+      if (existingIndex !== -1) {
+        const existing = this.messages[sessionId][existingIndex]
+
+        // Replace if existing is optimistic and new is real
+        if (existing.is_optimistic && !message.is_optimistic) {
+          this.messages[sessionId][existingIndex] = message
+          this.updateSessionLastMessage(sessionId, message)
+        }
+        // Otherwise skip duplicate
+        return
+      }
+
+      // Add new message
+      this.messages[sessionId].push(message)
+      this.updateSessionLastMessage(sessionId, message)
+
+      // Increment unread count if message is from customer and not in active room
+      if (message.sender === 'customer' && sessionId !== this.activeRoomId) {
+        const session = this.sessions.find(s => s.session_id === sessionId)
+        if (session) {
+          session.unread_count = (session.unread_count || 0) + 1
         }
       }
     },
 
     updateMessage(sessionId, updatedMessage) {
-      if (!this.messages[sessionId]) return
+      if (!this.messages[sessionId]) {
+        console.warn('⚠️ updateMessage: session not found', sessionId)
+        return
+      }
 
       const index = this.messages[sessionId].findIndex(m => m.id === updatedMessage.id)
       if (index !== -1) {
+        console.log('🔄 Updating message:', {
+          id: updatedMessage.id,
+          old_status: this.messages[sessionId][index].delivery_status,
+          new_status: updatedMessage.delivery_status,
+        })
+        
         this.messages[sessionId][index] = { ...this.messages[sessionId][index], ...updatedMessage }
+      } else {
+        console.warn('⚠️ updateMessage: message not found', updatedMessage.id)
       }
     },
 
@@ -160,6 +184,8 @@ export const useChatStore = defineStore('chat', {
         media_url: message.media_url || null,
         media_type: message.media_type || null,
         is_optimistic: true,
+        is_outgoing: true,
+        is_internal: false,
         ...message,
       }
 
@@ -186,14 +212,39 @@ export const useChatStore = defineStore('chat', {
 
     removeOptimisticMessage(tempId) {
       const optimistic = this.optimisticMessages[tempId]
-      if (!optimistic) return
-
-      const sessionId = optimistic.session_id
-      if (this.messages[sessionId]) {
-        this.messages[sessionId] = this.messages[sessionId].filter(m => m.id !== tempId)
+      if (!optimistic) {
+        console.warn('⚠️ replaceOptimisticMessage: optimistic message not found', tempId)
+        return
       }
 
+      const sessionId = optimistic.session_id
+      if (!this.messages[sessionId]) {
+        console.warn('⚠️ replaceOptimisticMessage: session not found', sessionId)
+        return
+      }
+
+      console.log('🔄 Replacing optimistic message', {
+        tempId,
+        realMessageId: realMessage.id,
+        sessionId
+      })
+
+      // Remove optimistic message
+      this.messages[sessionId] = this.messages[sessionId].filter(m => m.id !== tempId)
+
+      // Add real message with all necessary flags
+      const messageToAdd = {
+        ...realMessage,
+        is_outgoing: true,
+        is_optimistic: false,
+      }
+      
+      this.addMessage(sessionId, messageToAdd)
+
+      // Clean up
       delete this.optimisticMessages[tempId]
+      
+      console.log('✅ Optimistic message replaced successfully')
     },
 
     /* =====================
@@ -214,11 +265,18 @@ export const useChatStore = defineStore('chat', {
         }
 
         const res = await axios.post(`/chat/sessions/${sessionId}/messages`, formData)
+        const realMessage = res.data.data || res.data
 
         // Replace optimistic with real message
-        this.replaceOptimisticMessage(tempId, res.data)
+        this.replaceOptimisticMessage(tempId, realMessage)
 
-        return res.data
+        console.log('✅ Optimistic message replaced', {
+          tempId,
+          realMessageId: realMessage.id,
+          sessionId
+        })
+
+        return realMessage
       } catch (error) {
         // Remove optimistic message on error
         this.removeOptimisticMessage(tempId)

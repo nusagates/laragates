@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api\Chat;
 
+use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
@@ -229,5 +230,118 @@ class FonnteWebhookController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * ===============================
+     * WEBHOOK: UPDATE MESSAGE STATUS
+     * ===============================
+     * Menerima status update dari Fonnte untuk delivery tracking
+     */
+    public function updateStatus(Request $request)
+    {
+        Log::info('[FONNTE STATUS UPDATE RECEIVED]:1', [
+            'payload' => $request->all()
+        ]);
+        try {
+            $data = $request->validate([
+                'device' => 'required|string',
+                'id' => 'nullable|string',  // Optional: only present in "sent" status
+                'stateid' => 'nullable|string',
+                'status' => 'nullable|string',  // Optional: only present in "sent" status
+                'state' => 'nullable|string',  // Present in all statuses
+            ]);
+
+            $stateId = $data['stateid'];
+            $status  = $data['status'] ?? null;
+            $state   = $data['state'];
+            $id = $data['id'] ?? null;
+            $device = $data['device'] ?? null;
+
+            if (! $data) {
+                throw new \Exception('Invalid JSON payload', 420);
+            }
+
+            // Handle state "sent"
+            if ($state === 'sent' && $id) {
+                $message = ChatMessage::whereIn('wa_message_id', [$id, "[$id]"])->first();
+                if ($message) {
+                    Log::info('[WEBHOOK] Updating message to sent', [
+                        'message_id' => $message->id,
+                        'wa_message_id' => $id,
+                        'state_id' => $stateId,
+                    ]);
+                    
+                    $message->update([
+                        'delivery_status' => 'sent',
+                        'wa_message_id'   => trim($id, '[]'),
+                        'state_id'        => $stateId,
+                        'status'          => 'sent',
+                        'last_error'      => null,
+                    ]);
+
+                    // Refresh message to get updated data
+                    $message->refresh();
+                    
+                    Log::info('[WEBHOOK] Broadcasting MessageUpdated (sent)', [
+                        'message_id' => $message->id,
+                        'delivery_status' => $message->delivery_status,
+                    ]);
+
+                    broadcast(new \App\Events\Chat\MessageUpdated($message));
+
+                } else {
+                    Log::warning('Fonnte status update: message not found for state_id '.$stateId);
+                    return response()->json(['success' => false, 'message' => 'Message not found'], 404);
+                }
+            }
+            else if($state === 'delivered' || $state === 'read') {
+                $message = ChatMessage::where('state_id', $stateId)->first();
+                if ($message) {
+                    Log::info('[WEBHOOK] Updating message status', [
+                        'message_id' => $message->id,
+                        'old_status' => $message->delivery_status,
+                        'new_status' => $state,
+                        'state_id' => $stateId,
+                    ]);
+                    
+                    $message->update([
+                        'delivery_status' => $state,
+                        'status'          => $state,
+                    ]);
+                    
+                    // Refresh message to get updated data
+                    $message->refresh();
+                    
+                    Log::info('[WEBHOOK] Broadcasting MessageUpdated', [
+                        'message_id' => $message->id,
+                        'delivery_status' => $message->delivery_status,
+                        'session_id' => $message->chat_session_id,
+                    ]);
+                    
+                    broadcast(new \App\Events\Chat\MessageUpdated($message));
+                } else {
+                    Log::warning('Fonnte status update: message not found for state_id '.$stateId);
+                    return response()->json(['success' => false, 'message' => 'Message not found'], 404);
+                }
+            }
+
+            FonnteLogService::log(
+                event: 'fonnte_status_'.$state,
+                phone: $message->session->customer->phone,
+                sessionId: $message->chat_session_id,
+                meta: [
+                    'message_id' => $message->id,
+                    'state_id'   => $stateId,
+                    'status'     => $status,
+                    'wa_message_id' => $id,
+                ]
+            );
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $th) {
+            //throw $th;
+        }
+
     }
 }

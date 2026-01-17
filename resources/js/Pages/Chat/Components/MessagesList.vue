@@ -14,7 +14,19 @@ const isNearBottom = ref(true)
 const showNewMessageIndicator = ref(false)
 const unreadCount = ref(0)
 
-const messages = computed(() => chatStore.activeMessages)
+const messages = computed(() => {
+  // Filter out internal messages and delivery receipts
+  return chatStore.activeMessages.filter(msg => {
+    // Skip internal messages
+    if (msg.is_internal) return false
+
+    // Skip delivery receipts or system messages (e.g., "Sent via fonnte.com")
+    if (msg.message && msg.message.includes('Sent via fonnte.com')) return false
+    if (msg.message && msg.message.includes('Message queued')) return false
+
+    return true
+  })
+})
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉']
 
@@ -73,13 +85,18 @@ function formatTime(dateString) {
 function getDeliveryIcon(status) {
   switch (status) {
     case 'sent':
-      return 'mdi-check'
+      return 'mdi-check' // Single check - sent to server
     case 'delivered':
-      return 'mdi-check-all'
+      return 'mdi-check-all' // Double check - delivered to recipient
     case 'read':
-      return 'mdi-check-all'
+      return 'mdi-check-all' // Double check - read by recipient
     case 'failed':
-      return 'mdi-alert-circle'
+    case 'failed_final':
+      return 'mdi-alert-circle' // Failed to send
+    case 'pending':
+    case 'queued':
+    case 'sending':
+      return 'mdi-clock-outline' // Waiting to be sent
     default:
       return 'mdi-clock-outline'
   }
@@ -88,11 +105,20 @@ function getDeliveryIcon(status) {
 function getDeliveryColor(status) {
   switch (status) {
     case 'read':
-      return '#3b82f6'
+      return '#18ec0b' // Blue - message was read
+    case 'delivered':
+      return '#ffffff' // Gray - delivered but not read
+    case 'sent':
+      return '#ffffff' // Gray - sent but not delivered
     case 'failed':
-      return '#ef4444'
+    case 'failed_final':
+      return '#ef4444' // Red - failed
+    case 'pending':
+    case 'queued':
+    case 'sending':
+      return '#ffffff' // Gray - pending
     default:
-      return '#94a3b8'
+      return '#ffffff'
   }
 }
 
@@ -278,7 +304,10 @@ onMounted(() => {
         <div
           v-else
           class="message-wrapper"
-          :class="{ 'message-agent': item.data.sender === 'agent' }"
+          :class="{
+            'message-agent': item.data.sender === 'agent' || item.data.is_outgoing,
+            'message-customer': item.data.sender === 'customer' && !item.data.is_outgoing
+          }"
         >
           <div class="message-bubble">
             <!-- Media (Image/File) -->
@@ -399,9 +428,15 @@ onMounted(() => {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   position: relative;
   max-width: 70%;
+  align-items: flex-start;
+  align-self: flex-start;
+}
+
+.message-wrapper.message-customer {
+  align-items: flex-start;
+  align-self: flex-start;
 }
 
 .message-wrapper.message-agent {
@@ -422,6 +457,10 @@ onMounted(() => {
   position: relative;
   word-wrap: break-word;
   max-width: 100%;
+}
+
+.message-customer .message-bubble {
+  background: rgba(255,255,255,0.08);
 }
 
 .message-agent .message-bubble {

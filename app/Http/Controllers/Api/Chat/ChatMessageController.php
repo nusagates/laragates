@@ -6,7 +6,7 @@ use App\Events\Chat\MessageUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
-use App\Services\MessageDeliveryService;
+use App\Services\Whatsapp\MessageDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -32,12 +32,12 @@ class ChatMessageController extends Controller
             return response()->json(['error' => 'Your account is pending approval'], 403);
         }
 
-        $request->validate([
+        $data = $request->validate([
             'message' => 'nullable|string',
             'media' => 'nullable|file|max:5120',
         ]);
 
-        $text = $request->input('message');
+        $text = $data['message'] ?? null;
         $mediaUrl = null;
         $mediaType = null;
         $bubbleType = 'text';

@@ -77,9 +77,10 @@ export function useChat() {
     })
 
     // Listen for typing indicators
-    channel.listenForWhisper('typing', (data) => {
-      handleTyping(data)
-    })
+    // DISABLED: Requires client events enabled in Pusher dashboard
+    // channel.listenForWhisper('typing', (data) => {
+    //   handleTyping(data)
+    // })
 
     // Mark this channel as subscribed
     subscribedChannels.value.add(sessionId)
@@ -117,8 +118,22 @@ export function useChat() {
    * Handle MessageUpdated event (delivery status, reactions, etc.)
    */
   function handleMessageUpdated(event) {
+    console.log('📩 MessageUpdated event received:', event)
+    
     const message = event.message || event
-    chatStore.updateMessage(message.session_id, message)
+    const sessionId = message.session_id || message.chat_session_id
+    
+    if (!sessionId) {
+      console.warn('⚠️ MessageUpdated: no session_id found', message)
+      return
+    }
+    
+    console.log(`✅ Updating message ${message.id} in session ${sessionId}`, {
+      delivery_status: message.delivery_status,
+      status: message.status
+    })
+    
+    chatStore.updateMessage(sessionId, message)
   }
 
   /**
@@ -146,16 +161,16 @@ export function useChat() {
   function emitTyping(sessionId, typing = true) {
     if (!sessionId || !window.Echo) return
 
-    const channel = window.Echo.private(`chat-session.${sessionId}`)
-
-    if (channel) {
-      channel.whisper('typing', {
-        userId: window.Laravel?.user?.id,
-        userName: window.Laravel?.user?.name,
-        sessionId,
-        typing,
-      })
-    }
+    // DISABLED: Requires client events enabled in Pusher dashboard
+    // const channel = window.Echo.private(`chat-session.${sessionId}`)
+    // if (channel) {
+    //   channel.whisper('typing', {
+    //     userId: window.Laravel?.user?.id,
+    //     userName: window.Laravel?.user?.name,
+    //     sessionId,
+    //     typing,
+    //   })
+    // }
 
     // Update local typing state
     isTyping.value = typing

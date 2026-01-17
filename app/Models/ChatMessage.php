@@ -26,6 +26,7 @@ class ChatMessage extends Model
         // delivery & status
         'status',          // pending | sent | delivered | read | failed
         'delivery_status', // queued | sending | sent | delivered | read | failed | failed_final
+        'state_id',
         'retry_count',
         'last_retry_at',
         'last_error',

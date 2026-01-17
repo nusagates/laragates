@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Whatsapp;
 
-use App\Models\ChatMessage;
-use App\Services\System\FonnteLogService;
-use Illuminate\Support\Facades\Log;
 use Throwable;
+use App\Models\ChatMessage;
+use App\Services\FonnteService;
+use Illuminate\Support\Facades\Log;
+use App\Services\System\FonnteLogService;
 
 class MessageDeliveryService
 {
@@ -27,10 +28,6 @@ class MessageDeliveryService
                 ]
             );
 
-            $message->update([
-                'delivery_status' => 'sending',
-            ]);
-
             /** @var FonnteService $fonnte */
             $fonnte = app(FonnteService::class);
 
@@ -47,13 +44,29 @@ class MessageDeliveryService
                 );
             }
 
+            Log::info('WA send result from FonnteService', $result);
+            /**
+             * Expected result format:
+             * {"detail":"success! message in queue","id":[139324400],"process":"pending","quota":{"62882003951811":{"details":"deduced from total quota","quota":931,"remaining":930,"used":1}},"requestid":341725951,"status":true,"target":["6288221150799"]}
+             */
+
             // ===============================
             // SUCCESS
             // ===============================
+            // Normalize wa_message_id - remove brackets if present
+            $waMessageId = $result['id'] ?? null;
+            if (is_string($waMessageId)) {
+                $waMessageId = trim($waMessageId, '[]');
+            }
+
+            // Extract stateid from response for tracking delivered/read status
+            $stateId = $result['stateid'] ?? null;
+
             $message->update([
-                'delivery_status' => 'sent',
-                'wa_message_id' => $result['id'] ?? null,
-                'status' => 'sent',
+                'delivery_status' => 'pending',
+                'wa_message_id' => $waMessageId,
+                'state_id' => $stateId,
+                'status' => 'pending',
                 'last_error' => null,
             ]);
 
@@ -68,7 +81,7 @@ class MessageDeliveryService
             );
 
             // Broadcast status update ke frontend
-            broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()))->toOthers();
+            // broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()));
 
             return true;
 
@@ -109,7 +122,7 @@ class MessageDeliveryService
             ]);
 
             // Broadcast failure status ke frontend
-            broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()))->toOthers();
+            broadcast(new \App\Events\Chat\MessageUpdated($message->fresh()));
 
             return;
         }
