@@ -6,19 +6,19 @@ export const useChatStore = defineStore('chat', {
     // Sessions
     sessions: [],
     activeRoomId: null,
-    
+
     // Messages (keyed by session ID)
     messages: {},
-    
+
     // Typing indicators (keyed by session ID)
     typingUsers: {},
-    
+
     // Connection status
     connectionStatus: 'disconnected', // disconnected | connecting | connected
-    
+
     // Optimistic messages (temporary IDs)
     optimisticMessages: {},
-    
+
     // Loading states
     loadingSessions: false,
     loadingMessages: {},
@@ -99,7 +99,7 @@ export const useChatStore = defineStore('chat', {
         const res = await axios.get(`/chat/sessions/${sessionId}/messages`, {
           params: { page }
         })
-        
+
         if (page === 1) {
           this.messages[sessionId] = res.data
         } else {
@@ -126,7 +126,7 @@ export const useChatStore = defineStore('chat', {
       if (!exists) {
         this.messages[sessionId].push(message)
         this.updateSessionLastMessage(sessionId, message)
-        
+
         // Increment unread count if message is from customer and not in active room
         if (message.sender === 'customer' && sessionId !== this.activeRoomId) {
           const session = this.sessions.find(s => s.session_id === sessionId)
@@ -201,7 +201,7 @@ export const useChatStore = defineStore('chat', {
     ===================== */
     async sendMessage(sessionId, messageData) {
       const tempId = `temp_${Date.now()}_${Math.random()}`
-      
+
       // Add optimistic message
       this.addOptimisticMessage(sessionId, messageData, tempId)
 
@@ -214,7 +214,7 @@ export const useChatStore = defineStore('chat', {
         }
 
         const res = await axios.post(`/chat/sessions/${sessionId}/messages`, formData)
-        
+
         // Replace optimistic with real message
         this.replaceOptimisticMessage(tempId, res.data)
 
@@ -295,7 +295,7 @@ export const useChatStore = defineStore('chat', {
     async markAsRead(sessionId) {
       try {
         await axios.post(`/chat/sessions/${sessionId}/mark-read`)
-        
+
         // Reset unread count locally
         const session = this.sessions.find(s => s.session_id === sessionId)
         if (session) {

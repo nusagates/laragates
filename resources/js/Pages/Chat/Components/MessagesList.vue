@@ -25,7 +25,7 @@ const groupedMessages = computed(() => {
 
   messages.value.forEach((message) => {
     const messageDate = new Date(message.created_at).toDateString()
-    
+
     if (messageDate !== currentDate) {
       currentDate = messageDate
       groups.push({
@@ -54,11 +54,11 @@ function formatDateSeparator(dateString) {
   } else if (date.toDateString() === yesterday.toDateString()) {
     return 'Yesterday'
   } else {
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     })
   }
 }
@@ -125,13 +125,13 @@ async function scrollToBottom() {
 
 function checkIfNearBottom() {
   if (!messagesPanel.value) return true
-  
+
   const element = messagesPanel.value
   const threshold = 150 // pixels from bottom
   const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
-  
+
   const isNear = distanceFromBottom < threshold
-  
+
   console.log('📍 Check position:', {
     scrollHeight: element.scrollHeight,
     scrollTop: element.scrollTop,
@@ -140,7 +140,7 @@ function checkIfNearBottom() {
     threshold,
     isNearBottom: isNear
   })
-  
+
   return isNear
 }
 
@@ -153,13 +153,13 @@ async function loadMore() {
   try {
     const oldScrollHeight = messagesPanel.value.scrollHeight
     const newMessages = await chatStore.loadMessages(chatStore.activeRoomId, currentPage.value)
-    
+
     if (!newMessages || newMessages.length === 0) {
       hasMore.value = false
     }
 
     await nextTick()
-    
+
     // Maintain scroll position
     const newScrollHeight = messagesPanel.value.scrollHeight
     messagesPanel.value.scrollTop = newScrollHeight - oldScrollHeight
@@ -172,16 +172,16 @@ async function loadMore() {
 
 function handleScroll(event) {
   const element = event.target
-  
+
   // Check if user is near bottom
   isNearBottom.value = checkIfNearBottom()
-  
+
   // Hide indicator if user scrolls to bottom
   if (isNearBottom.value) {
     showNewMessageIndicator.value = false
     unreadCount.value = 0
   }
-  
+
   // Load more when scrolled to top
   if (element.scrollTop === 0 && hasMore.value && !loadingMore.value) {
     loadMore()
@@ -192,22 +192,22 @@ function handleScroll(event) {
 watch(messages, async (newMessages, oldMessages) => {
   if (newMessages.length > oldMessages.length) {
     const lastMessage = newMessages[newMessages.length - 1]
-    
+
     // Only auto-scroll if it's a new message (not from pagination)
     if (!oldMessages.find(m => m.id === lastMessage.id)) {
       // Wait for DOM update then check position
       await nextTick()
-      
+
       // Update isNearBottom status before checking
       const wasNearBottom = checkIfNearBottom()
-      
+
       console.log('💬 New message received:', {
         wasNearBottom,
         messageFrom: lastMessage.sender,
         currentIndicator: showNewMessageIndicator.value,
         unreadCount: unreadCount.value
       })
-      
+
       // Check if user is at bottom or near bottom
       if (wasNearBottom) {
         // Auto-scroll only if user is at bottom
@@ -234,7 +234,7 @@ watch(() => chatStore.activeRoomId, () => {
 
 onMounted(() => {
   scrollToBottom()
-  
+
   // Update isNearBottom on mount
   nextTick(() => {
     isNearBottom.value = checkIfNearBottom()
@@ -250,8 +250,8 @@ onMounted(() => {
 
     <!-- New Messages Indicator -->
     <transition name="slide-up">
-      <div 
-        v-if="showNewMessageIndicator" 
+      <div
+        v-if="showNewMessageIndicator"
         class="new-message-indicator"
         @click="scrollToBottom"
       >
@@ -303,7 +303,7 @@ onMounted(() => {
             <!-- Message Meta -->
             <div class="message-meta">
               <span class="message-time">{{ formatTime(item.data.created_at) }}</span>
-              
+
               <!-- Delivery Status (agent messages only) -->
               <v-icon
                 v-if="item.data.sender === 'agent'"
@@ -315,7 +315,7 @@ onMounted(() => {
             </div>
 
             <!-- Reactions Display -->
-            <div v-if="hasReactions(item.data)" class="message-reactions-display">
+            <div v-if="false && hasReactions(item.data)" class="message-reactions-display">
               <span
                 v-for="(count, emoji) in item.data.reactions"
                 :key="emoji"
@@ -327,7 +327,7 @@ onMounted(() => {
           </div>
 
           <!-- Reaction Buttons -->
-          <div class="reaction-buttons">
+          <div v-if="false" class="reaction-buttons">
             <button
               v-for="emoji in REACTION_EMOJIS"
               :key="emoji"

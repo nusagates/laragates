@@ -9,7 +9,7 @@ const query = ref('')
 
 const filtered = computed(() => {
   if (!query.value) return chatStore.sessions
-  
+
   return chatStore.sessions.filter(session =>
     (session.customer_name ?? '').toLowerCase().includes(query.value.toLowerCase()) ||
     (session.phone ?? '').includes(query.value)

@@ -69,7 +69,7 @@ export function useEcho() {
     if (!sessionId || !window.Echo) return null
 
     const channelName = `chat-session.${sessionId}`
-    
+
     return window.Echo.private(channelName)
   }
 
