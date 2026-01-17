@@ -26,34 +26,34 @@ export function useEcho() {
         isConnected.value = true
         isConnecting.value = false
         chatStore.setConnectionStatus('connected')
-        console.log('✅ Echo connected')
+        console.log('Echo connected')
       })
 
       pusher.connection.bind('disconnected', () => {
         isConnected.value = false
         isConnecting.value = false
         chatStore.setConnectionStatus('disconnected')
-        console.log('❌ Echo disconnected')
+        console.log('Echo disconnected')
       })
 
       pusher.connection.bind('connecting', () => {
         isConnecting.value = true
         chatStore.setConnectionStatus('connecting')
-        console.log('🔄 Echo connecting...')
+        console.log('Echo connecting...')
       })
 
       pusher.connection.bind('unavailable', () => {
         isConnected.value = false
         isConnecting.value = false
         chatStore.setConnectionStatus('disconnected')
-        console.log('⚠️ Echo unavailable')
+        console.log('Echo unavailable')
       })
 
       pusher.connection.bind('failed', () => {
         isConnected.value = false
         isConnecting.value = false
         chatStore.setConnectionStatus('disconnected')
-        console.error('💥 Echo connection failed')
+        console.error('Echo connection failed')
       })
 
       pusher.connection.bind('error', (err) => {

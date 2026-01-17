@@ -151,22 +151,11 @@ export const useChatStore = defineStore('chat', {
     },
 
     updateMessage(sessionId, updatedMessage) {
-      if (!this.messages[sessionId]) {
-        console.warn('⚠️ updateMessage: session not found', sessionId)
-        return
-      }
+      if (!this.messages[sessionId]) return
 
       const index = this.messages[sessionId].findIndex(m => m.id === updatedMessage.id)
       if (index !== -1) {
-        console.log('🔄 Updating message:', {
-          id: updatedMessage.id,
-          old_status: this.messages[sessionId][index].delivery_status,
-          new_status: updatedMessage.delivery_status,
-        })
-
         this.messages[sessionId][index] = { ...this.messages[sessionId][index], ...updatedMessage }
-      } else {
-        console.warn('⚠️ updateMessage: message not found', updatedMessage.id)
       }
     },
 
@@ -269,12 +258,6 @@ export const useChatStore = defineStore('chat', {
 
         // Replace optimistic with real message
         this.replaceOptimisticMessage(tempId, realMessage)
-
-        console.log('✅ Optimistic message replaced', {
-          tempId,
-          realMessageId: realMessage.id,
-          sessionId
-        })
 
         return realMessage
       } catch (error) {

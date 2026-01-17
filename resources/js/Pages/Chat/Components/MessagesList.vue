@@ -105,18 +105,18 @@ function getDeliveryIcon(status) {
 function getDeliveryColor(status) {
   switch (status) {
     case 'read':
-      return '#18ec0b' // Blue - message was read
+      return '#18ec0b' // Light green - message was read
     case 'delivered':
-      return '#ffffff' // Gray - delivered but not read
+      return '#ffffff' // white - delivered but not read
     case 'sent':
-      return '#ffffff' // Gray - sent but not delivered
+      return '#ffffff' // white - sent but not delivered
     case 'failed':
     case 'failed_final':
       return '#ef4444' // Red - failed
     case 'pending':
     case 'queued':
     case 'sending':
-      return '#ffffff' // Gray - pending
+      return '#ffffff' // white - pending
     default:
       return '#ffffff'
   }
@@ -157,15 +157,6 @@ function checkIfNearBottom() {
   const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
 
   const isNear = distanceFromBottom < threshold
-
-  console.log('📍 Check position:', {
-    scrollHeight: element.scrollHeight,
-    scrollTop: element.scrollTop,
-    clientHeight: element.clientHeight,
-    distanceFromBottom,
-    threshold,
-    isNearBottom: isNear
-  })
 
   return isNear
 }
@@ -227,21 +218,12 @@ watch(messages, async (newMessages, oldMessages) => {
       // Update isNearBottom status before checking
       const wasNearBottom = checkIfNearBottom()
 
-      console.log('💬 New message received:', {
-        wasNearBottom,
-        messageFrom: lastMessage.sender,
-        currentIndicator: showNewMessageIndicator.value,
-        unreadCount: unreadCount.value
-      })
-
       // Check if user is at bottom or near bottom
       if (wasNearBottom) {
         // Auto-scroll only if user is at bottom
-        console.log('✅ Auto-scrolling to bottom')
         scrollToBottom()
       } else {
         // User is scrolled up, show indicator instead
-        console.log('📌 Showing new message indicator')
         showNewMessageIndicator.value = true
         unreadCount.value++
       }
@@ -335,7 +317,7 @@ onMounted(() => {
 
               <!-- Delivery Status (agent messages only) -->
               <v-icon
-                v-if="item.data.sender === 'agent'"
+                v-show="item.data.sender === 'agent'"
                 :icon="getDeliveryIcon(item.data.delivery_status)"
                 :color="getDeliveryColor(item.data.delivery_status)"
                 size="16"
