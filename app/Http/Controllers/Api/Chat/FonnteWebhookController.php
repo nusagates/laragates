@@ -202,6 +202,29 @@ class FonnteWebhookController extends Controller
 
                 $agentId = AgentRouter::assignToSession($session);
 
+                // Check if agent assignment failed
+                if (! $agentId) {
+                    $reply =
+                        "⚠️ *Maaf, Semua Agent Sedang Sibuk*\n\n".
+                        'Saat ini tidak ada agent yang tersedia. Silakan coba beberapa saat lagi atau ketik *0* untuk kembali ke menu utama.';
+
+                    app(FonnteService::class)->sendText($phone, $reply);
+
+                    ChatMessage::create([
+                        'chat_session_id' => $session->id,
+                        'sender' => 'system',
+                        'message' => $reply,
+                        'type' => 'text',
+                        'is_outgoing' => true,
+                        'status' => 'sent',
+                    ]);
+
+                    return response()->json([
+                        'handover' => false,
+                        'error' => 'No agent available',
+                    ]);
+                }
+
                 $session->update([
                     'is_handover' => true,
                     'bot_state' => null,

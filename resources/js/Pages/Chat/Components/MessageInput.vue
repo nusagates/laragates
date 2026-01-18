@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useChatStore } from '@/stores/chatStore'
 import { useChat } from '@/composables/useChat'
 import { useToast } from 'vue-toastification'
@@ -13,8 +13,18 @@ const selectedFile = ref(null)
 const filePicker = ref(null)
 const isSending = ref(false)
 
+const activeRoom = computed(() => chatStore.activeRoom)
+const isClosed = computed(() => activeRoom.value?.status === 'closed')
+
 async function handleSend() {
   if (!chatStore.activeRoomId) return
+
+  // Check if session is closed
+  if (isClosed.value) {
+    toast.warning('This chat session is closed. Cannot send messages.')
+    return
+  }
+
   if (!messageText.value.trim() && !selectedFile.value) {
     toast.warning('Please type a message or select a file')
     return
@@ -90,7 +100,13 @@ watch(messageText, (newValue, oldValue) => {
 </script>
 
 <template>
-  <div class="chat-input">
+  <div class="chat-input" :class="{ 'chat-input-disabled': isClosed }">
+    <!-- Closed Session Banner -->
+    <div v-if="isClosed" class="closed-banner">
+      <v-icon size="18" class="mr-2">mdi-lock</v-icon>
+      <span>This chat session is closed</span>
+    </div>
+
     <!-- File Preview -->
     <div v-if="selectedFile" class="file-preview">
       <div class="file-preview-content">
@@ -122,7 +138,7 @@ watch(messageText, (newValue, oldValue) => {
       <v-btn
         icon
         @click="openFilePicker"
-        :disabled="isSending"
+        :disabled="isSending || isClosed"
         class="attach-btn"
       >
         <v-icon>mdi-paperclip</v-icon>
@@ -131,12 +147,12 @@ watch(messageText, (newValue, oldValue) => {
       <!-- Text Input -->
       <v-text-field
         v-model="messageText"
-        placeholder="Type a message..."
+        :placeholder="isClosed ? 'Session closed - cannot send messages' : 'Type a message...'"
         variant="solo"
         density="compact"
         hide-details
         class="message-input"
-        :disabled="isSending || !chatStore.activeRoomId"
+        :disabled="isSending || !chatStore.activeRoomId || isClosed"
         @keydown="handleKeyPress"
       />
 
@@ -144,7 +160,7 @@ watch(messageText, (newValue, oldValue) => {
       <v-btn
         class="btn-primary send-btn"
         @click="handleSend"
-        :disabled="isSending || (!messageText.trim() && !selectedFile)"
+        :disabled="isSending || (!messageText.trim() && !selectedFile) || isClosed"
         :loading="isSending"
       >
         <v-icon>mdi-send</v-icon>
@@ -160,6 +176,28 @@ watch(messageText, (newValue, oldValue) => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: opacity 0.3s;
+}
+
+.chat-input-disabled {
+  opacity: 0.6;
+}
+
+.closed-banner {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 4px;
+}
+
+.closed-banner .v-icon {
+  color: #fca5a5;
 }
 
 .file-preview {

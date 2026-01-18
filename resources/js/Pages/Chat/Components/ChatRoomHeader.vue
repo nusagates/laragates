@@ -86,8 +86,21 @@ async function handleReassignSession() {
       </div>
 
       <div class="header-info">
-        <div class="header-name">
-          {{ activeRoom.customer_name ?? activeRoom.phone }}
+        <div class="header-name-row">
+          <div class="header-name">
+            {{ activeRoom.customer_name ?? activeRoom.phone }}
+          </div>
+          <!-- Closed Status Badge -->
+          <v-chip
+            v-if="activeRoom.status === 'closed'"
+            size="x-small"
+            color="error"
+            variant="flat"
+            class="closed-badge"
+          >
+            <v-icon start size="12">mdi-lock</v-icon>
+            CLOSED
+          </v-chip>
         </div>
         <div class="header-phone" v-if="!typingText">
           {{ activeRoom.phone }}
@@ -117,7 +130,10 @@ async function handleReassignSession() {
         </template>
 
         <v-list density="compact" class="menu-dark bg-secondary">
-          <v-list-item @click="openReassignDialog">
+          <v-list-item
+            @click="openReassignDialog"
+            :disabled="activeRoom.status === 'closed'"
+          >
             <template v-slot:prepend>
               <v-icon size="small">mdi-account-switch</v-icon>
             </template>
@@ -126,7 +142,10 @@ async function handleReassignSession() {
 
           <v-divider />
 
-          <v-list-item @click="showCloseDialog = true">
+          <v-list-item
+            @click="showCloseDialog = true"
+            :disabled="activeRoom.status === 'closed'"
+          >
             <template v-slot:prepend>
               <v-icon size="small">mdi-close-circle-outline</v-icon>
             </template>
@@ -272,10 +291,24 @@ async function handleReassignSession() {
   gap: 2px;
 }
 
+.header-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .header-name {
   color: #f8fafc;
   font-weight: 600;
   font-size: 15px;
+}
+
+.closed-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  height: 20px !important;
+  padding: 0 8px !important;
 }
 
 .header-phone {

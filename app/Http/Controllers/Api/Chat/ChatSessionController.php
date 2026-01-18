@@ -313,6 +313,7 @@ class ChatSessionController extends Controller
         $session->update([
             'status' => 'closed',
             'is_handover' => false,
+            'closed_at' => now(),
         ]);
 
         // Optionally create a system message indicating session closure

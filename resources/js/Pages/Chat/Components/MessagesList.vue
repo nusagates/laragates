@@ -6,6 +6,9 @@ import { useChat } from '@/composables/useChat'
 const chatStore = useChatStore()
 const { addReaction } = useChat()
 
+const activeRoom = computed(() => chatStore.activeRoom)
+const isClosed = computed(() => activeRoom.value?.status === 'closed')
+
 const messagesPanel = ref(null)
 const currentPage = ref(1)
 const loadingMore = ref(false)
@@ -276,6 +279,15 @@ onMounted(() => {
     </transition>
 
     <div class="messages-list">
+      <!-- Closed Session Notice (at the bottom of messages) -->
+      <div v-if="isClosed && messages.length > 0" class="session-closed-notice">
+        <v-icon size="20" color="error">mdi-lock-outline</v-icon>
+        <div class="closed-notice-text">
+          <strong>This chat session has been closed</strong>
+          <span>No new messages can be sent</span>
+        </div>
+      </div>
+
       <template v-for="(item, index) in groupedMessages" :key="index">
         <!-- Date Separator -->
         <div v-if="item.type === 'date'" class="date-separator">
@@ -388,6 +400,36 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   padding: 12px;
+}
+
+/* Closed Session Notice */
+.session-closed-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  color: #fca5a5;
+}
+
+.closed-notice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.closed-notice-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ef4444;
+}
+
+.closed-notice-text span {
+  font-size: 12px;
+  color: #fca5a5;
 }
 
 /* Date Separator */

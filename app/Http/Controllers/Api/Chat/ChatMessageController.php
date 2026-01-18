@@ -43,6 +43,14 @@ class ChatMessageController extends Controller
 
         $user = $request->user();
 
+        // Prevent sending to closed sessions
+        if ($session->status === 'closed') {
+            return response()->json([
+                'error' => 'Cannot send message to a closed session.',
+                'status' => 'closed',
+            ], 400);
+        }
+
         // Authorization: Agent can only send messages to their assigned sessions
         if ($user->role === 'agent' && $session->assigned_to !== $user->id) {
             return response()->json([

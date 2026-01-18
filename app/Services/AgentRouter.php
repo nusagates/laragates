@@ -18,6 +18,7 @@ class AgentRouter
             $agent = User::query()
                 ->where('role', 'agent')
                 ->where('is_online', true)
+                ->whereNotNull('approved_at')
                 ->where('last_heartbeat_at', '>=', now()->subSeconds(60))
                 ->withCount([
                     'chatSessions as active_chats_count' => function ($q) {
