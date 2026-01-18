@@ -16,8 +16,9 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\Dashboard\CloseChatController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\SettingController; // ✅ CONTACT CONTROLLER
+use App\Http\Controllers\ImpersonateController;
+use App\Http\Controllers\ProfileController; // ✅ CONTACT CONTROLLER
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TestBroadcastController;
@@ -261,6 +262,10 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/users/{user}/unlock', [UserController::class, 'unlock'])->name('users.unlock');
         Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
         Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+        // Impersonate routes
+        Route::post('/users/{user}/impersonate', [ImpersonateController::class, 'impersonate'])->name('users.impersonate');
+        Route::post('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
     });
 
     Route::middleware(['auth:sanctum'])

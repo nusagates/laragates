@@ -110,14 +110,14 @@ function statusBadgeColor(status) {
 
 async function approveAgent(id) {
   if (!confirm('Approve this agent?')) return
-  await axios.post(`/agents/${id}/approve`)
+  await axios.post(`/users/${id}/approve`)
   const agent = agents.value.find(a => a.id === id)
   if (agent) agent.approved_at = new Date()
 }
 
 async function unlockAgent(agent) {
   if (!confirm(`Unlock account ${agent.name}?`)) return
-  await axios.post(`/agents/${agent.id}/unlock`)
+  await axios.post(`/users/${agent.id}/unlock`)
   agent.failed_login_attempts = 0
   agent.locked_until = null
 }
@@ -126,7 +126,7 @@ async function submitForm() {
   formLoading.value = true
   try {
     if (isEdit.value) {
-      await axios.put(`/agents/${form.value.id}`, form.value)
+      await axios.put(`/users/${form.value.id}`, form.value)
       const idx = agents.value.findIndex(a => a.id === form.value.id)
       if (idx !== -1) {
         agents.value[idx] = { ...agents.value[idx], ...form.value }
@@ -145,8 +145,32 @@ async function submitForm() {
 
 async function deleteAgent(agent) {
   if (!confirm(`Delete agent ${agent.name}?`)) return
-  await axios.delete(`/agents/${agent.id}`)
+  await axios.delete(`/users/${agent.id}`)
   agents.value = agents.value.filter(a => a.id !== agent.id)
+}
+
+async function impersonateAgent(agent) {
+  if (!confirm(`Login as ${agent.name}?`)) return
+  try {
+    const res = await axios.post(`/users/${agent.id}/impersonate`)
+    if (res?.data?.redirect) {
+      window.location.href = res.data.redirect
+    }
+  } catch (e) {
+    alert(e.response?.data?.message ?? 'Failed to impersonate agent')
+  }
+}
+
+function canImpersonate(agent) {
+  // Superadmin can impersonate agent, supervisor, admin
+  if (meRole.value === 'superadmin') {
+    return ['agent', 'supervisor', 'admin'].includes(agent.role)
+  }
+  // Admin can impersonate agent and supervisor
+  if (meRole.value === 'admin') {
+    return ['agent', 'supervisor'].includes(agent.role)
+  }
+  return false
 }
 </script>
 
@@ -273,6 +297,15 @@ async function deleteAgent(agent) {
                   class="unlock"
                   variant="text"
                   @click="unlockAgent(agent)"
+                />
+                <v-btn
+                  v-if="canImpersonate(agent)"
+                  icon="mdi-account-switch"
+                  size="small"
+                  color="purple"
+                  variant="text"
+                  @click="impersonateAgent(agent)"
+                  title="Login as this user"
                 />
                 <v-btn icon="mdi-pencil" size="small" variant="text" @click="openEdit(agent)" />
                 <v-btn icon="mdi-delete" size="small" color="red" variant="text" @click="deleteAgent(agent)" />

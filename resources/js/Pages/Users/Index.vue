@@ -279,6 +279,41 @@ async function deleteUser(user) {
     'red'
   )
 }
+
+async function impersonateUser(user) {
+  showConfirm(
+    'Login as User',
+    `Login as ${user.name} (${user.role})? You will be redirected to their dashboard.`,
+    async () => {
+      try {
+        const res = await axios.post(`/users/${user.id}/impersonate`)
+        if (res?.data?.redirect) {
+          window.location.href = res.data.redirect
+        }
+      } catch (e) {
+        showNotification(e.response?.data?.message ?? 'Failed to impersonate user', 'error')
+      }
+    },
+    'purple'
+  )
+}
+
+function canImpersonate(user) {
+  // Cannot impersonate yourself
+  if (user.id === myUserId.value) return false
+
+  // Superadmin can impersonate agent, supervisor, admin
+  if (meRole.value === 'superadmin') {
+    return ['agent', 'supervisor', 'admin'].includes(user.role)
+  }
+
+  // Admin can impersonate agent and supervisor
+  if (meRole.value === 'admin') {
+    return ['agent', 'supervisor'].includes(user.role)
+  }
+
+  return false
+}
 </script>
 
 <template>
@@ -418,6 +453,16 @@ async function deleteUser(user) {
                   class="unlock"
                   variant="text"
                   @click="unlockUser(user)"
+                  title="Unlock Account"
+                />
+                <v-btn
+                  v-if="canImpersonate(user)"
+                  icon="mdi-account-switch"
+                  size="small"
+                  variant="text"
+                  color="purple"
+                  @click="impersonateUser(user)"
+                  title="Login as this user"
                 />
                 <v-btn
                   icon="mdi-key-variant"
@@ -425,8 +470,15 @@ async function deleteUser(user) {
                   variant="text"
                   color="orange"
                   @click="resetPassword(user)"
+                  title="Reset Password"
                 />
-                <v-btn icon="mdi-pencil" size="small" variant="text" @click="openEdit(user)" />
+                <v-btn
+                  icon="mdi-pencil"
+                  size="small"
+                  variant="text"
+                  @click="openEdit(user)"
+                  title="Edit User"
+                />
                 <v-btn
                   v-if="user.id !== myUserId"
                   icon="mdi-delete"
@@ -434,6 +486,7 @@ async function deleteUser(user) {
                   color="red"
                   variant="text"
                   @click="deleteUser(user)"
+                  title="Delete User"
                 />
               </td>
             </tr>
