@@ -31,6 +31,7 @@ const menu = [
   { label: "Contacts", icon: "mdi-account-box", href: "/contacts-ui", roles: ["superadmin","agent","supervisor"] },
   { label: "Broadcast", icon: "mdi-send", href: "/broadcast", roles: ["admin","superadmin","supervisor"] },
   { label: "Analytics", icon: "mdi-finance", href: "/analytics", roles: ["admin","superadmin"] },
+  { label: "Users", icon: "mdi-account-group", href: "/users", roles: ["admin","superadmin"] },
   { label: "System Logs", icon: "mdi-clipboard-text-clock-outline", href: "/system-logs", roles: ["superadmin"] },
   { label: "Settings", icon: "mdi-cog", href: "/settings", roles: ["superadmin"] },
 ]
@@ -51,6 +52,18 @@ onMounted(() => {
 onUnmounted(() => {
   if (heartbeatInterval) clearInterval(heartbeatInterval)
 })
+
+/* ================= IMPERSONATION ================= */
+const leaveImpersonation = async () => {
+  try {
+    const res = await axios.post('/impersonate/leave')
+    if (res?.data?.redirect) {
+      window.location.href = res.data.redirect
+    }
+  } catch (e) {
+    alert(e.response?.data?.message ?? 'Failed to leave impersonation')
+  }
+}
 
 /* ================= LOGOUT & IDLE ================= */
 const showLogoutConfirm = ref(false)
@@ -129,6 +142,34 @@ const stayLoggedIn = () => {
 
     <!-- ================= MAIN ================= -->
     <v-main class="main-area">
+
+      <!-- IMPERSONATION BANNER -->
+      <v-alert
+        v-if="page.props.impersonating"
+        type="warning"
+        prominent
+        density="compact"
+        class="impersonate-banner"
+      >
+        <div class="d-flex align-center justify-space-between">
+          <div>
+            <v-icon size="20" class="mr-2">mdi-account-switch</v-icon>
+            <strong>You are logged in as {{ page.props.auth.user.name }} ({{ page.props.auth.user.role }})</strong>
+            <span class="ml-2 text-caption">
+              Original: {{ page.props.original_user?.name }} ({{ page.props.original_user?.role }})
+            </span>
+          </div>
+          <v-btn
+            size="small"
+            color="white"
+            variant="outlined"
+            prepend-icon="mdi-logout"
+            @click="leaveImpersonation"
+          >
+            Leave Impersonation
+          </v-btn>
+        </div>
+      </v-alert>
 
       <!-- TOPBAR -->
       <v-app-bar flat height="64" class="topbar">
@@ -285,5 +326,11 @@ const stayLoggedIn = () => {
 .toast-dark {
   background: #020617 !important;
   color: #e5e7eb !important;
+}
+
+.impersonate-banner {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid #f59e0b;
 }
 </style>

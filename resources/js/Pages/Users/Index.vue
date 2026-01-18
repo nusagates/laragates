@@ -8,15 +8,14 @@ import axios from 'axios'
    PROPS
 ====================== */
 const props = defineProps({
-  agents: Array,
+  users: Array,
   counts: Object,
-  filters: Object,
 })
 
 /* ======================
    LOCAL STATE
 ====================== */
-const agents = ref([...props.agents])
+const users = ref([...props.users])
 
 /* ======================
    AUTH
@@ -24,7 +23,7 @@ const agents = ref([...props.agents])
 const page = usePage()
 const meRole = computed(() => page.props.auth?.user?.role ?? 'agent')
 const myUserId = computed(() => page.props.auth?.user?.id)
-const canManageAgents = computed(() =>
+const canManageUsers = computed(() =>
   ['superadmin', 'admin'].includes(meRole.value)
 )
 
@@ -32,8 +31,8 @@ const canManageAgents = computed(() =>
    STATE
 ====================== */
 const tab = ref('all')
-const search = ref(props.filters?.search || '')
-const showDeleted = ref(props.filters?.show_deleted || false)
+const roleTab = ref('all')
+const search = ref('')
 const dialog = ref(false)
 const isEdit = ref(false)
 const formLoading = ref(false)
@@ -42,7 +41,7 @@ const form = ref({
   id: null,
   name: '',
   email: '',
-  company_id: null,
+  role: 'Agent',
 })
 
 // Confirmation Dialog State
@@ -61,6 +60,10 @@ const snackbarData = ref({
   color: 'success',
   timeout: 5000,
 })
+
+// Password Display Dialog State
+const passwordDialog = ref(false)
+const temporaryPassword = ref('')
 
 /* ======================
    DIALOG HELPERS
@@ -82,42 +85,49 @@ function showNotification(message, color = 'success', timeout = 5000) {
   snackbar.value = true
 }
 
+function showPassword(password) {
+  temporaryPassword.value = password
+  passwordDialog.value = true
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showNotification('Password copied to clipboard', 'success', 2000)
+  }).catch(() => {
+    showNotification('Failed to copy password', 'error', 2000)
+  })
+}
+
 /* ======================
    LOCK HELPERS
 ====================== */
-function isLocked(agent) {
-  if (!agent.locked_until) return false
-  return new Date(agent.locked_until) > new Date()
+function isLocked(user) {
+  if (!user.locked_until) return false
+  return new Date(user.locked_until) > new Date()
 }
 
 /* ======================
    FILTER
 ====================== */
-const filteredAgents = computed(() => {
-  let data = agents.value || []
-
-  // Filter by deleted status
-  if (!showDeleted.value) {
-    data = data.filter(a => !a.deleted_at)
-  }
+const filteredUsers = computed(() => {
+  let data = users.value || []
 
   // Filter by status tab
   if (tab.value !== 'all') {
-    if (tab.value === 'pending') {
-      data = data.filter(a => !a.approved_at && !a.deleted_at)
-    } else if (tab.value === 'deleted') {
-      data = data.filter(a => a.deleted_at)
-    } else {
-      data = data.filter(a => a.status === tab.value && !a.deleted_at)
-    }
+    data = data.filter(u => u.status === tab.value)
+  }
+
+  // Filter by role tab
+  if (roleTab.value !== 'all') {
+    data = data.filter(u => u.role === roleTab.value)
   }
 
   // Search filter
   if (search.value) {
     const q = search.value.toLowerCase()
-    data = data.filter(a =>
-      a.name.toLowerCase().includes(q) ||
-      a.email.toLowerCase().includes(q)
+    data = data.filter(u =>
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q)
     )
   }
 
@@ -129,19 +139,33 @@ const filteredAgents = computed(() => {
 ====================== */
 function openCreate() {
   isEdit.value = false
-  form.value = { id: null, name: '', email: '', company_id: null }
+  form.value = { id: null, name: '', email: '', role: 'Agent' }
   dialog.value = true
 }
 
-function openEdit(agent) {
+function openEdit(user) {
   isEdit.value = true
   form.value = {
-    id: agent.id,
-    name: agent.name,
-    email: agent.email,
-    company_id: agent.company_id,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role:
+      user.role === 'superadmin'
+        ? 'Superadmin'
+        : user.role === 'admin'
+        ? 'Admin'
+        : user.role === 'supervisor'
+        ? 'Supervisor'
+        : 'Agent',
   }
   dialog.value = true
+}
+
+function roleBadgeColor(role) {
+  if (role === 'superadmin') return 'red-darken-3'
+  if (role === 'admin') return 'indigo-darken-3'
+  if (role === 'supervisor') return 'teal-darken-2'
+  return 'blue-darken-2'
 }
 
 function statusBadgeColor(status) {
@@ -150,54 +174,52 @@ function statusBadgeColor(status) {
   return 'amber-darken-2'
 }
 
-async function approveAgent(id) {
+async function approveUser(id) {
   showConfirm(
-    'Approve Agent',
-    'Are you sure you want to approve this agent?',
+    'Approve User',
+    'Are you sure you want to approve this user?',
     async () => {
       try {
-        await axios.post(`/agents/${id}/approve`)
-        const agent = agents.value.find(a => a.id === id)
-        if (agent) agent.approved_at = new Date()
-        showNotification('Agent approved successfully', 'success')
+        await axios.post(`/users/${id}/approve`)
+        const user = users.value.find(u => u.id === id)
+        if (user) user.approved_at = new Date()
+        showNotification('User approved successfully', 'success')
       } catch (e) {
-        showNotification(e.response?.data?.message ?? 'Failed to approve agent', 'error')
+        showNotification(e.response?.data?.message ?? 'Failed to approve user', 'error')
       }
     },
     'green'
   )
 }
 
-async function lockAgent(agent) {
+async function unlockUser(user) {
   showConfirm(
-    'Lock Account',
-    `Lock account for ${agent.name}? They will not be able to login until unlocked.`,
+    'Unlock Account',
+    `Unlock account for ${user.name}?`,
     async () => {
       try {
-        await axios.post(`/agents/${agent.id}/lock`)
-        agent.locked_until = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
-        agent.failed_login_attempts = 6
-        showNotification('Account locked successfully', 'success')
+        await axios.post(`/users/${user.id}/unlock`)
+        user.failed_login_attempts = 0
+        user.locked_until = null
+        showNotification('Account unlocked successfully', 'success')
       } catch (e) {
-        showNotification(e.response?.data?.message ?? 'Failed to lock account', 'error')
+        showNotification(e.response?.data?.message ?? 'Failed to unlock account', 'error')
       }
     },
     'orange'
   )
 }
 
-async function unlockAgent(agent) {
+async function resetPassword(user) {
   showConfirm(
-    'Unlock Account',
-    `Unlock account for ${agent.name}?`,
+    'Reset Password',
+    `Reset password for ${user.name}? A new temporary password will be generated.`,
     async () => {
       try {
-        await axios.post(`/agents/${agent.id}/unlock`)
-        agent.failed_login_attempts = 0
-        agent.locked_until = null
-        showNotification('Account unlocked successfully', 'success')
+        const res = await axios.post(`/users/${user.id}/reset-password`)
+        showPassword(res.data.temp_password)
       } catch (e) {
-        showNotification(e.response?.data?.message ?? 'Failed to unlock account', 'error')
+        showNotification(e.response?.data?.message ?? 'Failed to reset password', 'error')
       }
     },
     'orange'
@@ -208,107 +230,104 @@ async function submitForm() {
   formLoading.value = true
   try {
     if (isEdit.value) {
-      await axios.put(`/agents/${form.value.id}`, form.value)
-      const idx = agents.value.findIndex(a => a.id === form.value.id)
+      await axios.put(`/users/${form.value.id}`, form.value)
+      const idx = users.value.findIndex(u => u.id === form.value.id)
       if (idx !== -1) {
-        agents.value[idx] = { ...agents.value[idx], ...form.value }
+        users.value[idx] = { ...users.value[idx], ...form.value }
       }
-      showNotification('Agent updated successfully', 'success')
+      showNotification('User updated successfully', 'success')
     } else {
-      const res = await axios.post('/agents', form.value)
-      if (res?.data?.agent) {
-        agents.value.push(res.data.agent)
+      const res = await axios.post('/users', form.value)
+      if (res?.data?.user) {
+        users.value.push(res.data.user)
+        // Show temporary password
+        if (res.data.temp_password) {
+          dialog.value = false
+          showPassword(res.data.temp_password)
+          showNotification('User created successfully', 'success')
+          return
+        }
       }
-      showNotification('Agent created successfully', 'success')
+      showNotification('User created successfully', 'success')
     }
     dialog.value = false
   } catch (e) {
-    showNotification(e.response?.data?.message ?? 'Failed to save agent', 'error')
+    showNotification(e.response?.data?.message ?? 'Failed to save user', 'error')
   } finally {
     formLoading.value = false
   }
 }
 
-async function deleteAgent(agent) {
-  if (agent.id === myUserId.value) {
+async function deleteUser(user) {
+  if (user.id === myUserId.value) {
     showNotification('Cannot delete yourself', 'warning')
     return
   }
 
   showConfirm(
-    'Delete Agent',
-    `Are you sure you want to delete agent ${agent.name}? This will soft delete the agent.`,
+    'Delete User',
+    `Are you sure you want to delete user ${user.name}? This action cannot be undone.`,
     async () => {
       try {
-        await axios.delete(`/agents/${agent.id}`)
-        const agentToDelete = agents.value.find(a => a.id === agent.id)
-        if (agentToDelete) {
-          agentToDelete.deleted_at = new Date()
-        }
-        showNotification('Agent deleted successfully', 'success')
+        await axios.delete(`/users/${user.id}`)
+        users.value = users.value.filter(u => u.id !== user.id)
+        showNotification('User deleted successfully', 'success')
       } catch (e) {
-        showNotification(e.response?.data?.message ?? 'Failed to delete agent', 'error')
+        showNotification(e.response?.data?.message ?? 'Failed to delete user', 'error')
       }
     },
     'red'
   )
 }
 
-async function permanentDelete(agent) {
-  if (agent.id === myUserId.value) {
-    showNotification('Cannot permanently delete yourself', 'warning')
-    return
+async function impersonateUser(user) {
+  showConfirm(
+    'Login as User',
+    `Login as ${user.name} (${user.role})? You will be redirected to their dashboard.`,
+    async () => {
+      try {
+        const res = await axios.post(`/users/${user.id}/impersonate`)
+        if (res?.data?.redirect) {
+          window.location.href = res.data.redirect
+        }
+      } catch (e) {
+        showNotification(e.response?.data?.message ?? 'Failed to impersonate user', 'error')
+      }
+    },
+    'purple'
+  )
+}
+
+function canImpersonate(user) {
+  // Cannot impersonate yourself
+  if (user.id === myUserId.value) return false
+
+  // Superadmin can impersonate agent, supervisor, admin
+  if (meRole.value === 'superadmin') {
+    return ['agent', 'supervisor', 'admin'].includes(user.role)
   }
 
-  showConfirm(
-    'Permanent Delete',
-    `Are you sure you want to PERMANENTLY delete agent ${agent.name}? This action CANNOT be undone and will remove all data associated with this agent.`,
-    async () => {
-      try {
-        await axios.delete(`/agents/${agent.id}/force`)
-        agents.value = agents.value.filter(a => a.id !== agent.id)
-        showNotification('Agent permanently deleted', 'success')
-      } catch (e) {
-        showNotification(e.response?.data?.message ?? 'Failed to permanently delete agent', 'error')
-      }
-    },
-    'red'
-  )
-}
+  // Admin can impersonate agent and supervisor
+  if (meRole.value === 'admin') {
+    return ['agent', 'supervisor'].includes(user.role)
+  }
 
-async function restoreAgent(agent) {
-  showConfirm(
-    'Restore Agent',
-    `Are you sure you want to restore agent ${agent.name}?`,
-    async () => {
-      try {
-        await axios.post(`/agents/${agent.id}/restore`)
-        const agentToRestore = agents.value.find(a => a.id === agent.id)
-        if (agentToRestore) {
-          agentToRestore.deleted_at = null
-        }
-        showNotification('Agent restored successfully', 'success')
-      } catch (e) {
-        showNotification(e.response?.data?.message ?? 'Failed to restore agent', 'error')
-      }
-    },
-    'green'
-  )
+  return false
 }
 </script>
 
 <template>
-  <Head title="Agents Management" />
+  <Head title="Users Management" />
 
   <AdminLayout>
-    <template #title>Agents Management</template>
+    <template #title>Users Management</template>
 
-    <div v-if="canManageAgents" class="agents-dark">
+    <div v-if="canManageUsers" class="agents-dark">
 
       <!-- SUMMARY -->
       <div class="summary-grid mb-6">
         <div class="summary-card">
-          <span>Total Agents</span>
+          <span>Total Users</span>
           <h2>{{ counts.all }}</h2>
         </div>
         <div class="summary-card online">
@@ -327,21 +346,17 @@ async function restoreAgent(agent) {
           <span>Locked</span>
           <h2>{{ counts.locked }}</h2>
         </div>
-        <div class="summary-card deleted">
-          <span>Deleted</span>
-          <h2>{{ counts.deleted }}</h2>
-        </div>
       </div>
 
       <!-- MAIN -->
       <v-card class="main-card pa-5">
         <div class="d-flex justify-space-between align-center mb-4">
           <div>
-            <h3 class="text-white">Agents Management</h3>
-            <p class="text-muted">Manage all agents in the system</p>
+            <h3 class="text-white">Users Management</h3>
+            <p class="text-muted">Manage all system users (agents, supervisors, admins, superadmins)</p>
           </div>
           <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">
-            Add Agent
+            Add User
           </v-btn>
         </div>
 
@@ -353,28 +368,24 @@ async function restoreAgent(agent) {
               <v-btn size="small" color="primary" :variant="tab==='online'?'flat':'text'" @click="tab='online'">Online</v-btn>
               <v-btn size="small" color="primary" :variant="tab==='offline'?'flat':'text'" @click="tab='offline'">Offline</v-btn>
               <v-btn size="small" color="primary" :variant="tab==='pending'?'flat':'text'" @click="tab='pending'">Pending</v-btn>
-              <v-btn size="small" color="red" :variant="tab==='deleted'?'flat':'text'" @click="tab='deleted'">Deleted</v-btn>
             </div>
 
             <v-text-field
               v-model="search"
               density="compact"
               prepend-inner-icon="mdi-magnify"
-              placeholder="Search agent..."
+              placeholder="Search user..."
               hide-details
               style="max-width:260px"
             />
           </div>
 
-          <div class="d-flex gap-2 align-center">
-            <v-switch
-              v-model="showDeleted"
-              label="Show Deleted Agents"
-              class="text-grey"
-              color="red"
-              hide-details
-              density="compact"
-            />
+          <div class="d-flex gap-2">
+            <v-chip size="small" :color="roleTab==='all'?'primary':''" @click="roleTab='all'">All Roles</v-chip>
+            <v-chip size="small" :color="roleTab==='agent'?'primary':''" @click="roleTab='agent'">Agents</v-chip>
+            <v-chip size="small" :color="roleTab==='supervisor'?'primary':''" @click="roleTab='supervisor'">Supervisors</v-chip>
+            <v-chip size="small" :color="roleTab==='admin'?'primary':''" @click="roleTab='admin'">Admins</v-chip>
+            <v-chip size="small" :color="roleTab==='superadmin'?'primary':''" @click="roleTab='superadmin'">Superadmins</v-chip>
           </div>
         </div>
 
@@ -382,7 +393,8 @@ async function restoreAgent(agent) {
         <v-table>
           <thead>
             <tr>
-              <th>Agent</th>
+              <th>User</th>
+              <th>Role</th>
               <th>Status</th>
               <th class="text-center">Approval</th>
               <th class="text-center">Actions</th>
@@ -390,17 +402,21 @@ async function restoreAgent(agent) {
           </thead>
 
           <tbody>
-            <tr v-for="agent in filteredAgents" :key="agent.id" :class="{'row-hover': !agent.deleted_at, 'row-deleted': agent.deleted_at}">
+            <tr v-for="user in filteredUsers" :key="user.id" class="row-hover">
               <td>
-                <strong>{{ agent.name }}</strong>
-                <v-chip v-if="agent.deleted_at" size="x-small" color="red" class="ml-2">DELETED</v-chip>
-                <br />
-                <small class="text-muted">{{ agent.email }}</small>
+                <strong>{{ user.name }}</strong><br />
+                <small class="text-muted">{{ user.email }}</small>
+              </td>
+
+              <td>
+                <v-chip size="small" :color="roleBadgeColor(user.role)">
+                  {{ user.role }}
+                </v-chip>
               </td>
 
               <td>
                 <v-chip
-                  v-if="isLocked(agent)"
+                  v-if="isLocked(user)"
                   size="small"
                   class="locked"
                 >
@@ -410,84 +426,68 @@ async function restoreAgent(agent) {
                 <v-chip
                   v-else
                   size="small"
-                  :color="statusBadgeColor(agent.status)"
+                  :color="statusBadgeColor(user.status)"
                 >
-                  {{ agent.status }}
+                  {{ user.status }}
                 </v-chip>
               </td>
 
               <td class="text-center">
                 <v-btn
-                  v-if="!agent.approved_at && !agent.deleted_at"
+                  v-if="!user.approved_at"
                   size="small"
                   icon="mdi-check"
                   color="green"
-                  @click="approveAgent(agent.id)"
+                  @click="approveUser(user.id)"
                 />
-                <v-chip v-else-if="agent.approved_at" size="small" color="blue-darken-2" variant="tonal">
+                <v-chip v-else size="small" color="blue-darken-2" variant="tonal">
                   Approved
                 </v-chip>
-                <span v-else class="text-muted">-</span>
               </td>
 
               <td class="text-center">
-                <!-- Deleted Agent Actions -->
-                <template v-if="agent.deleted_at">
-                  <v-btn
-                    icon="mdi-restore"
-                    size="small"
-                    variant="text"
-                    color="green"
-                    @click="restoreAgent(agent)"
-                    title="Restore Agent"
-                  />
-                  <v-btn
-                    icon="mdi-delete-forever"
-                    size="small"
-                    color="red"
-                    variant="text"
-                    @click="permanentDelete(agent)"
-                    title="Permanently Delete Agent"
-                  />
-                </template>
-
-                <!-- Active Agent Actions -->
-                <template v-else>
-                  <v-btn
-                    v-if="isLocked(agent)"
-                    icon="mdi-lock-open-variant"
-                    size="small"
-                    class="unlock"
-                    variant="text"
-                    @click="unlockAgent(agent)"
-                    title="Unlock Account"
-                  />
-                  <v-btn
-                    v-else
-                    icon="mdi-lock"
-                    size="small"
-                    variant="text"
-                    color="orange"
-                    @click="lockAgent(agent)"
-                    title="Lock Account"
-                  />
-                  <v-btn
-                    icon="mdi-pencil"
-                    size="small"
-                    variant="text"
-                    @click="openEdit(agent)"
-                    title="Edit Agent"
-                  />
-                  <v-btn
-                    v-if="agent.id !== myUserId"
-                    icon="mdi-delete"
-                    size="small"
-                    color="red"
-                    variant="text"
-                    @click="deleteAgent(agent)"
-                    title="Delete Agent"
-                  />
-                </template>
+                <v-btn
+                  v-if="isLocked(user)"
+                  icon="mdi-lock-open-variant"
+                  size="small"
+                  class="unlock"
+                  variant="text"
+                  @click="unlockUser(user)"
+                  title="Unlock Account"
+                />
+                <v-btn
+                  v-if="canImpersonate(user)"
+                  icon="mdi-account-switch"
+                  size="small"
+                  variant="text"
+                  color="purple"
+                  @click="impersonateUser(user)"
+                  title="Login as this user"
+                />
+                <v-btn
+                  icon="mdi-key-variant"
+                  size="small"
+                  variant="text"
+                  color="orange"
+                  @click="resetPassword(user)"
+                  title="Reset Password"
+                />
+                <v-btn
+                  icon="mdi-pencil"
+                  size="small"
+                  variant="text"
+                  @click="openEdit(user)"
+                  title="Edit User"
+                />
+                <v-btn
+                  v-if="user.id !== myUserId"
+                  icon="mdi-delete"
+                  size="small"
+                  color="red"
+                  variant="text"
+                  @click="deleteUser(user)"
+                  title="Delete User"
+                />
               </td>
             </tr>
           </tbody>
@@ -498,9 +498,10 @@ async function restoreAgent(agent) {
     <!-- FORM DIALOG -->
     <v-dialog v-model="dialog" max-width="480" content-class="agents-dialog-dark">
       <v-card class="pa-4">
-        <h3 class="mb-4 text-white">{{ isEdit ? 'Edit Agent' : 'Add Agent' }}</h3>
+        <h3 class="mb-4 text-white">{{ isEdit ? 'Edit User' : 'Add User' }}</h3>
         <v-text-field v-model="form.name" label="Full Name" />
         <v-text-field v-model="form.email" label="Email" />
+        <v-select v-model="form.role" :items="['Superadmin','Admin','Supervisor','Agent']" label="Role" />
         <div class="d-flex justify-end mt-4 gap-2">
           <v-btn variant="text" @click="dialog=false">Cancel</v-btn>
           <v-btn color="primary" :loading="formLoading" @click="submitForm">Save</v-btn>
@@ -533,6 +534,54 @@ async function restoreAgent(agent) {
             @click="confirmAction"
           >
             Confirm
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- PASSWORD DISPLAY DIALOG -->
+    <v-dialog v-model="passwordDialog" max-width="600">
+      <v-card>
+        <v-card-title class="text-h5 d-flex align-center">
+          <v-icon color="success" class="mr-2">mdi-key-variant</v-icon>
+          Temporary Password Generated
+        </v-card-title>
+        <v-card-text class="pt-4">
+          <v-alert type="info" variant="tonal" class="mb-4">
+            Please save this password and share it with the user. This password will not be shown again.
+          </v-alert>
+
+          <v-text-field
+            v-model="temporaryPassword"
+            label="Temporary Password"
+            readonly
+            variant="outlined"
+            class="password-field"
+          >
+            <template #append-inner>
+              <v-btn
+                icon="mdi-content-copy"
+                variant="text"
+                size="small"
+                @click="copyToClipboard(temporaryPassword)"
+              />
+            </template>
+          </v-text-field>
+
+          <div class="text-center mt-2">
+            <v-chip color="success" size="large" class="font-weight-bold">
+              {{ temporaryPassword }}
+            </v-chip>
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="passwordDialog = false"
+          >
+            Close
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -585,14 +634,8 @@ async function restoreAgent(agent) {
 .summary-card.online{border-color:#22c55e;}
 .summary-card.offline{border-color:#64748b;}
 .summary-card.pending{border-color:#f59e0b;}
-.summary-card.locked{border-color:#ef4444;}
-.summary-card.deleted{border-color:#dc2626;}
 .text-muted{color:#94a3b8;}
 .row-hover:hover{background:rgba(59,130,246,.08);}
-.row-deleted{
-  opacity:0.6;
-  background:rgba(220,38,38,.05);
-}
 .locked{
   background:rgba(239,68,68,.15);
   color:#fecaca;
@@ -611,6 +654,10 @@ async function restoreAgent(agent) {
   font-size: 1.1rem;
   font-weight: bold;
   letter-spacing: 0.1em;
+}
+
+.summary-card.locked {
+  border-color: #ef4444;
 }
 
 /* ===============================

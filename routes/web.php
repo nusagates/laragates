@@ -3,8 +3,8 @@
 use App\Http\Controllers\Admin\AiReportController;
 use App\Http\Controllers\Admin\AiSettingController;
 use App\Http\Controllers\AgentController;
-// Controllers
 use App\Http\Controllers\AiSummaryController;
+// Controllers
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\Api\Chat\ChatMessageController;
 use App\Http\Controllers\Api\Chat\ChatSessionController;
@@ -17,12 +17,14 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\Dashboard\CloseChatController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImpersonateController;
 use App\Http\Controllers\ProfileController; // ✅ CONTACT CONTROLLER
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SystemLogController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TestBroadcastController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\WaMenuController;
 use App\Http\Middleware\IdleTimeout;
 use App\Http\Middleware\RoleMiddleware;
@@ -122,8 +124,9 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     Route::post('/test/broadcast/trigger', [TestBroadcastController::class, 'trigger'])
         ->name('test.broadcast.trigger');
 
-    Route::post('/agent/heartbeat', [AgentController::class, 'heartbeat']);
-    Route::post('/agent/offline', [AgentController::class, 'offline']);
+    // TODO: Move these to a separate AgentPresenceController if heartbeat/offline methods exist
+    // Route::post('/agent/heartbeat', [UserController::class, 'heartbeat']);
+    // Route::post('/agent/offline', [UserController::class, 'offline']);
 
     /*
     |--------------------------------------------------------------------------
@@ -247,16 +250,34 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/settings/preferences', [SettingController::class, 'savePreferences'])->name('settings.preferences');
         Route::post('/settings/test-webhook', [SettingController::class, 'testWebhook'])->name('settings.test-webhook');
 
-        Route::get('/agents', [AgentController::class, 'index'])->name('agents');
-        Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
-        Route::put('/agents/{user}', [AgentController::class, 'update'])->name('agents.update');
-        Route::post('/agents/{user}/approve', [AgentController::class, 'approve'])->name('agents.approve');
-        Route::delete('/agents/{user}', [AgentController::class, 'destroy'])->name('agents.destroy');
-        Route::post('/agents/{user}/unlock', [AgentController::class, 'unlock'])->name('agents.unlock');
-
         Route::get('/system-logs', [SystemLogController::class, 'index'])->name('system.logs');
         Route::get('/system-logs/export', [SystemLogController::class, 'export'])->name('system.logs.export');
         Route::get('/system-logs/sources', [SystemLogController::class, 'sources']);
+    });
+
+    Route::middleware([RoleMiddleware::class.':superadmin,admin'])->group(function () {
+        Route::get('/users', [UserController::class, 'index'])->name('users');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::post('/users/{user}/approve', [UserController::class, 'approve'])->name('users.approve');
+        Route::post('/users/{user}/unlock', [UserController::class, 'unlock'])->name('users.unlock');
+        Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
+        Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+        // Impersonate routes
+        Route::post('/users/{user}/impersonate', [ImpersonateController::class, 'impersonate'])->name('users.impersonate');
+        Route::post('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
+
+        // Agent routes
+        Route::get('/agents', [AgentController::class, 'index'])->name('agents');
+        Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+        Route::put('/agents/{agent}', [AgentController::class, 'update'])->name('agents.update');
+        Route::post('/agents/{agent}/approve', [AgentController::class, 'approve'])->name('agents.approve');
+        Route::post('/agents/{agent}/lock', [AgentController::class, 'lock'])->name('agents.lock');
+        Route::post('/agents/{agent}/unlock', [AgentController::class, 'unlock'])->name('agents.unlock');
+        Route::delete('/agents/{agent}', [AgentController::class, 'destroy'])->name('agents.destroy');
+        Route::delete('/agents/{agent}/force', [AgentController::class, 'forceDestroy'])->name('agents.force-destroy');
+        Route::post('/agents/{agent}/restore', [AgentController::class, 'restore'])->name('agents.restore');
     });
 
     Route::middleware(['auth:sanctum'])
@@ -273,16 +294,17 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| AGENTS AJAX ACTIONS (NO INERTIA)
+| USER MANAGEMENT AJAX ACTIONS (NO INERTIA)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])
     ->withoutMiddleware([\App\Http\Middleware\HandleInertiaRequests::class])
     ->group(function () {
-        Route::post('/agents', [AgentController::class, 'store']);
-        Route::put('/agents/{user}', [AgentController::class, 'update']);
-        Route::delete('/agents/{user}', [AgentController::class, 'destroy']);
-        Route::post('/agents/{user}/approve', [AgentController::class, 'approve']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::put('/users/{user}', [UserController::class, 'update']);
+        Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        Route::post('/users/{user}/approve', [UserController::class, 'approve']);
+        Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
     });
 
 /*
