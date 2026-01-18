@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -33,12 +32,12 @@ class User extends Authenticatable
 
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'last_seen'         => 'datetime',
-        'approved_at'       => 'datetime',
-        'skills'            => 'array',
+        'last_seen' => 'datetime',
+        'approved_at' => 'datetime',
+        'skills' => 'array',
         'email_verified_at' => 'datetime',
-        'last_seen'         => 'datetime',
-        'locked_until'      => 'datetime'
+        'last_seen' => 'datetime',
+        'locked_until' => 'datetime',
     ];
 
     /* =======================
@@ -95,12 +94,35 @@ class User extends Authenticatable
         return $this->last_seen && $this->last_seen->gt(now()->subMinutes(3));
     }
 
-    public function chatSessions()
-{
-    return $this->hasMany(
-        \App\Models\ChatSession::class,
-        'assigned_to'
-    );
-}
+    /**
+     * Check if user has any of the given roles
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        return in_array($this->role, $roles);
+    }
 
+    /**
+     * Check if user is a superadmin
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    /**
+     * Check if user is admin or superadmin
+     */
+    public function isAdminOrSuperAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'superadmin']);
+    }
+
+    public function chatSessions()
+    {
+        return $this->hasMany(
+            \App\Models\ChatSession::class,
+            'assigned_to'
+        );
+    }
 }

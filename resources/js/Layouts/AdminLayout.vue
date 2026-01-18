@@ -26,7 +26,7 @@ const menu = [
   { label: "Chat", icon: "mdi-whatsapp", href: "/chat", roles: ["admin","superadmin","supervisor","agent"] },
   { label: "WhatsApp Menu", icon: "mdi-format-list-bulleted", href: "/menu", roles: ["admin","superadmin"] },
   { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets", roles: ["admin","superadmin","supervisor","agent"] },
-  { label: "Agents", icon: "mdi-account-group", href: "/agents", roles: ["admin","superadmin"] },
+  { label: "Users", icon: "mdi-account-group", href: "/users", roles: ["admin","superadmin"] },
   { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates", roles: ["admin","superadmin","supervisor"] },
   { label: "Contacts", icon: "mdi-account-box", href: "/contacts-ui", roles: ["superadmin","agent","supervisor"] },
   { label: "Broadcast", icon: "mdi-send", href: "/broadcast", roles: ["admin","superadmin","supervisor"] },
