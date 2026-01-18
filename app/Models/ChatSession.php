@@ -25,10 +25,10 @@ class ChatSession extends Model
     ];
 
     protected $casts = [
-        'pinned'             => 'boolean',
-        'is_handover'        => 'boolean',
+        'pinned' => 'boolean',
+        'is_handover' => 'boolean',
         'last_agent_read_at' => 'datetime',
-        'closed_at'          => 'datetime',
+        'closed_at' => 'datetime',
     ];
 
     /* =========================
@@ -42,7 +42,7 @@ class ChatSession extends Model
 
     public function agent(): BelongsTo
     {
-        return $this->belongsTo(Agent::class, 'assigned_to');
+        return $this->belongsTo(User::class, 'assigned_to');
     }
 
     public function messages(): HasMany
@@ -53,7 +53,7 @@ class ChatSession extends Model
     public function lastMessage(): HasOne
     {
         return $this->hasOne(ChatMessage::class, 'chat_session_id')
-                    ->latestOfMany();
+            ->latestOfMany();
     }
 
     public function participants(): HasMany
@@ -97,8 +97,8 @@ class ChatSession extends Model
     public function markClosed(): void
     {
         $this->update([
-            'status'    => 'closed',
-            'closed_at'=> now(),
+            'status' => 'closed',
+            'closed_at' => now(),
         ]);
     }
 }

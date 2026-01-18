@@ -14,6 +14,11 @@ if (token) {
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 
+// =======================
+// 🍪 CREDENTIALS (SANCTUM)
+// =======================
+window.axios.defaults.withCredentials = true
+
 // ===========================
 // 🔔 Real-time via Pusher
 // ===========================

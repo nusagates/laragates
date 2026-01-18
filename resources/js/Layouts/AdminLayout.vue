@@ -43,14 +43,50 @@ const sendHeartbeat = () => {
   axios.post("/agent/heartbeat").catch(() => {})
 }
 
+/* ================= REALTIME: SESSION ASSIGNED ================= */
+const setupAgentChannel = () => {
+  if (!window.Echo || !page.props.auth?.user?.id) return
+
+  const userId = page.props.auth.user.id
+
+  window.Echo.private(`agent.${userId}`)
+    .listen('.session.assigned', (event) => {
+      console.log('New session assigned:', event)
+
+      // Reload chat sessions if user is on chat page
+      if (window.location.pathname === '/chat') {
+        // Trigger reload of sessions in chat store if available
+        if (window.chatStore && typeof window.chatStore.loadSessions === 'function') {
+          window.chatStore.loadSessions()
+        } else {
+          // Fallback: reload page
+          router.reload({ only: ['sessions'] })
+        }
+      }
+
+      // Show notification
+      if (window.$toast) {
+        window.$toast.info(`New chat assigned from ${event.session?.customer?.name || 'customer'}`)
+      }
+    })
+}
+
 onMounted(() => {
   if (["agent", "supervisor"].includes(userRole)) {
     heartbeatInterval = setInterval(sendHeartbeat, 30000)
+
+    // Setup realtime channel for session assignments
+    setupAgentChannel()
   }
 })
 
 onUnmounted(() => {
   if (heartbeatInterval) clearInterval(heartbeatInterval)
+
+  // Leave agent channel
+  if (window.Echo && page.props.auth?.user?.id) {
+    window.Echo.leave(`agent.${page.props.auth.user.id}`)
+  }
 })
 
 /* ================= IMPERSONATION ================= */

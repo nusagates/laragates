@@ -2,19 +2,20 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
-use Illuminate\Http\Client\RequestException;
 use Exception;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
 
 class FonnteService
 {
     protected string $token;
+
     protected string $endpoint;
 
     public function __construct()
     {
-        $this->token    = env('FONNTE_TOKEN');
-        $this->endpoint = env('FONNTE_SEND_URL', 'https://api.fonnte.com/send');
+        $this->endpoint = config('services.fonnte.endpoint');
+        $this->token = config('services.fonnte.token');
     }
 
     /**
@@ -25,8 +26,8 @@ class FonnteService
     public function sendText(string $phone, string $message): array
     {
         return $this->send([
-            'target'      => $phone,
-            'message'     => $message,
+            'target' => $phone,
+            'message' => $message,
             'countryCode' => '62',
         ]);
     }
@@ -39,9 +40,9 @@ class FonnteService
     public function sendMedia(string $phone, string $caption, string $fileUrl): array
     {
         return $this->send([
-            'target'      => $phone,
-            'message'     => $caption,
-            'url'         => $fileUrl,
+            'target' => $phone,
+            'message' => $caption,
+            'url' => $fileUrl,
             'countryCode' => '62',
         ]);
     }
@@ -67,7 +68,7 @@ class FonnteService
             // Validasi response Fonnte
             if (! is_array($json) || ! ($json['status'] ?? false)) {
                 throw new Exception(
-                    'Fonnte API error: ' . json_encode($json)
+                    'Fonnte API error: '.json_encode($json)
                 );
             }
 
@@ -75,7 +76,7 @@ class FonnteService
 
         } catch (RequestException $e) {
             throw new Exception(
-                'Fonnte HTTP error: ' . $e->getMessage()
+                'Fonnte HTTP error: '.$e->getMessage()
             );
         }
     }

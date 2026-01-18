@@ -17,6 +17,11 @@ const chatStore = useChatStore()
 const { subscribeToRoom, subscribeToAllSessions, unsubscribeAll } = useChat()
 const toast = useToast()
 
+// Expose chatStore to window for AdminLayout
+if (typeof window !== 'undefined') {
+  window.chatStore = chatStore
+}
+
 /* ================= NEW CHAT DIALOG ================= */
 const newChatDialog = ref(false)
 const newChatLoading = ref(false)

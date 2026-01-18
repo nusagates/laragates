@@ -14,7 +14,6 @@ use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\BroadcastReportController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactController;
-use App\Http\Controllers\Dashboard\CloseChatController;
 use App\Http\Controllers\Dashboard\TakeChatController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImpersonateController;
@@ -124,9 +123,13 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     Route::post('/test/broadcast/trigger', [TestBroadcastController::class, 'trigger'])
         ->name('test.broadcast.trigger');
 
-    // TODO: Move these to a separate AgentPresenceController if heartbeat/offline methods exist
-    // Route::post('/agent/heartbeat', [UserController::class, 'heartbeat']);
-    // Route::post('/agent/offline', [UserController::class, 'offline']);
+    /*
+    |--------------------------------------------------------------------------
+    | AGENT HEARTBEAT
+    |--------------------------------------------------------------------------
+    */
+    Route::post('/agent/heartbeat', \App\Http\Controllers\Api\AgentHeartbeatController::class)
+        ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
 
     /*
     |--------------------------------------------------------------------------
@@ -156,15 +159,15 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::post('/sessions/{session}/pin', [ChatSessionController::class, 'pin']);
         Route::post('/sessions/{session}/unpin', [ChatSessionController::class, 'unpin']);
         Route::post('/sessions/{session}/mark-read', [ChatSessionController::class, 'markRead']);
+        Route::post('/sessions/{session}/close', [ChatSessionController::class, 'close']);
+        Route::get('/agents/available', [ChatSessionController::class, 'getAvailableAgents']);
+        Route::post('/sessions/{session}/reassign', [ChatSessionController::class, 'reassign']);
         Route::get('/sessions/{session}/messages', [ChatMessageController::class, 'index']);
         Route::post('/sessions/{session}/messages', [ChatMessageController::class, 'store']);
         Route::post('/messages/{message}/retry', [ChatMessageController::class, 'retry']);
         Route::post('/messages/{message}/mark-read', [ChatMessageController::class, 'markRead']);
         Route::post('/messages/{message}/reaction', [ChatMessageController::class, 'addReaction']);
         Route::post('/sessions/outbound', [ChatController::class, 'outbound'])->name('chat.outbound');
-        Route::post('/chat/sessions/{session}/close', [CloseChatController::class, 'close'])
-            ->middleware(['auth'])
-            ->name('chat.close');
     });
 
     /*

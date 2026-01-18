@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Agent;
 use App\Models\ChatSession;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class AgentRouter
@@ -15,13 +15,15 @@ class AgentRouter
     {
         return DB::transaction(function () {
 
-            $agent = Agent::query()
+            $agent = User::query()
+                ->where('role', 'agent')
                 ->where('is_online', true)
+                ->whereNotNull('approved_at')
                 ->where('last_heartbeat_at', '>=', now()->subSeconds(60))
                 ->withCount([
                     'chatSessions as active_chats_count' => function ($q) {
                         $q->whereIn('status', ['open', 'pending']);
-                    }
+                    },
                 ])
                 ->orderBy('active_chats_count')
                 ->orderBy('last_heartbeat_at', 'desc')
@@ -53,8 +55,11 @@ class AgentRouter
 
             $session->update([
                 'assigned_to' => $agentId,
-                'status'      => 'pending',
+                'status' => 'pending',
             ]);
+
+            // Dispatch event untuk notifikasi realtime ke agent
+            event(new \App\Events\SessionAssignedEvent($session->fresh()));
 
             return $agentId;
         });

@@ -24,6 +24,8 @@ class User extends Authenticatable
         'skills',
         'is_active',
         'approved_at',
+        'is_online',
+        'last_heartbeat_at',
     ];
 
     protected $hidden = [
@@ -36,9 +38,9 @@ class User extends Authenticatable
         'last_seen' => 'datetime',
         'approved_at' => 'datetime',
         'skills' => 'array',
-        'email_verified_at' => 'datetime',
-        'last_seen' => 'datetime',
         'locked_until' => 'datetime',
+        'is_online' => 'boolean',
+        'last_heartbeat_at' => 'datetime',
     ];
 
     /* =======================

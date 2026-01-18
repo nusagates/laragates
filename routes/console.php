@@ -1,11 +1,10 @@
 <?php
 
+use App\Jobs\SendScheduledBroadcastJob;
+use App\Services\TicketSlaService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
-
-use App\Services\TicketSlaService;
-use App\Jobs\SendScheduledBroadcastJob;
 
 /*
 |--------------------------------------------------------------------------
@@ -15,8 +14,8 @@ use App\Jobs\SendScheduledBroadcastJob;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })
-->purpose('Display an inspiring quote')
-->hourly();
+    ->purpose('Display an inspiring quote')
+    ->hourly();
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +38,17 @@ Schedule::job(new SendScheduledBroadcastJob)
 Schedule::call(function () {
     TicketSlaService::run();
 })
-->everyMinute()
-->name('ticket-sla-check')
-->withoutOverlapping();
+    ->everyMinute()
+    ->name('ticket-sla-check')
+    ->withoutOverlapping();
+
+/*
+|--------------------------------------------------------------------------
+| SCHEDULER — CHAT ARCHIVE
+|--------------------------------------------------------------------------
+| Archive closed chat sessions older than 7 days
+*/
+Schedule::command('chat:archive-closed-sessions')
+    ->dailyAt('02:00')
+    ->timezone('Asia/Jakarta')
+    ->name('archive-closed-sessions');
