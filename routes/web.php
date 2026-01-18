@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AiReportController;
 use App\Http\Controllers\Admin\AiSettingController;
+use App\Http\Controllers\AgentController;
 use App\Http\Controllers\AiSummaryController;
 // Controllers
 use App\Http\Controllers\AnalyticsController;
@@ -266,6 +267,17 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         // Impersonate routes
         Route::post('/users/{user}/impersonate', [ImpersonateController::class, 'impersonate'])->name('users.impersonate');
         Route::post('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
+
+        // Agent routes
+        Route::get('/agents', [AgentController::class, 'index'])->name('agents');
+        Route::post('/agents', [AgentController::class, 'store'])->name('agents.store');
+        Route::put('/agents/{agent}', [AgentController::class, 'update'])->name('agents.update');
+        Route::post('/agents/{agent}/approve', [AgentController::class, 'approve'])->name('agents.approve');
+        Route::post('/agents/{agent}/lock', [AgentController::class, 'lock'])->name('agents.lock');
+        Route::post('/agents/{agent}/unlock', [AgentController::class, 'unlock'])->name('agents.unlock');
+        Route::delete('/agents/{agent}', [AgentController::class, 'destroy'])->name('agents.destroy');
+        Route::delete('/agents/{agent}/force', [AgentController::class, 'forceDestroy'])->name('agents.force-destroy');
+        Route::post('/agents/{agent}/restore', [AgentController::class, 'restore'])->name('agents.restore');
     });
 
     Route::middleware(['auth:sanctum'])
