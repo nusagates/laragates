@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Middleware\CheckQuota;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Http\Middleware\CheckQuota;
 
 return Application::configure(basePath: dirname(__DIR__))
 
@@ -13,10 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
     |--------------------------------------------------------------------------
     */
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        api: __DIR__ . '/../routes/api.php',
-        commands: __DIR__ . '/../routes/console.php',
-        channels: __DIR__ . '/../routes/channels.php', // defaultnya udah include channels
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php', // defaultnya udah include channels
         health: '/up',
     )
 
@@ -57,6 +57,15 @@ return Application::configure(basePath: dirname(__DIR__))
 
         /**
          * ==================================================
+         * API MIDDLEWARE
+         * ==================================================
+         */
+        $middleware->api(append: [
+            \App\Http\Middleware\UpdateAgentLastSeen::class,
+        ]);
+
+        /**
+         * ==================================================
          * MIDDLEWARE ALIAS
          * ==================================================
          */
@@ -75,6 +84,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // contoh existing scheduler
         $schedule->command('waba:sync-templates')->hourly();
 
+        // Agent balancer: reassign sessions from offline agents
+        $schedule->command('agent:reassign-offline-sessions')->everyFiveMinutes();
+
         // (kalau ada SLA, scheduler lain masuk sini)
         // $schedule->call(fn () => TicketSlaService::run())->everyMinute();
     })
@@ -90,6 +102,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
     ->create();
 
-    $app->routeMiddleware([
+$app->routeMiddleware([
     'quota' => CheckQuota::class,
 ]);

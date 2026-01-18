@@ -3,25 +3,25 @@
 namespace App\Http\Controllers\Api\Chat;
 
 use App\Http\Controllers\Controller;
-use App\Models\Customer;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
-use App\Services\MenuEngine;
-use Illuminate\Http\Request;
+use App\Models\Customer;
 use App\Services\AgentRouter;
-use App\Services\FonnteService;
-use Illuminate\Support\Facades\Log;
+use App\Services\ContactIntelligenceService;
 use App\Services\ContactScoringService;
+use App\Services\FonnteService;
+use App\Services\MenuEngine;
 use App\Services\System\ChatLogService;
 use App\Services\System\FonnteLogService;
-use App\Services\ContactIntelligenceService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class FonnteWebhookController extends Controller
 {
     public function handle(Request $request)
     {
         Log::info('[FONNTE WEBHOOK RECEIVED]:1', [
-            'payload' => $request->all()
+            'payload' => $request->all(),
         ]);
         // ===============================
         // LOG RAW WEBHOOK
@@ -32,11 +32,11 @@ class FonnteWebhookController extends Controller
             meta: $request->all()
         );
 
-        $sender  = $request->input('sender');
+        $sender = $request->input('sender');
         $message = $request->input('message');
-        $name    = $request->input('name');
+        $name = $request->input('name');
 
-        if (!$sender || !$message) {
+        if (! $sender || ! $message) {
             return response()->json(['ignored' => true]);
         }
 
@@ -46,10 +46,10 @@ class FonnteWebhookController extends Controller
         $phone = preg_replace('/[^0-9]/', '', $sender);
 
         if (str_starts_with($phone, '0')) {
-            $phone = '62' . substr($phone, 1);
+            $phone = '62'.substr($phone, 1);
         }
-        if (!str_starts_with($phone, '62')) {
-            $phone = '62' . $phone;
+        if (! str_starts_with($phone, '62')) {
+            $phone = '62'.$phone;
         }
 
         // ===============================
@@ -72,8 +72,8 @@ class FonnteWebhookController extends Controller
                 event: 'blacklist_blocked_inbound',
                 meta: [
                     'customer_id' => $customer->id,
-                    'phone'       => $phone,
-                    'text'        => $message,
+                    'phone' => $phone,
+                    'text' => $message,
                 ]
             );
 
@@ -89,10 +89,10 @@ class FonnteWebhookController extends Controller
             ->whereIn('status', ['open', 'pending'])
             ->first();
 
-        if (!$session) {
+        if (! $session) {
             $session = ChatSession::create([
                 'customer_id' => $customer->id,
-                'status'      => 'open',
+                'status' => 'open',
             ]);
 
             // stats
@@ -106,12 +106,12 @@ class FonnteWebhookController extends Controller
         // ===============================
         $msg = ChatMessage::create([
             'chat_session_id' => $session->id,
-            'sender'          => 'customer',
-            'message'         => $message,
-            'type'            => 'text',
-            'is_outgoing'     => false,
-            'status'          => 'received',
-            'is_handover'     => (bool) $session->is_handover,
+            'sender' => 'customer',
+            'message' => $message,
+            'type' => 'text',
+            'is_outgoing' => false,
+            'status' => 'received',
+            'is_handover' => (bool) $session->is_handover,
         ]);
 
         $session->touch();
@@ -121,7 +121,7 @@ class FonnteWebhookController extends Controller
         // ===============================
         $customer->increment('total_messages');
         $customer->update([
-            'last_message_at'   => now(),
+            'last_message_at' => now(),
             'last_contacted_at' => now(),
         ]);
         ContactScoringService::evaluate($customer);
@@ -135,8 +135,8 @@ class FonnteWebhookController extends Controller
             sessionId: $session->id,
             meta: [
                 'message_id' => $msg->id,
-                'text'       => $message,
-                'handover'   => $session->is_handover,
+                'text' => $message,
+                'handover' => $session->is_handover,
             ]
         );
 
@@ -145,7 +145,8 @@ class FonnteWebhookController extends Controller
         // ===============================
         try {
             broadcast(new \App\Events\Chat\MessageSent($msg))->toOthers();
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+        }
 
         // ===============================
         // HANDOVER GUARD
@@ -164,9 +165,9 @@ class FonnteWebhookController extends Controller
             $session->update([
                 'is_handover' => false,
                 'assigned_to' => null,
-                'status'      => 'open',
-                'bot_state'   => null,
-                'bot_context' => null
+                'status' => 'open',
+                'bot_state' => null,
+                'bot_context' => null,
             ]);
 
             $menuText = MenuEngine::mainMenu();
@@ -174,11 +175,11 @@ class FonnteWebhookController extends Controller
 
             ChatMessage::create([
                 'chat_session_id' => $session->id,
-                'sender'          => 'system',
-                'message'         => $menuText,
-                'type'            => 'text',
-                'is_outgoing'     => true,
-                'status'          => 'sent'
+                'sender' => 'system',
+                'message' => $menuText,
+                'type' => 'text',
+                'is_outgoing' => true,
+                'status' => 'sent',
             ]);
 
             return response()->json(['success' => true]);
@@ -193,7 +194,7 @@ class FonnteWebhookController extends Controller
 
             $menu = MenuEngine::findByKey($key);
 
-            if (!$menu) {
+            if (! $menu) {
                 return response()->json(['success' => true]);
             }
 
@@ -203,28 +204,28 @@ class FonnteWebhookController extends Controller
 
                 $session->update([
                     'is_handover' => true,
-                    'bot_state'   => null,
-                    'bot_context' => null
+                    'bot_state' => null,
+                    'bot_context' => null,
                 ]);
 
                 $reply =
-                    "👩‍💼 *Menghubungkan ke Customer Service*\n\n" .
-                    "Mohon tunggu, agent kami akan segera membantu Anda 🙏";
+                    "👩‍💼 *Menghubungkan ke Customer Service*\n\n".
+                    'Mohon tunggu, agent kami akan segera membantu Anda 🙏';
 
                 app(FonnteService::class)->sendText($phone, $reply);
 
                 ChatMessage::create([
                     'chat_session_id' => $session->id,
-                    'sender'          => 'system',
-                    'message'         => $reply,
-                    'type'            => 'text',
-                    'is_outgoing'     => true,
-                    'status'          => 'sent'
+                    'sender' => 'system',
+                    'message' => $reply,
+                    'type' => 'text',
+                    'is_outgoing' => true,
+                    'status' => 'sent',
                 ]);
 
                 return response()->json([
-                    'handover'    => true,
-                    'assigned_to' => $agentId
+                    'handover' => true,
+                    'assigned_to' => $agentId,
                 ]);
             }
         }
@@ -241,7 +242,7 @@ class FonnteWebhookController extends Controller
     public function updateStatus(Request $request)
     {
         Log::info('[FONNTE STATUS UPDATE RECEIVED]:1', [
-            'payload' => $request->all()
+            'payload' => $request->all(),
         ]);
         try {
             $data = $request->validate([
@@ -253,8 +254,8 @@ class FonnteWebhookController extends Controller
             ]);
 
             $stateId = $data['stateid'];
-            $status  = $data['status'] ?? null;
-            $state   = $data['state'];
+            $status = $data['status'] ?? null;
+            $state = $data['state'];
             $id = $data['id'] ?? null;
             $device = $data['device'] ?? null;
 
@@ -274,10 +275,10 @@ class FonnteWebhookController extends Controller
 
                     $message->update([
                         'delivery_status' => 'sent',
-                        'wa_message_id'   => trim($id, '[]'),
-                        'state_id'        => $stateId,
-                        'status'          => 'sent',
-                        'last_error'      => null,
+                        'wa_message_id' => trim($id, '[]'),
+                        'state_id' => $stateId,
+                        'status' => 'sent',
+                        'last_error' => null,
                     ]);
 
                     // Refresh message to get updated data
@@ -292,10 +293,10 @@ class FonnteWebhookController extends Controller
 
                 } else {
                     Log::warning('Fonnte status update: message not found for state_id '.$stateId);
+
                     return response()->json(['success' => false, 'message' => 'Message not found'], 404);
                 }
-            }
-            else if($state === 'delivered' || $state === 'read') {
+            } elseif ($state === 'delivered' || $state === 'read') {
                 $message = ChatMessage::where('state_id', $stateId)->first();
                 if ($message) {
                     Log::info('[WEBHOOK] Updating message status', [
@@ -307,7 +308,7 @@ class FonnteWebhookController extends Controller
 
                     $message->update([
                         'delivery_status' => $state,
-                        'status'          => $state,
+                        'status' => $state,
                     ]);
 
                     // Refresh message to get updated data
@@ -322,6 +323,7 @@ class FonnteWebhookController extends Controller
                     broadcast(new \App\Events\Chat\MessageUpdated($message));
                 } else {
                     Log::warning('Fonnte status update: message not found for state_id '.$stateId);
+
                     return response()->json(['success' => false, 'message' => 'Message not found'], 404);
                 }
             }
@@ -332,15 +334,15 @@ class FonnteWebhookController extends Controller
                 sessionId: $message->chat_session_id,
                 meta: [
                     'message_id' => $message->id,
-                    'state_id'   => $stateId,
-                    'status'     => $status,
+                    'state_id' => $stateId,
+                    'status' => $status,
                     'wa_message_id' => $id,
                 ]
             );
 
             return response()->json(['success' => true]);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
         }
 
     }

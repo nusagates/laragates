@@ -16,8 +16,17 @@ class ChatMessageController extends Controller
     /**
      * GET messages of chat session
      */
-    public function index(ChatSession $session)
+    public function index(Request $request, ChatSession $session)
     {
+        $user = $request->user();
+
+        // Authorization: Agent can only see messages from their assigned sessions
+        if ($user->role === 'agent' && $session->assigned_to !== $user->id) {
+            return response()->json([
+                'error' => 'Unauthorized. This session is not assigned to you.',
+            ], 403);
+        }
+
         return ChatMessage::where('chat_session_id', $session->id)
             ->orderBy('id', 'asc')
             ->get();
@@ -30,6 +39,15 @@ class ChatMessageController extends Controller
     {
         if (! $this->checkApproval()) {
             return response()->json(['error' => 'Your account is pending approval'], 403);
+        }
+
+        $user = $request->user();
+
+        // Authorization: Agent can only send messages to their assigned sessions
+        if ($user->role === 'agent' && $session->assigned_to !== $user->id) {
+            return response()->json([
+                'error' => 'Unauthorized. This session is not assigned to you.',
+            ], 403);
         }
 
         $data = $request->validate([

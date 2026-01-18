@@ -346,5 +346,70 @@ export const useChatStore = defineStore('chat', {
         console.error('Failed to mark as read:', error)
       }
     },
+
+    /* =====================
+       CLOSE SESSION
+    ===================== */
+    async closeSession(sessionId) {
+      try {
+        const res = await axios.post(`/chat/sessions/${sessionId}/close`)
+
+        // Remove session from list or update status
+        const sessionIndex = this.sessions.findIndex(s => s.session_id === sessionId)
+        if (sessionIndex !== -1) {
+          // Remove from active sessions list (closed sessions tidak ditampilkan)
+          this.sessions.splice(sessionIndex, 1)
+
+          // If this was the active session, clear it
+          if (this.activeRoomId === sessionId) {
+            // Set to first available session or null
+            this.activeRoomId = this.sessions.length > 0 ? this.sessions[0].session_id : null
+          }
+        }
+
+        return res.data
+      } catch (error) {
+        console.error('Failed to close session:', error)
+        throw error
+      }
+    },
+
+    /* =====================
+       REASSIGN SESSION
+    ===================== */
+    async getAvailableAgents() {
+      try {
+        const res = await axios.get('/chat/agents/available')
+        return res.data.agents || []
+      } catch (error) {
+        console.error('Failed to get available agents:', error)
+        throw error
+      }
+    },
+
+    async reassignSession(sessionId, agentId) {
+      try {
+        const res = await axios.post(`/chat/sessions/${sessionId}/reassign`, {
+          agent_id: agentId,
+        })
+
+        // Remove session from current agent's list (karena sudah dialihkan)
+        const sessionIndex = this.sessions.findIndex(s => s.session_id === sessionId)
+        if (sessionIndex !== -1) {
+          this.sessions.splice(sessionIndex, 1)
+
+          // If this was the active session, clear it
+          if (this.activeRoomId === sessionId) {
+            // Set to first available session or null
+            this.activeRoomId = this.sessions.length > 0 ? this.sessions[0].session_id : null
+          }
+        }
+
+        return res.data
+      } catch (error) {
+        console.error('Failed to reassign session:', error)
+        throw error
+      }
+    },
   },
 })
