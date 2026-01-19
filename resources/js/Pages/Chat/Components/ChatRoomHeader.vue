@@ -117,9 +117,9 @@ async function handleReassignSession() {
     </div>
 
     <div class="header-right">
-      <v-btn icon size="small" variant="text">
+      <!-- <v-btn icon size="small" variant="text">
         <v-icon>mdi-phone</v-icon>
-      </v-btn>
+      </v-btn> -->
 
       <!-- Menu Dropdown -->
       <v-menu>

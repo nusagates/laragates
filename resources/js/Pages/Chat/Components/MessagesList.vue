@@ -178,19 +178,32 @@ async function loadMore() {
       hasMore.value = false
     }
 
+    // Stop loading indicator BEFORE measuring new height so spinner is removed
+    // AND prevent scroll event from triggering loadMore again
+    isRestoringScroll.value = true
+    loadingMore.value = false
+
     await nextTick()
 
     // Maintain scroll position
     const newScrollHeight = messagesPanel.value.scrollHeight
     messagesPanel.value.scrollTop = newScrollHeight - oldScrollHeight
+
+    // Allow scroll handling again after a short delay
+    setTimeout(() => {
+      isRestoringScroll.value = false
+    }, 100)
+
   } catch (error) {
     console.error('Failed to load more messages:', error)
-  } finally {
     loadingMore.value = false
+    isRestoringScroll.value = false
   }
 }
 
 function handleScroll(event) {
+  if (isRestoringScroll.value) return
+
   const element = event.target
 
   // Check if user is near bottom
