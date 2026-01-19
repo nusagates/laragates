@@ -1,22 +1,65 @@
+<script setup>
+import AdminLayout from '@/Layouts/AdminLayout.vue'
+
+import OverviewCards from './OverviewCards.vue'
+import MessagesTrendChart from './MessagesTrendChart.vue'
+import AgentPerformanceChart from './AgentPerformanceChart.vue'
+import PeakHourChart from './PeakHourChart.vue'
+import SessionsTable from './SessionsTable.vue'
+
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas"
+
+/* ================= EXPORT PDF ================= */
+const exportPDF = async () => {
+  const target = document.getElementById("analytics-export-area")
+  if (!target) return
+
+  const canvas = await html2canvas(target, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#020617",
+  })
+
+  const imgData = canvas.toDataURL("image/png")
+  const pdf = new jsPDF("p", "mm", "a4")
+
+  const pdfWidth = pdf.internal.pageSize.getWidth()
+  const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+
+  pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight)
+  pdf.save(`analytics-report-${Date.now()}.pdf`)
+}
+</script>
+
 <template>
   <AdminLayout>
-    
-    <!-- tombol export -->
-    <v-row class="mb-4">
-      <v-col cols="12" class="d-flex justify-end">
-        <v-btn color="primary" @click="exportPDF">
-          <v-icon left>mdi-file-pdf-box</v-icon>
-          Export PDF
-        </v-btn>
-      </v-col>
-    </v-row>
+    <template #title>Analytics</template>
 
-    <!-- WRAP AREA UNTUK EXPORT -->
-    <v-container fluid class="mt-4" id="analytics-export-area">
+    <!-- ================= HEADER ================= -->
+    <div class="analytics-header">
+      <div>
+        <h3>Analytics Dashboard</h3>
+        <p>Monitoring & performance overview</p>
+      </div>
 
+      <v-btn
+        color="primary"
+        prepend-icon="mdi-file-pdf-box"
+        @click="exportPDF"
+      >
+        Export PDF
+      </v-btn>
+    </div>
+
+    <!-- ================= EXPORT AREA ================= -->
+    <div id="analytics-export-area" class="analytics-dark">
+
+      <!-- OVERVIEW -->
       <OverviewCards />
 
-      <v-row class="mt-6" dense>
+      <!-- ROW 1 -->
+      <v-row dense class="analytics-grid mt-6">
         <v-col cols="12" lg="8">
           <MessagesTrendChart />
         </v-col>
@@ -26,7 +69,8 @@
         </v-col>
       </v-row>
 
-      <v-row class="mt-6" dense>
+      <!-- ROW 2 -->
+      <v-row dense class="analytics-grid mt-6">
         <v-col cols="12" lg="8">
           <PeakHourChart />
         </v-col>
@@ -36,43 +80,106 @@
         </v-col>
       </v-row>
 
-    </v-container>
-
+    </div>
   </AdminLayout>
 </template>
 
-<script setup>
-import AdminLayout from '@/Layouts/AdminLayout.vue'
-import OverviewCards from './OverviewCards.vue'
-import MessagesTrendChart from './MessagesTrendChart.vue'
-import AgentPerformanceChart from './AgentPerformanceChart.vue'
-import PeakHourChart from './PeakHourChart.vue'
-import SessionsTable from './SessionsTable.vue'
+<style scoped>
+/* =========================================================
+   ANALYTICS – DARK WABA (SAFE & STABLE)
+========================================================= */
 
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+.analytics-dark {
+  color: #e5e7eb;
+}
 
-const exportPDF = async () => {
-  const dashboard = document.querySelector("#analytics-export-area");
+/* ================= HEADER ================= */
+.analytics-header {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  padding: 20px;
+  border-radius: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
 
-  if (!dashboard) {
-    console.error("Dashboard not found for export");
-    return;
+.analytics-header p {
+  color: #94a3b8;
+}
+
+/* ================= GRID ================= */
+.analytics-grid {
+  align-items: stretch;
+}
+
+/* ================= CARD FIX ================= */
+:deep(.v-card) {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 16px;
+  color: #e5e7eb;
+}
+
+/* ================= CHART WRAPPER ================= */
+/* WAJIB agar Chart.js tidak kabur */
+:deep(.chart-wrapper) {
+  height: 260px;
+  position: relative;
+}
+
+/* ================= TABLE FIX ================= */
+:deep(.sessions-card) {
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+/* ================= TABLE DARK ================= */
+:deep(.v-table),
+:deep(table) {
+  background: transparent !important;
+}
+
+:deep(tbody td),
+:deep(thead th) {
+  color: #e5e7eb !important;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+/* ================= BUTTON ================= */
+.v-btn {
+  border-radius: 10px;
+}
+
+/* ================= PDF SAFETY ================= */
+@media print {
+  .analytics-header {
+    display: none;
   }
+}
 
-  // generate screenshot
-  const canvas = await html2canvas(dashboard, {
-    scale: 2,
-    useCORS: true,
-  });
+/* ================= HEADER ================= */
+.analytics-header {
+  background: linear-gradient(180deg, #020617, #0f172a);
+  padding: 20px;
+  border-radius: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
 
-  const imgData = canvas.toDataURL("image/png");
-  const pdf = new jsPDF("p", "mm", "a4");
+/* 🔥 FIX UTAMA */
+.analytics-header h3 {
+  color: #e5e7eb !important;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
 
-  const pdfWidth = pdf.internal.pageSize.getWidth();
-  const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+.analytics-header p {
+  color: #94a3b8;
+  margin-top: 4px;
+}
 
-  pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
-  pdf.save(`analytics-report-${Date.now()}.pdf`);
-};
-</script>
+</style>

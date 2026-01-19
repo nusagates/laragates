@@ -17,9 +17,12 @@ class BroadcastApprovalController extends Controller
      */
     public function requestApproval(Request $request, BroadcastCampaign $campaign)
     {
-        // Allow if creator or agent (adjust this to your permission system)
-        if ($campaign->created_by && $campaign->created_by !== Auth::id() && !Auth::user()->hasRole('agent')) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        // Check if campaign is in draft status
+        if ($campaign->status !== 'draft') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Campaign must be in draft status to request approval',
+            ], 400);
         }
 
         $data = $request->validate([
@@ -32,15 +35,20 @@ class BroadcastApprovalController extends Controller
         $approval = BroadcastApproval::create([
             'broadcast_campaign_id' => $campaign->id,
             'requested_by' => Auth::id(),
-            'request_notes' => $data['notes'] ?? null,
+            'request_notes' => $data['notes'] ?? 'Approval requested',
             'action' => 'requested',
             'snapshot' => $snapshot,
         ]);
 
         // Set campaign status to pending_approval
-        $campaign->markPendingApproval();
+        $campaign->status = 'pending_approval';
+        $campaign->save();
 
-        return response()->json(['ok' => true, 'approval' => $approval]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Approval request submitted successfully',
+            'approval' => $approval,
+        ]);
     }
 
     /**
@@ -138,7 +146,7 @@ class BroadcastApprovalController extends Controller
     protected function authorizeAdmin()
     {
         // adapt this to your roles/permissions implementation
-        if (!Auth::user()->hasRole('superadmin') && !Auth::user()->hasRole('admin')) {
+        if (! Auth::user()->hasRole('superadmin') && ! Auth::user()->hasRole('admin')) {
             abort(403);
         }
     }

@@ -1,29 +1,42 @@
-<template>
-  <v-app class="login-bg"
-    style="
-      background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),
-      url('/images/landing-bg.jpg');
-      background-size: cover;
-      background-position: center;
-      min-height: 100vh;
-    "
-  >
-    <v-container class="d-flex justify-center align-center" style="min-height: 100vh;">
-      <Head title="Log in" />
+<script setup>
+import { ref } from 'vue'
+import { Head, Link, useForm } from '@inertiajs/vue3'
 
-      <v-card
-        width="420"
-        elevation="12"
-        class="rounded-lg pa-8"
-        style="background-color: rgba(255,255,255,0.92);"
-      >
-        <div class="text-center mb-6">
-          <h2 class="text-h5 font-weight-bold" style="color:#333">Welcome Back</h2>
-          <p class="text-body-2" style="color:#666">Please enter your account</p>
+defineProps({
+  canResetPassword: Boolean,
+  status: String,
+})
+
+const form = useForm({
+  email: '',
+  password: '',
+  remember: false,
+})
+
+const showPassword = ref(false)
+
+const submit = () => {
+  form.post(route('login'), {
+    onFinish: () => form.reset('password'),
+  })
+}
+</script>
+
+<template>
+  <Head title="Login – WABA" />
+
+  <v-app class="auth-bg">
+    <v-container class="fill-height d-flex align-center justify-center">
+      <v-card width="440" class="auth-card">
+        <!-- HEADER -->
+        <div class="text-center mb-8">
+          <h2 class="title">Welcome back</h2>
+          <p class="subtitle">
+            Sign in to continue to WABA
+          </p>
         </div>
 
         <form @submit.prevent="submit">
-
           <!-- EMAIL -->
           <v-text-field
             v-model="form.email"
@@ -32,10 +45,9 @@
             variant="outlined"
             density="comfortable"
             :error-messages="form.errors.email"
-            required
-            autofocus
-            autocomplete="email"
             class="mb-4"
+            autofocus
+            required
           />
 
           <!-- PASSWORD -->
@@ -45,69 +57,84 @@
             label="Password"
             variant="outlined"
             density="comfortable"
-            :append-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-            @click:append="showPassword = !showPassword"
+            :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+            @click:append-inner="showPassword = !showPassword"
             :error-messages="form.errors.password"
-            required
-            autocomplete="current-password"
             class="mb-2"
+            required
           />
 
-          <!-- Remember -->
+          <!-- REMEMBER -->
           <v-checkbox
             v-model="form.remember"
             label="Remember me"
             density="compact"
-            class="mt-0"
+            class="mt-1 mb-6"
           />
 
-          <!-- Forgot + Login -->
-          <div class="d-flex justify-space-between align-center mt-4">
+          <!-- LOGIN BUTTON -->
+          <v-btn
+            block
+            size="large"
+            color="primary"
+            type="submit"
+            :loading="form.processing"
+            :disabled="form.processing"
+            class="mb-4"
+          >
+            Sign In
+          </v-btn>
+
+          <!-- FOOTER -->
+          <div class="text-center text-body-2">
             <Link
               v-if="canResetPassword"
               :href="route('password.request')"
-              class="text-blue text-decoration-underline"
+              class="text-primary font-weight-medium text-decoration-none d-block mb-2"
             >
               Forgot password?
             </Link>
 
-            <v-btn
-              :loading="form.processing"
-              :disabled="form.processing"
-              color="primary"
-              type="submit"
+            <span class="text-grey-darken-1">
+              Don’t have an account?
+            </span>
+            <Link
+              :href="route('register')"
+              class="ml-1 text-primary font-weight-medium text-decoration-none"
             >
-              Log in
-            </v-btn>
+              Create one
+            </Link>
           </div>
-
         </form>
-
       </v-card>
     </v-container>
   </v-app>
 </template>
 
-<script setup>
-import { ref } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+<style scoped>
+/* BACKGROUND */
+.auth-bg {
+  background: radial-gradient(
+    circle at top,
+    #eef3fb,
+    #f8fbff
+  );
+}
 
-defineProps({
-  canResetPassword: Boolean,
-  status: String,
-});
+/* CARD */
+.auth-card {
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+}
 
-const form = useForm({
-  email: '',
-  password: '',
-  remember: false,
-});
-
-const showPassword = ref(false);
-
-const submit = () => {
-  form.post(route('login'), {
-    onFinish: () => form.reset('password'),
-  });
-};
-</script>
+/* TEXT */
+.title {
+  font-size: 24px;
+  font-weight: 700;
+}
+.subtitle {
+  font-size: 14px;
+  color: #64748b;
+}
+</style>

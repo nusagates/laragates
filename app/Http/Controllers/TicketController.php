@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Ticket;
 use App\Models\TicketMessage;
 use App\Models\User;
+use App\Services\TicketAuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -12,7 +13,9 @@ use Inertia\Inertia;
 class TicketController extends Controller
 {
     /**
-     * Halaman utama ticket
+     * ===============================
+     * HALAMAN LIST TICKET
+     * ===============================
      */
     public function index(Request $request)
     {
@@ -33,18 +36,30 @@ class TicketController extends Controller
                   ->orWhere('subject', 'like', "%{$search}%")
                   ->orWhere('customer_phone', 'like', "%{$search}%");
             });
+
+            TicketAuditService::log(
+    $ticket,
+    'ticket_created',
+    null,
+    [
+        'subject' => $ticket->subject,
+        'status'  => $ticket->status,
+    ],
+    $request
+);
+
         }
 
         $tickets = $query->get()->map(function ($t) {
             return [
-                'id'            => $t->id,
-                'customer_name' => $t->customer_name,
-                'subject'       => $t->subject,
-                'status'        => $t->status,
-                'priority'      => $t->priority,
-                'channel'       => $t->channel,
-                'assigned_to'   => $t->assigned_to,
-                'assigned_name' => $t->agent?->name,
+                'id'              => $t->id,
+                'customer_name'   => $t->customer_name,
+                'subject'         => $t->subject,
+                'status'          => $t->status,
+                'priority'        => $t->priority,
+                'channel'         => $t->channel,
+                'assigned_to'     => $t->assigned_to,
+                'assigned_name'   => $t->agent?->name,
                 'last_message_at' => optional($t->last_message_at)->format('H:i'),
             ];
         });
@@ -56,7 +71,6 @@ class TicketController extends Controller
             'closed'  => Ticket::where('status', 'closed')->count(),
         ];
 
-        // List agents untuk assign dropdown
         $agents = User::whereIn('role', ['agent', 'admin'])
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -73,40 +87,84 @@ class TicketController extends Controller
     }
 
     /**
-     * Detail Ticket + Messages (AJAX)
+     * ===============================
+     * CREATE TICKET (MANUAL OLEH CS)
+     * ===============================
+     */
+    public function store(Request $request)
+{
+    $data = $request->validate([
+        'customer_name'  => 'required|string|max:255',
+        'customer_phone' => 'nullable|string|max:30',
+        'subject'        => 'required|string|max:255',
+        'priority'       => 'required|in:low,medium,high',
+        'channel'        => 'required|string',
+    ]);
+
+    $ticket = Ticket::create([
+        'customer_name'  => $data['customer_name'],
+        'customer_phone' => $data['customer_phone'],
+        'subject'        => $data['subject'],
+        'priority'       => $data['priority'],
+        'channel'        => $data['channel'],
+        'status'         => 'pending',
+        'last_message_at'=> now(),
+    ]);
+
+    return response()->json([
+        'id' => $ticket->id,
+    ]);
+}
+
+
+    /**
+     * ===============================
+     * DETAIL TICKET + INTERNAL CHAT
+     * (STANDALONE TICKET)
+     * ===============================
      */
     public function show(Ticket $ticket)
     {
+        // auto open ticket
+        if ($ticket->status === 'pending') {
+            $ticket->status = 'ongoing';
+            $ticket->save();
+        }
+
         $ticket->load(['agent', 'messages.sender']);
 
         return [
             'ticket' => [
-                'id'            => $ticket->id,
-                'customer_name' => $ticket->customer_name,
-                'customer_phone'=> $ticket->customer_phone,
-                'subject'       => $ticket->subject,
-                'status'        => $ticket->status,
-                'priority'      => $ticket->priority,
-                'channel'       => $ticket->channel,
-                'assigned_to'   => $ticket->assigned_to,
-                'assigned_name' => $ticket->agent?->name,
-                'created_at'    => $ticket->created_at->format('d M Y H:i'),
+                'id'              => $ticket->id,
+                'customer_name'   => $ticket->customer_name,
+                'customer_phone'  => $ticket->customer_phone,
+                'subject'         => $ticket->subject,
+                'status'          => $ticket->status,
+                'priority'        => $ticket->priority,
+                'channel'         => $ticket->channel,
+                'assigned_to'     => $ticket->assigned_to,
+                'assigned_name'   => $ticket->agent?->name,
+                'created_at'      => $ticket->created_at->format('d M Y H:i'),
             ],
             'messages' => $ticket->messages->map(function ($m) {
                 return [
                     'id'          => $m->id,
                     'sender_type' => $m->sender_type,
-                    'sender_name' => $m->sender?->name ?? 'Customer',
-                    'is_me'       => $m->sender_id && $m->sender_id === Auth::id(),
+                    'sender_name' => $m->sender?->name ?? 'Internal',
+                    'is_me'       => $m->sender_id === Auth::id(),
                     'message'     => $m->message,
-                    'time'        => $m->created_at->timezone('Asia/Jakarta')->format('H:i'),
+                    'time'        => $m->created_at
+                                        ->timezone('Asia/Jakarta')
+                                        ->format('H:i'),
                 ];
             }),
         ];
     }
 
     /**
-     * Kirim balasan oleh Agent
+     * ===============================
+     * REPLY INTERNAL (AGENT)
+     * ===============================
      */
     public function reply(Request $request, Ticket $ticket)
     {
@@ -114,7 +172,7 @@ class TicketController extends Controller
             'message' => 'required|string|max:5000',
         ]);
 
-        $user = auth()->user();
+        $user = Auth::user();
 
         $msg = TicketMessage::create([
             'ticket_id'   => $ticket->id,
@@ -123,13 +181,15 @@ class TicketController extends Controller
             'message'     => $request->message,
         ]);
 
-        // Update ticket state
+        // update ticket state
         if ($ticket->status === 'pending') {
             $ticket->status = 'ongoing';
         }
+
         if (!$ticket->assigned_to) {
             $ticket->assigned_to = $user->id;
         }
+
         $ticket->last_message_at = now();
         $ticket->save();
 
@@ -141,10 +201,23 @@ class TicketController extends Controller
             'message'     => $msg->message,
             'time'        => $msg->created_at->format('H:i'),
         ];
+
+        TicketAuditService::log(
+    $ticket,
+    'reply_sent',
+    null,
+    [
+        'message_id' => $msg->id,
+    ],
+    $request
+);
+
     }
 
     /**
-     * Update Status Ticket
+     * ===============================
+     * UPDATE STATUS
+     * ===============================
      */
     public function updateStatus(Request $request, Ticket $ticket)
     {
@@ -156,20 +229,53 @@ class TicketController extends Controller
         $ticket->save();
 
         return back()->with('success', 'Ticket status updated.');
+
+        $old = ['status' => $ticket->status];
+
+$ticket->status = $data['status'];
+$ticket->save();
+
+TicketAuditService::log(
+    $ticket,
+    'status_changed',
+    $old,
+    ['status' => $ticket->status],
+    $request
+);
+
     }
 
     /**
-     * Assign Ticket to Agent
+     * ===============================
+     * ASSIGN AGENT
+     * ===============================
      */
     public function assign(Request $request, Ticket $ticket)
-    {
-        $data = $request->validate([
-            'assigned_to' => 'nullable|exists:users,id',
-        ]);
+{
+    $data = $request->validate([
+        'assigned_to' => 'nullable|exists:users,id',
+    ]);
 
-        $ticket->assigned_to = $data['assigned_to'];
-        $ticket->save();
+    // SIMPAN NILAI LAMA
+    $old = [
+        'assigned_to' => $ticket->assigned_to,
+    ];
 
-        return back()->with('success', 'Ticket assigned.');
-    }
+    // UPDATE DATA
+    $ticket->assigned_to = $data['assigned_to'];
+    $ticket->save();
+
+    // AUDIT LOG
+    TicketAuditService::log(
+        $ticket,
+        'agent_assigned',
+        $old,
+        [
+            'assigned_to' => $ticket->assigned_to,
+        ],
+        $request
+    );
+
+    return back()->with('success', 'Ticket assigned.');
+}
 }

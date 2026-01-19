@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\ChatSession;
 
 class Ticket extends Model
 {
@@ -26,18 +25,53 @@ class Ticket extends Model
         'last_message_at' => 'datetime',
     ];
 
+    /* =========================
+       RELATIONS
+    ========================= */
+
     public function messages()
     {
         return $this->hasMany(TicketMessage::class)->orderBy('created_at', 'asc');
     }
 
-    public function agent()
+    public function agent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
-    public function chatSession(): BelongsTo
+    /* =========================
+       LIFECYCLE LOGIC
+    ========================= */
+
+    /**
+     * Trigger lifecycle when agent replies
+     */
+    public function markOngoingByAgent(int $agentId): void
     {
-        return $this->belongsTo(ChatSession::class, 'chat_session_id');
+        // Ticket closed = lifecycle stop
+        if ($this->status === 'closed') {
+            return;
+        }
+
+        // Auto assign agent pertama
+        if (!$this->assigned_to) {
+            $this->assigned_to = $agentId;
+        }
+
+        // Pending → Ongoing
+        if ($this->status === 'pending') {
+            $this->status = 'ongoing';
+        }
+
+        // Update activity timestamp
+        $this->last_message_at = now();
+
+        $this->save();
     }
+
+    public function auditLogs()
+{
+    return $this->hasMany(TicketAuditLog::class)->latest();
+}
+
 }

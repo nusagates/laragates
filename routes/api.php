@@ -1,28 +1,127 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Broadcast;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\FonnteWebhookController;
+use App\Http\Controllers\AiMetricsController;
+use App\Http\Controllers\Api\Chat\FonnteWebhookController;
+use App\Http\Controllers\ChatSessionController;
+use App\Http\Controllers\ChatSimulationController;
+use App\Http\Controllers\WabaMenuController;
 use App\Http\Controllers\WhatsappTemplateController;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Route;
 
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+| Semua endpoint API aplikasi (WABA + CRM)
+| Quota hanya dipasang pada user-triggered action
+|
+*/
 
-// Health check
-Route::get('/ping', fn() => response()->json(['message' => 'API is running']));
+/*
+|--------------------------------------------------------------------------
+| HEALTH CHECK
+|--------------------------------------------------------------------------
+*/
+Route::get('/ping', fn () => response()->json([
+    'message' => 'API is running',
+]));
 
-// Broadcast channels
+/*
+|--------------------------------------------------------------------------
+| BROADCAST CHANNELS
+|--------------------------------------------------------------------------
+*/
 Broadcast::routes();
 
-// ⭐️ WEBHOOK FONNTE — WAJIB DI LUAR AUTH
-Route::match(['GET', 'POST'], '/webhook/fonnte', [FonnteWebhookController::class, 'handle']);
+/*
+|--------------------------------------------------------------------------
+| WEBHOOK & SYSTEM ROUTES (NO AUTH, NO QUOTA)
+|--------------------------------------------------------------------------
+| Jangan dikasih quota karena bukan user action
+|
+*/
 
-// Simulate inbound WA
-Route::post('/simulate-inbound', [\App\Http\Controllers\ChatSimulationController::class, 'simulate']);
+// 🔔 Webhook Fonnte
+Route::match(['GET', 'POST'], '/webhook/fonnte', [
+    FonnteWebhookController::class,
+    'handle',
+]);
 
-// Update message status (sent/delivered/read)
-Route::post('/chat-messages/{message}/status', [ChatController::class, 'updateStatus']);
+// 📦 Update WA delivery status
+Route::match(['GET', 'POST'], '/webhook/message/update-status', [
+    FonnteWebhookController::class,
+    'updateStatus',
+]);
 
-// Protected routes (auth required)
-Route::middleware('auth:sanctum')->prefix('templates')->group(function () {
-    Route::post('/{template}/sync', [WhatsappTemplateController::class, 'sync']);
+// 🧪 Simulate inbound WhatsApp (DEV ONLY)
+Route::post('/simulate-inbound', [
+    ChatSimulationController::class,
+    'simulate',
+]);
+
+/*
+|--------------------------------------------------------------------------
+| AUTHENTICATED API (USER ACTION)
+|--------------------------------------------------------------------------
+| Semua di bawah ini:
+| - auth:sanctum
+| - boleh kena quota
+|
+*/
+Route::middleware('auth:sanctum')->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | WHATSAPP TEMPLATE
+    |--------------------------------------------------------------------------
+    */
+
+    // Sync template (automation quota)
+    Route::post('/templates/{template}/sync', [
+        WhatsappTemplateController::class,
+        'sync',
+    ])->middleware('quota:automation,1');
+
+    /*
+    |--------------------------------------------------------------------------
+    | WABA ACTION
+    |--------------------------------------------------------------------------
+    */
+
+    // // Send WABA main menu (message quota)
+    // Route::post('/waba/send-main-menu', [
+    //     WabaMenuController::class,
+    //     'sendMainMenu',
+    // ])->middleware('quota:messages,1');
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHAT SESSION CONTROL
+    |--------------------------------------------------------------------------
+    */
+
+    // Agent take chat session
+    Route::post('/chat-sessions/{session}/take', [
+        ChatSessionController::class,
+        'take',
+    ])->middleware('quota:messages,1');
+
+    // Agent close chat session
+    Route::post('/chat-sessions/{session}/close', [
+        ChatSessionController::class,
+        'close',
+    ])->middleware('quota:messages,1');
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI
+    |--------------------------------------------------------------------------
+    */
+
+    // AI metrics / AI usage
+    Route::get('/ai/metrics', [
+        AiMetricsController::class,
+        'index',
+    ])->middleware('quota:ai_request,1');
 });

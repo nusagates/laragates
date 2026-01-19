@@ -15,6 +15,9 @@ class ChatSession extends Model
         'customer_id',
         'assigned_to',
         'status',              // open, pending, closed
+        'is_handover',
+        'bot_state',
+        'bot_context',
         'pinned',
         'priority',            // vip, normal, low
         'last_agent_read_at',
@@ -22,49 +25,50 @@ class ChatSession extends Model
     ];
 
     protected $casts = [
-        'pinned'             => 'boolean',
+        'pinned' => 'boolean',
+        'is_handover' => 'boolean',
         'last_agent_read_at' => 'datetime',
-        'closed_at'          => 'datetime',
+        'closed_at' => 'datetime',
     ];
 
-    /** Customer pemilik chat ini */
+    /* =========================
+     * RELATIONS
+     * ========================= */
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
     }
 
-    /** Agent yang menangani (User) */
     public function agent(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
-    /** Semua pesan dalam session ini */
     public function messages(): HasMany
     {
         return $this->hasMany(ChatMessage::class, 'chat_session_id');
     }
 
-    /** Pesan terakhir (untuk preview di sidebar) */
     public function lastMessage(): HasOne
     {
         return $this->hasOne(ChatMessage::class, 'chat_session_id')
-                    ->latestOfMany();
+            ->latestOfMany();
     }
 
-    /** Peserta session (kalau multi agent) */
     public function participants(): HasMany
     {
         return $this->hasMany(ChatSessionParticipant::class, 'chat_session_id');
     }
 
-    /** Ticket yang terhubung dengan session ini (kalau ada) */
     public function ticket(): HasOne
     {
         return $this->hasOne(Ticket::class, 'chat_session_id');
     }
 
-    /* ========= Scopes praktis ========= */
+    /* =========================
+     * SCOPES
+     * ========================= */
 
     public function scopeOpen($query)
     {
@@ -76,8 +80,25 @@ class ChatSession extends Model
         return $query->where('status', 'pending');
     }
 
+    public function scopeActive($query)
+    {
+        return $query->whereIn('status', ['open', 'pending']);
+    }
+
     public function scopeClosed($query)
     {
         return $query->where('status', 'closed');
+    }
+
+    /* =========================
+     * HELPERS
+     * ========================= */
+
+    public function markClosed(): void
+    {
+        $this->update([
+            'status' => 'closed',
+            'closed_at' => now(),
+        ]);
     }
 }

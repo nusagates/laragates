@@ -3,15 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AccountLockService;
+use App\Services\SystemLogService;
+use App\Support\IamLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 
 class AgentController extends Controller
 {
-    /**
-     * Allow only superadmin or admin.
-     */
     private function ensureCanManageAgents(): void
     {
         $role = auth()->user()->role ?? null;
@@ -21,141 +21,269 @@ class AgentController extends Controller
         }
     }
 
-    /**
-     * List all agents.
-     */
     public function index(Request $request)
     {
         $this->ensureCanManageAgents();
 
-        $status = $request->query('status');
+        $query = User::query()->where('role', 'agent');
 
-        $baseQuery = User::whereIn('role', ['agent', 'supervisor', 'admin']);
-
-        if ($status && in_array($status, ['online', 'offline', 'pending'])) {
-            $baseQuery->where('status', $status);
+        if ($request->filled('search')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('name', 'like', '%'.$request->search.'%')
+                    ->orWhere('email', 'like', '%'.$request->search.'%');
+            });
         }
 
-        $agents = $baseQuery->orderBy('name')->get()->map(function ($user) {
-            return [
-                'id'          => $user->id,
-                'name'        => $user->name,
-                'email'       => $user->email,
-                'role'        => $user->role,
-                'status'      => $user->status,
-                'approved_at' => $user->approved_at,
-                'last_seen'   => $user->last_seen,
-            ];
-        });
+        if ($request->boolean('show_deleted')) {
+            $query->withTrashed();
+        }
 
-        $statsQuery = User::whereIn('role', ['agent', 'supervisor', 'admin']);
+        $agents = $query->orderBy('name')
+            ->get()
+            ->map(function ($agent) {
+                $isOnline = $agent->last_seen && $agent->last_seen->diffInMinutes(now()) <= 5;
 
-        $counts = [
-            'all'     => (clone $statsQuery)->count(),
-            'online'  => (clone $statsQuery)->where('status', 'online')->count(),
-            'offline' => (clone $statsQuery)->where('status', 'offline')->count(),
-            'pending' => (clone $statsQuery)->where('status', 'pending')->count(),
-        ];
+                return [
+                    'id' => $agent->id,
+                    'name' => $agent->name,
+                    'email' => $agent->email,
+                    'role' => $agent->role,
+                    'status' => $isOnline ? 'online' : 'offline',
+                    'approved_at' => $agent->approved_at,
+                    'last_seen' => $agent->last_seen,
+                    'locked_until' => $agent->locked_until,
+                    'failed_login_attempts' => $agent->failed_login_attempts,
+                    'is_locked' => $agent->locked_until && $agent->locked_until->isFuture(),
+                    'company_id' => $agent->company_id,
+                    'created_at' => $agent->created_at,
+                    'deleted_at' => $agent->deleted_at,
+                ];
+            });
 
         return Inertia::render('Agents/Index', [
-            'agents'  => $agents,
-            'counts'  => $counts,
-            'filters' => ['status' => $status],
+            'agents' => $agents,
+            'counts' => [
+                'all' => $agents->whereNull('deleted_at')->count(),
+                'online' => $agents->where('status', 'online')->whereNull('deleted_at')->count(),
+                'offline' => $agents->where('status', 'offline')->whereNull('deleted_at')->count(),
+                'pending' => $agents->whereNull('approved_at')->whereNull('deleted_at')->count(),
+                'locked' => $agents->where('is_locked', true)->whereNull('deleted_at')->count(),
+                'deleted' => $agents->whereNotNull('deleted_at')->count(),
+            ],
+            'filters' => $request->only(['search', 'show_deleted']),
         ]);
     }
 
-    /**
-     * Create new agent – AUTO GENERATE PASSWORD.
-     */
     public function store(Request $request)
     {
         $this->ensureCanManageAgents();
 
         $data = $request->validate([
-            'name'  => 'required|string|max:100',
-            'email' => 'required|email|max:150|unique:users,email',
-            'role'  => 'required|in:Admin,Supervisor,Agent',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'company_id' => 'nullable|integer|exists:companies,id',
         ]);
 
-        // 🚀 Auto generate secure password
-        $generatedPassword = str()->random(10);
+        $password = str()->random(12);
 
-        User::create([
-            'name'        => $data['name'],
-            'email'       => $data['email'],
-            'role'        => strtolower($data['role']),
-            'password'    => Hash::make($generatedPassword),
-            'status'      => 'pending',
-            'is_active'   => false,
-            'approved_at' => null,
+        $agent = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'role' => 'agent',
+            'password' => Hash::make($password),
+            'status' => 'pending',
+            'email_verified_at' => now(),
+            'company_id' => $data['company_id'] ?? auth()->user()->company_id,
         ]);
 
-        // 🚀 Flash password untuk ditampilkan di UI
-        return back()->with('password_generated', [
-            'email'    => $data['email'],
-            'password' => $generatedPassword,
+        IamLogger::log('CREATE_USER', $agent->id, null, $agent->only('email', 'role', 'company_id'));
+
+        return response()->json([
+            'success' => true,
+            'agent' => $agent,
+            'temp_password' => $password,
         ]);
     }
 
-    /**
-     * Update existing agent.
-     */
-    public function update(Request $request, User $user)
+    public function update(Request $request, User $agent)
     {
         $this->ensureCanManageAgents();
 
-        $data = $request->validate([
-            'name'  => 'required|string|max:100',
-            'email' => 'required|email|max:150|unique:users,email,' . $user->id,
-            'role'  => 'required|in:Admin,Supervisor,Agent',
-            'password'         => 'nullable|min:6',
-            'password_confirm' => 'nullable|same:password',
-        ]);
-
-        $updateData = [
-            'name'  => $data['name'],
-            'email' => $data['email'],
-            'role'  => strtolower($data['role']),
-        ];
-
-        if (!empty($data['password'])) {
-            $updateData['password'] = Hash::make($data['password']);
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
         }
 
-        $user->update($updateData);
+        $before = $agent->only(['name', 'email', 'company_id']);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,'.$agent->id,
+            'company_id' => 'nullable|integer|exists:companies,id',
+        ]);
+
+        $agent->update([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'company_id' => $data['company_id'] ?? $agent->company_id,
+        ]);
+
+        IamLogger::log('UPDATE_USER', $agent->id, $before, $agent->only(['name', 'email', 'company_id']));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'agent' => $agent,
+            ]);
+        }
 
         return back()->with('success', 'Agent updated.');
     }
 
-    /**
-     * Approve agent.
-     */
-    public function approve(User $user)
+    public function approve(Request $request, User $agent)
     {
         $this->ensureCanManageAgents();
 
-        $user->update([
-            'approved_at' => now(),
-            'status'      => 'offline',
-            'is_active'   => true,
-        ]);
-
-        return back()->with('success', 'Agent approved successfully.');
-    }
-
-    /**
-     * Delete agent.
-     */
-    public function destroy(User $user)
-    {
-        $this->ensureCanManageAgents();
-
-        if (auth()->id() === $user->id) {
-            return back()->with('error', 'You cannot delete yourself.');
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
         }
 
-        $user->delete();
+        $before = $agent->only(['status', 'approved_at']);
 
-        return back()->with('success', 'Agent deleted.');
+        $agent->update([
+            'approved_at' => now(),
+            'status' => 'offline',
+        ]);
+
+        IamLogger::log('APPROVE_USER', $agent->id, $before, $agent->only(['status', 'approved_at']));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'approved_at' => $agent->approved_at,
+            ]);
+        }
+
+        return back()->with('success', 'Agent approved.');
+    }
+
+    public function destroy(User $agent)
+    {
+        $this->ensureCanManageAgents();
+
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
+        }
+
+        if (auth()->id() === $agent->id) {
+            return response()->json(['message' => 'Cannot delete yourself'], 422);
+        }
+
+        $before = $agent->toArray();
+        $agent->delete();
+
+        IamLogger::log('DELETE_USER', $agent->id, $before, null);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function forceDestroy(int $id)
+    {
+        $this->ensureCanManageAgents();
+
+        $agent = User::withTrashed()->findOrFail($id);
+
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
+        }
+
+        if (auth()->id() === $agent->id) {
+            return response()->json(['message' => 'Cannot permanently delete yourself'], 422);
+        }
+
+        $before = $agent->toArray();
+        $agent->forceDelete();
+
+        IamLogger::log('FORCE_DELETE_USER', $agent->id, $before, null);
+
+        SystemLogService::record(
+            'agent_force_deleted',
+            'user',
+            $agent->id,
+            null,
+            null,
+            ['by_admin' => auth()->id()]
+        );
+
+        return response()->json(['success' => true]);
+    }
+
+    public function restore(int $id)
+    {
+        $this->ensureCanManageAgents();
+
+        $agent = User::withTrashed()->findOrFail($id);
+
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
+        }
+
+        $agent->restore();
+
+        IamLogger::log('RESTORE_USER', $agent->id, ['deleted_at' => $agent->deleted_at], null);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function lock(User $agent)
+    {
+        $this->ensureCanManageAgents();
+
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
+        }
+
+        $agent->update([
+            'locked_until' => now()->addHours(24),
+            'failed_login_attempts' => 6,
+        ]);
+
+        IamLogger::log('LOCK_USER', $agent->id, ['locked' => false], ['locked' => true, 'locked_until' => $agent->locked_until]);
+
+        SystemLogService::record(
+            'admin_lock_account',
+            'user',
+            $agent->id,
+            null,
+            null,
+            ['by_admin' => auth()->id()]
+        );
+
+        return response()->json([
+            'message' => 'Agent account locked',
+        ]);
+    }
+
+    public function unlock(User $agent)
+    {
+        $this->ensureCanManageAgents();
+
+        if ($agent->role !== 'agent') {
+            return response()->json(['message' => 'User is not an agent'], 422);
+        }
+
+        AccountLockService::unlock($agent);
+
+        SystemLogService::record(
+            'admin_unlock_account',
+            'user',
+            $agent->id,
+            null,
+            null,
+            ['by_admin' => auth()->id()]
+        );
+
+        return response()->json([
+            'message' => 'Agent account unlocked',
+        ]);
     }
 }
