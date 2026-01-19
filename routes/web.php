@@ -269,7 +269,6 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
 
         // Impersonate routes
         Route::post('/users/{user}/impersonate', [ImpersonateController::class, 'impersonate'])->name('users.impersonate');
-        Route::post('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
 
         // Agent routes
         Route::get('/agents', [AgentController::class, 'index'])->name('agents');
@@ -282,6 +281,9 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
         Route::delete('/agents/{agent}/force', [AgentController::class, 'forceDestroy'])->name('agents.force-destroy');
         Route::post('/agents/{agent}/restore', [AgentController::class, 'restore'])->name('agents.restore');
     });
+
+    Route::post('/impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');
+    
 
     Route::middleware(['auth:sanctum'])
         ->prefix('admin/ai')
