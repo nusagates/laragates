@@ -16,9 +16,6 @@ import { Head } from '@inertiajs/vue3'
           <v-btn variant="text" href="/login">
             Sign In
           </v-btn>
-          <v-btn color="primary" href="/register">
-            Register
-          </v-btn>
         </div>
       </v-container>
     </div>
@@ -51,9 +48,6 @@ import { Head } from '@inertiajs/vue3'
             </ul>
 
             <div class="hero-cta fade-up delay-4">
-              <v-btn size="large" color="primary" href="/register">
-                Register
-              </v-btn>
               <v-btn size="large" variant="outlined" href="/login">
                 Sign In
               </v-btn>

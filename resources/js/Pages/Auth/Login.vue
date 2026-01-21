@@ -87,23 +87,17 @@ const submit = () => {
 
           <!-- FOOTER -->
           <div class="text-center text-body-2">
-            <Link
+            <!-- <Link
               v-if="canResetPassword"
               :href="route('password.request')"
               class="text-primary font-weight-medium text-decoration-none d-block mb-2"
             >
               Forgot password?
-            </Link>
+            </Link> -->
 
-            <span class="text-grey-darken-1">
+            <!-- <span class="text-grey-darken-1">
               Don’t have an account?
-            </span>
-            <Link
-              :href="route('register')"
-              class="ml-1 text-primary font-weight-medium text-decoration-none"
-            >
-              Create one
-            </Link>
+            </span> -->
           </div>
         </form>
       </v-card>
