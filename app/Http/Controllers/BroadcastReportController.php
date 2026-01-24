@@ -118,16 +118,6 @@ class BroadcastReportController extends Controller
             $fonnte = app(BroadcastFonnteService::class);
             $result = $fonnte->sendBroadcastMessage($target);
 
-            // Update target status jika berhasil
-            $target->update([
-                'status' => 'sent',
-                'sent_at' => now(),
-                'error_message' => null,
-            ]);
-
-            // Update campaign counters
-            $target->campaign->increment('sent_count');
-
             return response()->json([
                 'success' => true,
                 'message' => 'Message sent successfully',

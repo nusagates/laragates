@@ -99,7 +99,7 @@ async function startBroadcast() {
 
     toast.success(`Broadcast campaign "${form.value.name}" berhasil dibuat!${targetCount > 0 ? ` (${targetCount} targets)` : ''}`)
 
-    router.visit(route('broadcast'))
+    router.visit(route('broadcast.report.show', { campaign: campaign.id }))
 
   } catch (e) {
     console.error(e)
@@ -115,6 +115,10 @@ async function startBroadcast() {
     uploading.value = false
     uploadProgress.value = 0
   }
+}
+
+function detailReport(campaign) {
+  router.visit(route('broadcast.report.show', { campaign: campaign.id }))
 }
 </script>
 
@@ -253,7 +257,7 @@ async function startBroadcast() {
             <h4>History</h4>
             <v-table density="compact">
               <tbody>
-                <tr v-for="h in history" :key="h.id">
+                <tr v-for="h in history" :key="h.id" @click="detailReport(h)">
                   <td>{{ h.name }}</td>
                   <td>{{ h.sent }}/{{ h.failed }}</td>
                 </tr>
@@ -384,6 +388,15 @@ async function startBroadcast() {
 :deep(tbody td) {
   color: var(--text-main) !important;
   border-bottom: 1px solid var(--border-soft);
+}
+:deep(tbody tr) {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+:deep(tbody tr:hover) {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  border-left: 3px solid var(--blue-strong);
+  padding-left: 8px;
 }
 
 /* VUETIFY TEXT FIX */

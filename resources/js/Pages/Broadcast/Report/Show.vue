@@ -10,7 +10,7 @@ const page = usePage()
 const campaign = computed(() => page.props.campaign)
 const targets = computed(() => page.props.targets)
 const filters = ref(page.props.filters || { q: '', status: '' })
-const retrying = ref(false)
+const retryingTargets = ref(new Set())
 
 const successRate = computed(() => {
   const total = campaign.value.total_targets || 0
@@ -28,10 +28,10 @@ function applyFilter() {
 }
 
 async function retryTarget(targetId) {
-  if (retrying.value) return
+  if (retryingTargets.value.has(targetId)) return
 
   try {
-    retrying.value = true
+    retryingTargets.value.add(targetId)
     await axios.post(`/broadcast/targets/${targetId}/retry`)
     toast.success('Target queued for retry')
     router.reload({ only: ['targets'] })
@@ -39,7 +39,7 @@ async function retryTarget(targetId) {
     const msg = e.response?.data?.message || 'Failed to retry target'
     toast.error(msg)
   } finally {
-    retrying.value = false
+    retryingTargets.value.delete(targetId)
   }
 }
 
@@ -212,8 +212,8 @@ function goBack() {
                   color="orange"
                   prepend-icon="mdi-refresh"
                   @click="retryTarget(t.id)"
-                  :disabled="t.status === 'sent' || retrying"
-                  :loading="retrying"
+                  :disabled="t.status === 'sent' || retryingTargets.has(t.id)"
+                  :loading="retryingTargets.has(t.id)"
                 >
                   Retry
                 </v-btn>

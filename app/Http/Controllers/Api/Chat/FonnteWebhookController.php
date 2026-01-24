@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Chat;
 
 use App\Http\Controllers\Controller;
+use App\Models\BroadcastTarget;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Models\Customer;
@@ -288,7 +289,10 @@ class FonnteWebhookController extends Controller
 
             // Handle state "sent"
             if ($state === 'sent' && $id) {
+
+                // Cari di ChatMessage terlebih dahulu
                 $message = ChatMessage::whereIn('wa_message_id', [$id, "[$id]"])->first();
+
                 if ($message) {
                     Log::info('[WEBHOOK] Updating message to sent', [
                         'message_id' => $message->id,
@@ -313,14 +317,37 @@ class FonnteWebhookController extends Controller
                     ]);
 
                     broadcast(new \App\Events\Chat\MessageUpdated($message));
+                } elseif ($broadcastTarget = BroadcastTarget::whereIn('wa_message_id', [$id, "[$id]"])->first()) {
+
+                    Log::info('[WEBHOOK] Updating broadcast target to sent', [
+                        'broadcast_target_id' => $broadcastTarget->id,
+                        'wa_message_id' => $id,
+                        'state_id' => $stateId,
+                    ]);
+
+                    $broadcastTarget->update([
+                        'status' => 'sent',
+                        'wa_message_id' => trim($id, '[]'),
+                        'sent_at' => now(),
+                        'error_message' => null,
+                    ]);
+
+                    $broadcastTarget->campaign->increment('sent_count');
+
+                    Log::info('[WEBHOOK] Broadcast target updated (sent)', [
+                        'broadcast_target_id' => $broadcastTarget->id,
+                        'status' => $broadcastTarget->status,
+                    ]);
 
                 } else {
-                    Log::warning('Fonnte status update: message not found for state_id '.$stateId);
+                    Log::warning('Fonnte status update: message not found in ChatMessage or BroadcastTarget for state_id '.$stateId);
 
                     return response()->json(['success' => false, 'message' => 'Message not found'], 404);
                 }
             } elseif ($state === 'delivered' || $state === 'read') {
+                // Cari di ChatMessage terlebih dahulu
                 $message = ChatMessage::where('state_id', $stateId)->first();
+
                 if ($message) {
                     Log::info('[WEBHOOK] Updating message status', [
                         'message_id' => $message->id,
@@ -345,9 +372,33 @@ class FonnteWebhookController extends Controller
 
                     broadcast(new \App\Events\Chat\MessageUpdated($message));
                 } else {
-                    Log::warning('Fonnte status update: message not found for state_id '.$stateId);
+                    // Jika tidak ditemukan di ChatMessage, cari di BroadcastTarget
+                    $broadcastTarget = BroadcastTarget::where('wa_message_id', $id)
+                        ->orWhere('wa_message_id', "[$id]")
+                        ->first();
 
-                    return response()->json(['success' => false, 'message' => 'Message not found'], 404);
+                    if ($broadcastTarget) {
+                        Log::info('[WEBHOOK] Updating broadcast target status', [
+                            'broadcast_target_id' => $broadcastTarget->id,
+                            'old_status' => $broadcastTarget->status,
+                            'new_status' => $state,
+                            'state_id' => $stateId,
+                        ]);
+
+                        $broadcastTarget->update([
+                            'status' => $state,
+                            'state_id' => $stateId,
+                        ]);
+
+                        Log::info('[WEBHOOK] Broadcast target status updated', [
+                            'broadcast_target_id' => $broadcastTarget->id,
+                            'status' => $broadcastTarget->status,
+                        ]);
+                    } else {
+                        Log::warning('Fonnte status update: message not found in ChatMessage or BroadcastTarget for state_id '.$stateId);
+
+                        return response()->json(['success' => false, 'message' => 'Message not found'], 404);
+                    }
                 }
             }
 

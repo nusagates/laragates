@@ -16,7 +16,7 @@ class BroadcastFonnteService
     public function __construct()
     {
         $this->token = env('FONNTE_TOKEN');
-        $this->endpoint = env('FONNTE_ENDPOINT', 'https://api.fonnte.com').'/send';
+        $this->endpoint = env('FONNTE_BASE_URL', 'https://api.fonnte.com').'/send';
     }
 
     /**
@@ -57,15 +57,11 @@ class BroadcastFonnteService
                 'template_name' => $template->name,
             ]);
 
-            $response = Http::timeout(15)
-                ->withHeaders([
-                    'Authorization' => $this->token,
-                ])
-                ->asMultipart()
-                ->post($this->endpoint, $payload)
-                ->throw();
-
-            $json = $response->json();
+            /** @var FonnteService $fonnte */
+            $json = app(FonnteService::class)->sendText(
+                $target->phone,
+                $message
+            );
 
             // Validasi response Fonnte
             if (! is_array($json) || ! ($json['status'] ?? false)) {
@@ -73,6 +69,12 @@ class BroadcastFonnteService
                     'Fonnte API error: '.json_encode($json)
                 );
             }
+
+            // update $target
+            $target->update([
+                'wa_message_id' => is_array($json['id']) && count($json['id']) > 0 ? $json['id'][0] : null,
+                'status' => $json['process'],
+            ]);
 
             Log::info('Broadcast sent successfully via Fonnte', [
                 'target_id' => $target->id,

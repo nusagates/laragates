@@ -184,7 +184,7 @@ class BroadcastController extends Controller
             $name = $row['name'] ?? $row['Name'] ?? $row[0] ?? null;
             $phone = $row['phone'] ?? $row['Phone'] ?? $row[1] ?? null;
 
-            $phone = $this->normalizePhone($phone);
+            $phone = normalizePhone($phone);
 
             if (! $phone) {
                 $skippedRows++;
@@ -316,7 +316,7 @@ class BroadcastController extends Controller
             $name = $row['name'] ?? $row[0] ?? null;
             $phone = $row['phone'] ?? $row[1] ?? null;
 
-            $phone = $this->normalizePhone($phone);
+            $phone = normalizePhone($phone);
             if (! $phone) {
                 continue;
             }
@@ -478,7 +478,28 @@ class BroadcastController extends Controller
         ]);
 
         if (($handle = fopen($file->getRealPath(), 'r')) !== false) {
-            $firstRow = fgetcsv($handle, 0, ',');
+            // Read first line to detect delimiter
+            $firstLine = fgets($handle, 1000);
+            rewind($handle);
+
+            if ($firstLine === false) {
+                fclose($handle);
+                Log::error('Failed to read file');
+
+                return [];
+            }
+
+            // Detect delimiter: tab, semicolon, or comma
+            $delimiter = ',';
+            if (str_contains($firstLine, "\t")) {
+                $delimiter = "\t";
+            } elseif (str_contains($firstLine, ';')) {
+                $delimiter = ';';
+            }
+
+            Log::info('Detected delimiter', ['delimiter' => $delimiter === "\t" ? 'TAB' : $delimiter]);
+
+            $firstRow = fgetcsv($handle, 0, $delimiter);
 
             if ($firstRow === false) {
                 fclose($handle);
@@ -487,7 +508,10 @@ class BroadcastController extends Controller
                 return [];
             }
 
-            $firstRow = array_map('trim', $firstRow);
+            // Clean headers: remove quotes and trim
+            $firstRow = array_map(function ($val) {
+                return trim(trim((string) $val, '"\''));
+            }, $firstRow);
 
             // Detect if first row is header or data
             // If first column is a phone number (all digits), treat as data without header
@@ -518,7 +542,12 @@ class BroadcastController extends Controller
             }
 
             // Read remaining rows
-            while (($data = fgetcsv($handle, 0, ',')) !== false) {
+            while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
+                // Clean values: remove quotes and trim
+                $data = array_map(function ($val) {
+                    return $val !== null ? trim(trim((string) $val, '"\'')) : null;
+                }, $data);
+
                 $assocRow = [];
                 foreach ($headers as $index => $header) {
                     $assocRow[$header] = $data[$index] ?? null;
@@ -538,28 +567,5 @@ class BroadcastController extends Controller
         }
 
         return $rows;
-    }
-
-    private function normalizePhone($phone)
-    {
-        if (! $phone) {
-            return null;
-        }
-
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-
-        if (str_starts_with($phone, '0')) {
-            return '62'.substr($phone, 1);
-        }
-
-        if (str_starts_with($phone, '62')) {
-            return $phone;
-        }
-
-        if (strlen($phone) > 6) {
-            return '62'.$phone;
-        }
-
-        return null;
     }
 }
