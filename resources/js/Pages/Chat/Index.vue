@@ -20,6 +20,7 @@ const toast = useToast()
 // Expose chatStore to window for AdminLayout
 if (typeof window !== 'undefined') {
   window.chatStore = chatStore
+  console.log('chatStore exposed to window for AdminLayout', chatStore.activeRoom)
 }
 
 /* ================= NEW CHAT DIALOG ================= */
@@ -93,7 +94,7 @@ onUnmounted(() => {
   <Head title="Chat" />
 
   <AdminLayout>
-    <template #title>Chat</template>
+    <template #title>Chat = {{  chatStore.activeRoom?.status }}</template>
 
     <div class="chat-flex">
       <!-- SIDEBAR -->
@@ -111,7 +112,9 @@ onUnmounted(() => {
           </div>
 
           <!-- Input Area -->
-          <MessageInput />
+           <div v-if="chatStore.activeRoom?.status == 'open'">
+             <MessageInput />
+           </div>
         </div>
       </section>
     </div>

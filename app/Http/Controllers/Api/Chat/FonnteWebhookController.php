@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Services\AgentRouter;
 use App\Services\ContactIntelligenceService;
 use App\Services\ContactScoringService;
+use App\Services\DuplicateChatToTicketService;
 use App\Services\FonnteService;
 use App\Services\MenuEngine;
 use App\Services\System\ChatLogService;
@@ -114,6 +115,9 @@ class FonnteWebhookController extends Controller
             'status' => 'received',
             'is_handover' => (bool) $session->is_handover,
         ]);
+
+        // Duplicate to ticket on first message
+        DuplicateChatToTicketService::duplicateMessage($msg);
 
         $session->touch();
 

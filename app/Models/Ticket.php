@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Ticket extends Model
@@ -11,6 +11,7 @@ class Ticket extends Model
     use HasFactory;
 
     protected $fillable = [
+        'chat_session_id',
         'customer_name',
         'customer_phone',
         'subject',
@@ -54,7 +55,7 @@ class Ticket extends Model
         }
 
         // Auto assign agent pertama
-        if (!$this->assigned_to) {
+        if (! $this->assigned_to) {
             $this->assigned_to = $agentId;
         }
 
@@ -70,8 +71,7 @@ class Ticket extends Model
     }
 
     public function auditLogs()
-{
-    return $this->hasMany(TicketAuditLog::class)->latest();
-}
-
+    {
+        return $this->hasMany(TicketAuditLog::class)->latest();
+    }
 }

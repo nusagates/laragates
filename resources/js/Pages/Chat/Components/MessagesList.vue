@@ -49,10 +49,19 @@ const groupedMessages = computed(() => {
       })
     }
 
-    groups.push({
-      type: 'message',
-      data: message,
-    })
+    if (message.sender === 'system') {
+      groups.push({
+        type: 'system',
+        data: message,
+        date: formatTime(message.created_at),
+      })
+    }
+    else{
+      groups.push({
+        type: 'message',
+        data: message,
+      })
+    }
   })
 
   return groups
@@ -307,6 +316,10 @@ onMounted(() => {
           <span class="date-text">{{ item.date }}</span>
         </div>
 
+        <div v-else-if="item.data.sender === 'system'" class="info-separator">
+          <span class="date-text">{{ item.data.message }} at {{ item.date }}</span>
+        </div>
+
         <!-- Message Bubble -->
         <div
           v-else
@@ -447,6 +460,12 @@ onMounted(() => {
 
 /* Date Separator */
 .date-separator {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.info-separator {
   display: flex;
   justify-content: center;
   margin: 16px 0;

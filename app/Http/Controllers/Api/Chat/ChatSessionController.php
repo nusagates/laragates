@@ -41,6 +41,9 @@ class ChatSessionController extends Controller
                     'time' => optional($s->lastMessage?->created_at)->format('H:i'),
                     'unread_count' => 0,
                     'has_ticket' => (bool) $s->ticket,
+                    'status' => $s->status,
+                    'pinned' => $s->pinned,
+                    'priority' => $s->priority,
                 ];
             });
 
@@ -303,18 +306,14 @@ class ChatSessionController extends Controller
         }
 
         // Prevent closing already closed sessions
-        if ($session->status === 'closed') {
-            return response()->json([
-                'error' => 'Session is already closed.',
-            ], 400);
-        }
+        // if ($session->status === 'closed') {
+        //     return response()->json([
+        //         'error' => 'Session is already closed.',
+        //     ], 400);
+        // }
 
         // Update session status to closed
-        $session->update([
-            'status' => 'closed',
-            'is_handover' => false,
-            'closed_at' => now(),
-        ]);
+        $session->markClosed();
 
         // Optionally create a system message indicating session closure
         ChatMessage::create([

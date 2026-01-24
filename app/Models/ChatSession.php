@@ -98,7 +98,16 @@ class ChatSession extends Model
     {
         $this->update([
             'status' => 'closed',
+            'is_handover' => false,
             'closed_at' => now(),
         ]);
+
+        // Sync status to linked ticket
+        \App\Services\DuplicateChatToTicketService::syncStatusToTicket($this);
+    }
+
+    public function syncTicketStatus(): void
+    {
+        \App\Services\DuplicateChatToTicketService::syncStatusToTicket($this);
     }
 }

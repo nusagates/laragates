@@ -6,6 +6,7 @@ use App\Events\Chat\MessageUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
+use App\Services\DuplicateChatToTicketService;
 use App\Services\Whatsapp\MessageDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -103,6 +104,9 @@ class ChatMessageController extends Controller
             'is_internal' => false,
             'is_bot' => false,
         ]);
+
+        // Duplicate to ticket
+        DuplicateChatToTicketService::duplicateMessage($msg);
 
         $session->touch();
 
