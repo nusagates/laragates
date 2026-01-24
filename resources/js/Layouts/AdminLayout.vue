@@ -8,6 +8,8 @@ const page = usePage()
 const userRole = page.props.auth.user.role
 const drawer = ref(true)
 
+console.log('page', page)
+
 /* =====================================================
    ✅ SAFE URL SNAPSHOT (ANTI INFINITE REACTIVE LOOP)
    ===================================================== */
@@ -20,12 +22,27 @@ watch(
   }
 )
 
+/* ================= MENU ACTIVE DETECTION ================= */
+const isMenuActive = (href) => {
+  const url = currentUrl.value.split('?')[0] // Remove query params
+  
+  // Exact match
+  if (url === href) return true
+  
+  // Check if it's a child path (e.g., /tickets/123 matches /tickets)
+  // But prevent /chat-history from matching /chat
+  if (url.startsWith(href + '/')) return true
+  
+  return false
+}
+
 /* ================= MENU ================= */
 const menu = [
   { label: "Dashboard", icon: "mdi-view-dashboard", href: "/dashboard", roles: ["admin","superadmin","supervisor","agent"] },
   { label: "Chat", icon: "mdi-whatsapp", href: "/chat", roles: ["admin","superadmin","supervisor","agent"] },
+  { label: "Chat History", icon: "mdi-archive-outline", href: "/chat-history", roles: ["admin","superadmin","supervisor","agent"] },
   { label: "WhatsApp Menu", icon: "mdi-format-list-bulleted", href: "/menu", roles: ["admin","superadmin"] },
-  { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets", roles: ["admin","superadmin","supervisor","agent"] },
+  // { label: "Tickets", icon: "mdi-ticket-confirmation-outline", href: "/tickets", roles: ["admin","superadmin","supervisor","agent"] },
   { label: "Agents", icon: "mdi-account-group", href: "/agents", roles: ["admin","superadmin"] },
   { label: "Templates", icon: "mdi-file-document-multiple", href: "/templates", roles: ["admin","superadmin","supervisor"] },
   { label: "Contacts", icon: "mdi-account-box", href: "/contacts-ui", roles: ["superadmin","agent","supervisor"] },
@@ -166,7 +183,7 @@ const stayLoggedIn = () => {
         <v-list-item
           v-for="item in menu.filter(m => m.roles.includes(userRole))"
           :key="item.href"
-          :class="currentUrl.startsWith(item.href) ? 'active-menu' : ''"
+          :class="isMenuActive(item.href) ? 'active-menu' : ''"
         >
           <Link :href="item.href" class="menu-link">
             <v-icon class="mr-3">{{ item.icon }}</v-icon>

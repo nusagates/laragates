@@ -112,6 +112,7 @@ Route::middleware(['auth', 'verified', IdleTimeout::class])->group(function () {
     });
 
     Route::get('/chat', fn () => Inertia::render('Chat/Index'))->name('chat');
+    Route::get('/chat-history', fn () => Inertia::render('ChatHistory/Index'))->name('chat.history');
 
     /*
     |--------------------------------------------------------------------------
