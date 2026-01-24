@@ -38,10 +38,6 @@ export const useChatStore = defineStore('chat', {
         // Filter out internal messages
         if (msg.is_internal) return false
 
-        // Skip delivery receipts or system messages (e.g., "Sent via fonnte.com")
-        if (msg.message && msg.message.includes('Sent via fonnte.com')) return false
-        if (msg.message && msg.message.includes('Message queued')) return false
-
         return true
       })
         .map(msg => {

@@ -29,7 +29,11 @@ class ChatMessageController extends Controller
         }
 
         return ChatMessage::where('chat_session_id', $session->id)
-        
+            ->where(function ($query) {
+                // Exclude messages containing Fonnte delivery receipts
+                $query->whereNotLike('message', '%Sent via fonnte.com%')
+                    ->whereNotLike('message', '%Message queued%');
+            })
             ->orderBy('id', 'asc')
             ->get();
     }
