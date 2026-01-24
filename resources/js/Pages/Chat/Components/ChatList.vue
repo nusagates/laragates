@@ -60,7 +60,19 @@ function openNewChat() {
             </template>
 
             <v-list-item-title class="list-title">
-              {{ session.customer_name ?? session.phone }}
+              <div class="title-row">
+                {{ session.customer_name ?? session.phone }}
+                <v-chip
+                  v-if="session.status === 'closed'"
+                  size="x-small"
+                  color="error"
+                  variant="flat"
+                  class="closed-badge"
+                >
+                  <v-icon start size="12">mdi-lock</v-icon>
+                  CLOSED
+                </v-chip>
+              </div>
             </v-list-item-title>
 
             <v-list-item-subtitle class="list-subtitle">
@@ -160,6 +172,16 @@ function openNewChat() {
 .list-title {
   color: #f8fafc !important;
   font-weight: 500;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.closed-badge {
+  flex-shrink: 0;
 }
 
 .list-subtitle {
