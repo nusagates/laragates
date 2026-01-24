@@ -306,11 +306,11 @@ class ChatSessionController extends Controller
         }
 
         // Prevent closing already closed sessions
-        // if ($session->status === 'closed') {
-        //     return response()->json([
-        //         'error' => 'Session is already closed.',
-        //     ], 400);
-        // }
+        if ($session->status === 'closed') {
+            return response()->json([
+                'error' => 'Session is already closed.',
+            ], 400);
+        }
 
         // Update session status to closed
         $session->markClosed();
@@ -328,6 +328,7 @@ class ChatSessionController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Session closed successfully',
+            'session' => $session->fresh(),
         ]);
     }
 

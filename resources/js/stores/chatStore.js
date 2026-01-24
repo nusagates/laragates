@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import axios from 'axios'
+import { formatDateSeparator, formatTime } from '../helpers'
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
@@ -32,7 +33,59 @@ export const useChatStore = defineStore('chat', {
 
     activeMessages: (state) => {
       if (!state.activeRoomId) return []
-      return state.messages[state.activeRoomId] || []
+
+      return (state.messages[state.activeRoomId] || []).filter(msg => {
+        // Filter out internal messages
+        if (msg.is_internal) return false
+
+        // Skip delivery receipts or system messages (e.g., "Sent via fonnte.com")
+        if (msg.message && msg.message.includes('Sent via fonnte.com')) return false
+        if (msg.message && msg.message.includes('Message queued')) return false
+
+        return true
+      })
+        .map(msg => {
+          // Mark outgoing messages
+          if (msg.sender === 'agent') {
+            return { ...msg, is_outgoing: true }
+          }
+          return msg
+        })
+
+    },
+
+    activeGroupedMessages: (state) => {
+      const messages = state.activeMessages
+      if(!messages || messages.length === 0) return []
+      const groups = []
+      let currentDate = null
+      messages.forEach((message) => {
+        const messageDate = new Date(message.created_at).toDateString()
+
+        if (messageDate !== currentDate) {
+          currentDate = messageDate
+          groups.push({
+            type: 'date',
+            date: formatDateSeparator(message.created_at),
+          })
+        }
+
+        if (message.sender === 'system') {
+          groups.push({
+            type: 'system',
+            data: message,
+            date: formatTime(message.created_at),
+          })
+        }
+        else {
+          groups.push({
+            type: 'message',
+            data: message,
+          })
+        }
+      })
+
+      return groups
     },
 
     activeTypingUsers: (state) => {
@@ -353,18 +406,18 @@ export const useChatStore = defineStore('chat', {
     async closeSession(sessionId) {
       try {
         const res = await axios.post(`/chat/sessions/${sessionId}/close`)
+        const closedSession = res.data.session || null
 
-        // Remove session from list or update status
-        const sessionIndex = this.sessions.findIndex(s => s.session_id === sessionId)
-        if (sessionIndex !== -1) {
-          // Remove from active sessions list (closed sessions tidak ditampilkan)
-          this.sessions.splice(sessionIndex, 1)
+        // Update session status to closed instead of removing it
+        const session = this.sessions.find(s => s.session_id === sessionId)
+        if (session && closedSession) {
+          session.status = 'closed'
+          session.closed_at = closedSession?.closed_at || new Date().toISOString()
+        }
 
-          // If this was the active session, clear it
-          if (this.activeRoomId === sessionId) {
-            // Set to first available session or null
-            this.activeRoomId = this.sessions.length > 0 ? this.sessions[0].session_id : null
-          }
+        // Refresh messages to display the system message about session closure
+        if (sessionId === this.activeRoomId) {
+          await this.loadMessages(sessionId, 1)
         }
 
         return res.data
@@ -392,6 +445,11 @@ export const useChatStore = defineStore('chat', {
         const res = await axios.post(`/chat/sessions/${sessionId}/reassign`, {
           agent_id: agentId,
         })
+
+        // Refresh messages to display the system message about reassignment
+        if (sessionId === this.activeRoomId) {
+          await this.loadMessages(sessionId, 1)
+        }
 
         // Remove session from current agent's list (karena sudah dialihkan)
         const sessionIndex = this.sessions.findIndex(s => s.session_id === sessionId)

@@ -19,52 +19,14 @@ const unreadCount = ref(0)
 
 const messages = computed(() => {
   // Filter out internal messages and delivery receipts
-  return chatStore.activeMessages.filter(msg => {
-    // Skip internal messages
-    if (msg.is_internal) return false
-
-    // Skip delivery receipts or system messages (e.g., "Sent via fonnte.com")
-    if (msg.message && msg.message.includes('Sent via fonnte.com')) return false
-    if (msg.message && msg.message.includes('Message queued')) return false
-
-    return true
-  })
+  return chatStore.activeMessages
 })
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '🎉']
 
 // Group messages by date
 const groupedMessages = computed(() => {
-  const groups = []
-  let currentDate = null
-
-  messages.value.forEach((message) => {
-    const messageDate = new Date(message.created_at).toDateString()
-
-    if (messageDate !== currentDate) {
-      currentDate = messageDate
-      groups.push({
-        type: 'date',
-        date: formatDateSeparator(message.created_at),
-      })
-    }
-
-    if (message.sender === 'system') {
-      groups.push({
-        type: 'system',
-        data: message,
-        date: formatTime(message.created_at),
-      })
-    }
-    else{
-      groups.push({
-        type: 'message',
-        data: message,
-      })
-    }
-  })
-
-  return groups
+  return chatStore.activeGroupedMessages
 })
 
 function formatDateSeparator(dateString) {
@@ -240,6 +202,12 @@ watch(messages, async (newMessages, oldMessages) => {
       // Wait for DOM update then check position
       await nextTick()
 
+      // System messages should ALWAYS scroll to bottom (important notifications)
+      if (lastMessage.sender === 'system') {
+        scrollToBottom()
+        return
+      }
+
       // Update isNearBottom status before checking
       const wasNearBottom = checkIfNearBottom()
 
@@ -301,14 +269,6 @@ onMounted(() => {
     </transition>
 
     <div class="messages-list">
-      <!-- Closed Session Notice (at the bottom of messages) -->
-      <div v-if="isClosed && messages.length > 0" class="session-closed-notice">
-        <v-icon size="20" color="error">mdi-lock-outline</v-icon>
-        <div class="closed-notice-text">
-          <strong>This chat session has been closed</strong>
-          <span>No new messages can be sent</span>
-        </div>
-      </div>
 
       <template v-for="(item, index) in groupedMessages" :key="index">
         <!-- Date Separator -->
@@ -317,7 +277,14 @@ onMounted(() => {
         </div>
 
         <div v-else-if="item.data.sender === 'system'" class="info-separator">
-          <span class="date-text">{{ item.data.message }} at {{ item.date }}</span>
+          <div class="system-message">
+            <v-icon 
+              :icon="item.data.message.includes('reassigned') ? 'mdi-account-switch' : 'mdi-information'"
+              size="18"
+            />
+            <span class="system-text">{{ item.data.message }}</span>
+            <span class="system-time">{{ item.date }}</span>
+          </div>
         </div>
 
         <!-- Message Bubble -->
@@ -389,6 +356,16 @@ onMounted(() => {
           </div>
         </div>
       </template>
+
+
+      <!-- Closed Session Notice (at the bottom of messages) -->
+      <div v-if="isClosed" class="session-closed-notice">
+        <v-icon size="20" color="error">mdi-lock-outline</v-icon>
+        <div class="closed-notice-text">
+          <strong>This chat session has been closed</strong>
+          <span>No new messages can be sent</span>
+        </div>
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -478,6 +455,48 @@ onMounted(() => {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
+}
+
+/* System Message */
+.system-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #93c5fd;
+  animation: systemMessageSlide 0.4s ease-out;
+}
+
+.system-message :deep(.v-icon) {
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.system-text {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  color: #93c5fd;
+}
+
+.system-time {
+  font-size: 11px;
+  color: rgba(147, 197, 253, 0.7);
+  white-space: nowrap;
+}
+
+@keyframes systemMessageSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Message Wrapper */

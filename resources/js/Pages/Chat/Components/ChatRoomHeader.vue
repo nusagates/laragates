@@ -35,6 +35,9 @@ async function handleCloseSession() {
     await chatStore.closeSession(activeRoom.value.session_id)
     toast.success('Chat session closed successfully')
     showCloseDialog.value = false
+    
+    // Wait a moment for the messages to refresh before navigating
+    await new Promise(resolve => setTimeout(resolve, 500))
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to close session'
     toast.error(errorMsg)
@@ -66,6 +69,9 @@ async function handleReassignSession() {
     await chatStore.reassignSession(activeRoom.value.session_id, selectedAgent.value)
     toast.success('Chat session reassigned successfully')
     showReassignDialog.value = false
+    
+    // Wait a moment for the messages to refresh before navigating
+    await new Promise(resolve => setTimeout(resolve, 500))
   } catch (error) {
     const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to reassign session'
     toast.error(errorMsg)

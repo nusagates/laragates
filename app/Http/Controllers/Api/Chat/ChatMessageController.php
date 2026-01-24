@@ -29,6 +29,7 @@ class ChatMessageController extends Controller
         }
 
         return ChatMessage::where('chat_session_id', $session->id)
+        
             ->orderBy('id', 'asc')
             ->get();
     }
