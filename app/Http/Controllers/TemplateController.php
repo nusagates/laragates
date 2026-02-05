@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Template;
 use App\Models\TemplateVersion;
 use App\Models\TemplateNote;
+use App\Services\SystemLogService;
+use App\Support\TemplateLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -28,7 +30,6 @@ class TemplateController extends Controller
     {
         $role = auth()->user()->role ?? null;
 
-        // supervisor tidak boleh approve
         if (! in_array($role, ['superadmin','admin'])) {
             abort(403, 'You are not allowed to approve templates.');
         }
@@ -43,18 +44,33 @@ class TemplateController extends Controller
 
         $q = Template::query();
 
-        if ($request->status) $q->where('status',$request->status);
+        if ($request->status) {
+            $q->where('status', $request->status);
+        }
 
         if ($request->search) {
             $s = $request->search;
-            $q->where(fn($x) =>
-                $x->where('name','like',"%$s%")
-                  ->orWhere('body','like',"%$s%")
+            $q->where(fn ($x) =>
+                $x->where('name', 'like', "%$s%")
+                  ->orWhere('body', 'like', "%$s%")
             );
         }
 
         $templates = $q->orderBy('created_at','desc')
-                       ->paginate(20)->withQueryString();
+                       ->paginate(20)
+                       ->withQueryString();
+
+        SystemLogService::record(
+            'template_view',
+            null,
+            null,
+            null,
+            null,
+            [
+                'description' => 'Opened template list',
+                'filters'     => $request->only(['search','status']),
+            ]
+        );
 
         return Inertia::render('Templates/Index', [
             'templates' => $templates,
@@ -81,16 +97,29 @@ class TemplateController extends Controller
 
         $this->validateTemplateRules($data);
 
-        Template::create(array_merge($data, [
+        $template = Template::create(array_merge($data, [
             'created_by' => Auth::id(),
             'status'     => 'draft',
         ]));
+
+        SystemLogService::record(
+            'template_create',
+            'template',
+            $template->id,
+            null,
+            $template->toArray(),
+            TemplateLog::meta(
+                $template,
+                'create',
+                'Template "' . $template->name . '" created'
+            )
+        );
 
         return back()->with('success','Template created.');
     }
 
     /* -----------------------------------------------------
-     | SHOW DETAIL (with versions & notes)
+     | SHOW
      ------------------------------------------------------*/
     public function show(Template $template)
     {
@@ -122,22 +151,58 @@ class TemplateController extends Controller
 
         $this->validateTemplateRules($data);
 
+        $old = $template->toArray();
+
         $template->update(array_merge($data, [
             'version' => $template->version + 1,
             'status'  => 'draft',
         ]));
 
-        return back()->with('success','Updated.');
+        SystemLogService::record(
+            'template_update',
+            'template',
+            $template->id,
+            $old,
+            $template->fresh()->toArray(),
+            TemplateLog::meta(
+                $template,
+                'update',
+                'Template "' . $template->name . '" updated'
+            )
+        );
+
+        return response()->json([
+            'message'  => 'Template updated',
+            'template' => $template->fresh()
+        ]);
     }
 
     /* -----------------------------------------------------
-     | DELETE
+     | DELETE (HIGH RISK)
      ------------------------------------------------------*/
     public function destroy(Template $template)
     {
         $this->ensureCanManageTemplates();
+
+        SystemLogService::record(
+            'template_delete',
+            'template',
+            $template->id,
+            $template->toArray(),
+            null,
+            TemplateLog::highRisk(
+                $template,
+                'delete',
+                'Template "' . $template->name . '" deleted'
+            )
+        );
+
         $template->delete();
-        return back()->with('success','Deleted.');
+
+        return response()->json([
+            'message' => 'Template deleted',
+            'id'      => $template->id
+        ]);
     }
 
     /* -----------------------------------------------------
@@ -147,9 +212,20 @@ class TemplateController extends Controller
     {
         $this->ensureCanManageTemplates();
 
-        $template->update([
-            'status' => 'submitted'
-        ]);
+        $template->update(['status' => 'submitted']);
+
+        SystemLogService::record(
+            'template_submit',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::meta(
+                $template,
+                'submit',
+                'Template "' . $template->name . '" submitted for approval'
+            )
+        );
 
         return back()->with('success','Submitted for approval.');
     }
@@ -166,6 +242,19 @@ class TemplateController extends Controller
             'approved_by' => Auth::id(),
             'approved_at' => now(),
         ]);
+
+        SystemLogService::record(
+            'template_approve',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::approval(
+                $template,
+                'approve',
+                'Template "' . $template->name . '" approved'
+            )
+        );
 
         return back()->with('success','Approved.');
     }
@@ -188,6 +277,20 @@ class TemplateController extends Controller
             ]
         ]);
 
+        SystemLogService::record(
+            'template_reject',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::meta(
+                $template,
+                'reject',
+                'Template "' . $template->name . '" rejected',
+                ['reason' => $reason]
+            )
+        );
+
         return back()->with('success','Rejected.');
     }
 
@@ -203,10 +306,10 @@ class TemplateController extends Controller
         }
 
         $payload = [
-            'name'      => $template->name,
-            'language'  => $template->language,
-            'category'  => $template->category ?? 'UTILITY',
-            'components'=> $this->buildComponents($template),
+            'name'       => $template->name,
+            'language'   => $template->language,
+            'category'   => $template->category ?? 'UTILITY',
+            'components' => $this->buildComponents($template),
         ];
 
         $resp = Http::withToken(config('services.whatsapp.token'))
@@ -224,45 +327,25 @@ class TemplateController extends Controller
             'meta'      => $data,
         ]);
 
+        SystemLogService::record(
+            'template_sync',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::sync(
+                $template,
+                'meta',
+                'Template "' . $template->name . '" synced to Meta',
+                ['remote_id' => $data['id'] ?? null]
+            )
+        );
+
         return back()->with('success','Synced.');
     }
 
-    private function buildComponents(Template $t)
-    {
-        $c = [];
-
-        if (!empty($t->header)) {
-            $c[] = [
-                'type'   => 'HEADER',
-                'format' => 'TEXT',
-                'text'   => $t->header
-            ];
-        }
-
-        $c[] = [
-            'type' => 'BODY',
-            'text' => $t->body
-        ];
-
-        if (!empty($t->footer)) {
-            $c[] = [
-                'type' => 'FOOTER',
-                'text' => $t->footer
-            ];
-        }
-
-        if ($t->buttons) {
-            $c[] = [
-                'type'    => 'BUTTONS',
-                'buttons' => $t->buttons
-            ];
-        }
-
-        return $c;
-    }
-
     /* -----------------------------------------------------
-     | SEND TEMPLATE (SIMULASI ATAU CUSTOM PROVIDER)
+     | SEND TEMPLATE
      ------------------------------------------------------*/
     public function send(Template $template, Request $request)
     {
@@ -274,7 +357,23 @@ class TemplateController extends Controller
             'components'=> 'nullable|array'
         ]);
 
-        // Simulasi kirim (bisa ganti dengan Fonnte/Provider)
+        SystemLogService::record(
+            'template_send',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::meta(
+                $template,
+                'send',
+                'Template "' . $template->name . '" sent',
+                [
+                    'to'       => $data['to'],
+                    'language' => $data['language']
+                ]
+            )
+        );
+
         return response()->json([
             'status'  => 'ok',
             'message' => 'Send simulated OK',
@@ -298,9 +397,20 @@ class TemplateController extends Controller
 
         $template->versions()->create($data);
 
-        return response()->json([
-            'message' => 'Version saved'
-        ]);
+        SystemLogService::record(
+            'template_version_save',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::meta(
+                $template,
+                'version_save',
+                'New version saved for template "' . $template->name . '"'
+            )
+        );
+
+        return response()->json(['message' => 'Version saved']);
     }
 
     /* -----------------------------------------------------
@@ -320,9 +430,21 @@ class TemplateController extends Controller
             'version' => $template->version + 1,
         ]);
 
-        return response()->json([
-            'message' => 'Reverted to selected version'
-        ]);
+        SystemLogService::record(
+            'template_version_revert',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::meta(
+                $template,
+                'version_revert',
+                'Template "' . $template->name . '" reverted to previous version',
+                ['version_id' => $versionId]
+            )
+        );
+
+        return response()->json(['message' => 'Reverted to selected version']);
     }
 
     /* -----------------------------------------------------
@@ -341,9 +463,20 @@ class TemplateController extends Controller
             'created_by' => Auth::id()
         ]);
 
-        return response()->json([
-            'message' => 'Note saved'
-        ]);
+        SystemLogService::record(
+            'template_note_add',
+            'template',
+            $template->id,
+            null,
+            null,
+            TemplateLog::meta(
+                $template,
+                'note_add',
+                'Note added to template "' . $template->name . '"'
+            )
+        );
+
+        return response()->json(['message' => 'Note saved']);
     }
 
     /* -----------------------------------------------------

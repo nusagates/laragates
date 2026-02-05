@@ -41,4 +41,63 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Indicate that the user is an agent.
+     */
+    public function agent(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'agent',
+            'approved_at' => now(),
+            'status' => 'offline',
+        ]);
+    }
+
+    /**
+     * Indicate that the user is a supervisor.
+     */
+    public function supervisor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'supervisor',
+            'approved_at' => now(),
+            'status' => 'offline',
+        ]);
+    }
+
+    /**
+     * Indicate that the user is an admin.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'admin',
+            'approved_at' => now(),
+            'status' => 'offline',
+        ]);
+    }
+
+    /**
+     * Indicate that the user is a superadmin.
+     */
+    public function superadmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'superadmin',
+            'approved_at' => now(),
+            'status' => 'offline',
+        ]);
+    }
+
+    /**
+     * Indicate that the user account is locked.
+     */
+    public function locked(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'locked_until' => now()->addHours(24),
+            'failed_login_attempts' => 6,
+        ]);
+    }
 }

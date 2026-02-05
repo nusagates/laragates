@@ -20,6 +20,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Load all helper files from app/Helpers directory
+        $helperPath = app_path('Helpers');
+        if (is_dir($helperPath)) {
+            foreach (glob($helperPath.'/*.php') as $file) {
+                require_once $file;
+            }
+        }
+
         // Vite prefetch (Laravel 12)
         Vite::prefetch(concurrency: 3);
 

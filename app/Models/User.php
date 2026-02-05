@@ -2,20 +2,21 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
         'email',
         'password',
+        'company_id',
         'role',
         'status',
         'last_seen',
@@ -23,6 +24,8 @@ class User extends Authenticatable
         'skills',
         'is_active',
         'approved_at',
+        'is_online',
+        'last_heartbeat_at',
     ];
 
     protected $hidden = [
@@ -32,9 +35,12 @@ class User extends Authenticatable
 
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'last_seen'         => 'datetime',
-        'approved_at'       => 'datetime',
-        'skills'            => 'array'
+        'last_seen' => 'datetime',
+        'approved_at' => 'datetime',
+        'skills' => 'array',
+        'locked_until' => 'datetime',
+        'is_online' => 'boolean',
+        'last_heartbeat_at' => 'datetime',
     ];
 
     /* =======================
@@ -89,5 +95,37 @@ class User extends Authenticatable
     public function isOnline(): bool
     {
         return $this->last_seen && $this->last_seen->gt(now()->subMinutes(3));
+    }
+
+    /**
+     * Check if user has any of the given roles
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        return in_array($this->role, $roles);
+    }
+
+    /**
+     * Check if user is a superadmin
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    /**
+     * Check if user is admin or superadmin
+     */
+    public function isAdminOrSuperAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'superadmin']);
+    }
+
+    public function chatSessions()
+    {
+        return $this->hasMany(
+            \App\Models\ChatSession::class,
+            'assigned_to'
+        );
     }
 }

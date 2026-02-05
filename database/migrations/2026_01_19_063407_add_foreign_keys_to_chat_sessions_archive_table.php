@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('chat_sessions_archive', function (Blueprint $table) {
+            $table->foreign(['assigned_to'])->references(['id'])->on('users')->onUpdate('no action')->onDelete('no action');
+            $table->foreign(['customer_id'])->references(['id'])->on('customers')->onUpdate('no action')->onDelete('no action');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('chat_sessions_archive', function (Blueprint $table) {
+            $table->dropForeign('chat_sessions_archive_assigned_to_foreign');
+            $table->dropForeign('chat_sessions_archive_customer_id_foreign');
+        });
+    }
+};

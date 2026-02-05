@@ -17,6 +17,8 @@ class BroadcastTarget extends Model
         'sent_at',
         'error_message',
         'attempts',
+        'wa_message_id',
+        'state_id',
     ];
 
     protected $casts = [
@@ -44,7 +46,7 @@ class BroadcastTarget extends Model
         $this->increment('attempts');
         $this->update([
             'status' => 'failed',
-            'error_message' => $error ? (string)$error : null,
+            'error_message' => $error ? (string) $error : null,
         ]);
     }
 }

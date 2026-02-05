@@ -31,25 +31,39 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | WHATSAPP CLOUD API CONFIG
+    | WHATSAPP CLOUD API (META / WABA)
     |--------------------------------------------------------------------------
     */
 
     'waba' => [
+        'base_url'    => env('WABA_BASE_URL', 'https://graph.facebook.com'),
+        'version'     => env('WABA_API_VERSION', 'v22.0'),
+        'token'       => env('WABA_ACCESS_TOKEN'),
+        'phone_id'    => env('WABA_PHONE_NUMBER_ID'),
+        'business_id' => env('WABA_BUSINESS_ID'),
+    ],
 
-    'base_url' => env('WABA_BASE_URL', 'https://graph.facebook.com'),
+    /*
+    |--------------------------------------------------------------------------
+    | WHATSAPP PROVIDER ADAPTER (FONNTE / WAZAPBRO)
+    |--------------------------------------------------------------------------
+    */
 
-    'version'  => env('WABA_API_VERSION', 'v22.0'),
+    // Provider yang dipakai sistem saat ini
+    'whatsapp' => [
+        'provider' => env('WHATSAPP_PROVIDER', 'fonnte'),
+    ],
 
-    // WA Business Cloud API Access Token
-    'token'    => env('WABA_ACCESS_TOKEN'),
+    // FONNTE CONFIG (legacy, existing system)
+    'fonnte' => [
+        'endpoint' => env('FONNTE_ENDPOINT', 'https://api.fonnte.com/send'),
+        'token'    => env('FONNTE_TOKEN'),
+    ],
 
-    // Phone Number ID
-    'phone_id' => env('WABA_PHONE_NUMBER_ID'),
-
-    // Business ID
-    'business_id' => env('WABA_BUSINESS_ID'),
-],
-
+    // WAZAPBRO CONFIG (testing / alternative provider)
+    'wazapbro' => [
+        'endpoint' => env('WAZAPBRO_ENDPOINT'),
+        'token'    => env('WAZAPBRO_TOKEN'),
+    ],
 
 ];

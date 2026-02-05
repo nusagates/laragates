@@ -29,12 +29,26 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $impersonating = session()->has('impersonate_original_user');
+        $originalUser = null;
+
+        if ($impersonating) {
+            $originalUser = \App\Models\User::find(session()->get('impersonate_original_user'));
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user(),
             ],
             'csrf_token' => csrf_token(),
+            'impersonating' => $impersonating,
+            'original_user' => $originalUser ? [
+                'id' => $originalUser->id,
+                'name' => $originalUser->name,
+                'email' => $originalUser->email,
+                'role' => $originalUser->role,
+            ] : null,
         ];
     }
 }

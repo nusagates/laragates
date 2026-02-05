@@ -10,12 +10,39 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(SuperAdminSeeder::class);
+
         User::create([
-            'name'     => 'Administrator',
-            'email'    => 'admin@waba-biz.com',
-            'role'     => 'admin',
-            'status'   => 'offline',
-            'password' => Hash::make('password123'),
+            'name' => 'Administrator',
+            'email' => 'admin@auresys.id',
+            'role' => 'admin',
+            'status' => 'offline',
+            'email_verified_at' => now(),
+            'password' => Hash::make('Xuxoken@32'),
+            'approved_at' => now(),
+        ]);
+
+        // agent sample
+        User::create([
+            'name' => 'Agent One',
+            'email' => 'agent1@auresys.id',
+            'role' => 'agent',
+            'status' => 'offline',
+            'email_verified_at' => now(),
+            'password' => Hash::make('Xuxoken@32'),
+            'approved_at' => now(),
+            'skills' => ['sales', 'support'],
+        ]);
+
+        User::create([
+            'name' => 'Agent Two',
+            'email' => 'agent2@auresys.id',
+            'role' => 'agent',
+            'status' => 'offline',
+            'email_verified_at' => now(),
+            'password' => Hash::make('Xuxoken@32'),
+            'approved_at' => now(),
+            'skills' => ['support'],
         ]);
     }
 }

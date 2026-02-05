@@ -10,15 +10,18 @@ class SuperAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        if (User::where('email', 'admin@waba-biz.com')->exists()) return;
+        $email = 'superadmin@auresys.id';
+        if (User::where('email', $email)->exists()) return;
 
         User::create([
             'name' => 'Super Admin',
-            'email' => 'admin@waba-biz.com',
-            'password' => Hash::make('Admin123!'),
-            'role' => 'admin',
-            'status' => 'offline',
+            'email' => $email,
+            'password' => Hash::make('Pakarul@123!'),
+            'role' => 'superadmin',
+            'status' => 'online',
             'is_active' => true,
+            'email_verified_at' => now(),
+            'approved_at' => now(),
         ]);
     }
 }

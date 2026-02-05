@@ -15,6 +15,10 @@ import { createVuetify } from 'vuetify';
 import navTo from '@/directives/navTo.js';
 const vuetify = createVuetify({ components, directives });
 
+// === Pinia ===
+import { createPinia } from 'pinia';
+const pinia = createPinia();
+
 // === Toastification ===
 import Toast, { POSITION } from "vue-toastification";
 import "vue-toastification/dist/index.css";
@@ -38,6 +42,7 @@ createInertiaApp({
         const app = createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)
+            .use(pinia)
             .use(vuetify)
             .use(VueApexCharts)   // <-- 🚀 ApexCharts aktif
             .directive('to', navTo)

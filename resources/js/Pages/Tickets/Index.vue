@@ -1,43 +1,47 @@
 <script setup>
-/* === LOGIC TETAP, HANYA DIRAPIKAN === */
+/* ===============================
+   LOGIC ASLI — TIDAK DIUBAH
+=============================== */
 import AdminLayout from '@/Layouts/AdminLayout.vue'
 import { Head, usePage, router } from '@inertiajs/vue3'
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 
-const page    = usePage()
+const page = usePage()
+
 const tickets = ref(page.props.tickets || [])
 const counts  = ref(page.props.counts || {})
 const agents  = ref(page.props.agents || [])
 const filters = ref(page.props.filters || { status: 'all', q: '' })
 
-// Sidebar state
 const search       = ref(filters.value.q || '')
 const statusFilter = ref(filters.value.status || 'all')
 
-// Ticket aktif
 const activeTicketId = ref(tickets.value[0]?.id || null)
 const activeTicket   = ref(null)
 const messages       = ref([])
 
-// Form reply
-const replyText    = ref('')
-const loadingReply = ref(false)
+const replyText     = ref('')
+const loadingReply  = ref(false)
 const loadingTicket = ref(false)
 
-// Warna status badge
-const badgeColor = (status) => {
-  if (status === 'pending') return 'orange'
-  if (status === 'ongoing') return 'blue'
-  if (status === 'closed')  return 'green'
-  return 'grey'
-}
+/* ===============================
+   CREATE TICKET STATE
+=============================== */
+const showCreate = ref(false)
 
-// Filter ticket (front-end, sync sama backend)
+const newTicket = ref({
+  customer_name: '',
+  customer_phone: '', // ✅ TAMBAHAN
+  subject: '',
+  priority: 'medium',
+  channel: 'other',
+})
+
 const filteredTickets = computed(() => {
   let data = tickets.value
 
-  if (statusFilter.value && statusFilter.value !== 'all') {
+  if (statusFilter.value !== 'all') {
     data = data.filter(t => t.status === statusFilter.value)
   }
 
@@ -75,7 +79,37 @@ function doSearch() {
   })
 }
 
-// Load detail ticket
+/* ===============================
+   CREATE TICKET (STANDALONE)
+=============================== */
+async function createTicket() {
+  if (!newTicket.value.customer_name || !newTicket.value.subject) return
+
+  try {
+    const res = await axios.post('/tickets', {
+      customer_name: newTicket.value.customer_name,
+      customer_phone: newTicket.value.customer_phone || null, // ✅ KIRIM KE DB
+      subject: newTicket.value.subject,
+      priority: newTicket.value.priority,
+      channel: newTicket.value.channel,
+    })
+
+    showCreate.value = false
+    newTicket.value = {
+      customer_name: '',
+      customer_phone: '',
+      subject: '',
+      priority: 'medium',
+      channel: 'other',
+    }
+
+    await refreshTicketsList()
+    openTicket(res.data.id)
+  } catch {
+    alert('Failed to create ticket')
+  }
+}
+
 async function loadTicket(id) {
   if (!id) return
   loadingTicket.value = true
@@ -94,9 +128,9 @@ function openTicket(id) {
   loadTicket(id)
 }
 
-// Kirim balasan
 async function sendReply() {
   if (!replyText.value.trim() || !activeTicketId.value) return
+  if (activeTicket.value?.status === 'closed') return
 
   loadingReply.value = true
   const text = replyText.value
@@ -106,7 +140,6 @@ async function sendReply() {
     const res = await axios.post(`/tickets/${activeTicketId.value}/reply`, {
       message: text,
     })
-
     messages.value.push(res.data)
     await refreshTicketsList()
   } finally {
@@ -114,22 +147,13 @@ async function sendReply() {
   }
 }
 
-// Update status ticket
-async function updateStatus(newStatus) {
+async function updateStatus(status) {
   if (!activeTicketId.value) return
-
-  await axios.post(`/tickets/${activeTicketId.value}/status`, {
-    status: newStatus,
-  })
-
-  if (activeTicket.value) {
-    activeTicket.value.status = newStatus
-  }
-
+  await axios.post(`/tickets/${activeTicketId.value}/status`, { status })
+  if (activeTicket.value) activeTicket.value.status = status
   await refreshTicketsList()
 }
 
-// Assign agent
 async function assignAgent(userId) {
   if (!activeTicketId.value) return
 
@@ -138,7 +162,6 @@ async function assignAgent(userId) {
   })
 
   const a = agents.value.find(x => x.id === userId)
-
   if (activeTicket.value) {
     activeTicket.value.assigned_to   = userId
     activeTicket.value.assigned_name = a ? a.name : null
@@ -147,7 +170,6 @@ async function assignAgent(userId) {
   await refreshTicketsList()
 }
 
-// Refresh list di sidebar setelah ada perubahan
 async function refreshTicketsList() {
   await router.get('/tickets', {
     status: statusFilter.value,
@@ -163,18 +185,13 @@ async function refreshTicketsList() {
   })
 }
 
-// Init
 onMounted(() => {
-  if (activeTicketId.value) {
-    loadTicket(activeTicketId.value)
-  }
+  if (activeTicketId.value) loadTicket(activeTicketId.value)
 })
 
-// Sinkron kalau ada props baru dari Inertia
-watch(
-  () => page.props.tickets,
-  val => { if (val) tickets.value = val },
-)
+watch(() => page.props.tickets, v => {
+  if (v) tickets.value = v
+})
 </script>
 
 <template>
@@ -183,11 +200,11 @@ watch(
   <AdminLayout>
     <template #title>Tickets</template>
 
-    <div class="tickets-flex">
-      <!-- ================= SIDEBAR ================= -->
-      <div class="tickets-sidebar">
-        <v-card class="tickets-sidebar-card" elevation="1">
-          <!-- Search -->
+    <div class="tickets-root">
+
+      <!-- SIDEBAR -->
+      <aside class="tickets-sidebar">
+        <div class="sidebar-top">
           <v-text-field
             v-model="search"
             placeholder="Search ticket..."
@@ -195,438 +212,435 @@ watch(
             variant="solo"
             flat
             hide-details
-            rounded
-            clearable
             prepend-inner-icon="mdi-magnify"
+            class="search"
             @keyup.enter="doSearch"
-            class="tickets-search"
           />
 
-          <!-- Filter status -->
+          <!-- ➕ BUTTON CREATE -->
+          <v-btn
+            color="primary"
+            block
+            class="mt-3"
+            @click="showCreate = true"
+          >
+            + New Ticket
+          </v-btn>
+
           <v-chip-group
             v-model="statusFilter"
             mandatory
-            class="tickets-chip-group"
+            class="filters"
             @update:modelValue="changeStatusFilter"
           >
-            <v-chip value="all" filter>
-              All ({{ counts.all ?? 0 }})
-            </v-chip>
-            <v-chip value="pending" filter color="orange">
-              Pending ({{ counts.pending ?? 0 }})
-            </v-chip>
-            <v-chip value="ongoing" filter color="blue">
-              Ongoing ({{ counts.ongoing ?? 0 }})
-            </v-chip>
-            <v-chip value="closed" filter color="green">
-              Closed ({{ counts.closed ?? 0 }})
-            </v-chip>
+            <v-chip value="all">All</v-chip>
+            <v-chip value="pending">Pending</v-chip>
+            <v-chip value="ongoing">Ongoing</v-chip>
+            <v-chip value="closed">Closed</v-chip>
           </v-chip-group>
+        </div>
 
-          <v-divider />
-
-          <!-- List tiket -->
-          <div class="tickets-scroll">
-            <v-list density="compact">
-              <v-list-item
-                v-for="t in filteredTickets"
-                :key="t.id"
-                :class="{ 'active-ticket': t.id === activeTicketId }"
-                class="tickets-item"
-                @click="openTicket(t.id)"
-              >
-                <div class="ticket-line">
-                  <span class="ticket-name">{{ t.customer_name }}</span>
-                  <small class="ticket-time">{{ t.last_message_at }}</small>
-                </div>
-                <div class="ticket-sub">
-                  <span class="ticket-subject">
-                    {{ t.subject }}
-                  </span>
-                  <v-chip
-                    :color="badgeColor(t.status)"
-                    size="x-small"
-                    label
-                    class="ticket-badge text-capitalize"
-                  >
-                    {{ t.status }}
-                  </v-chip>
-                </div>
-              </v-list-item>
-            </v-list>
-
-            <div v-if="!filteredTickets.length" class="no-tickets">
-              No tickets
-            </div>
-          </div>
-        </v-card>
-      </div>
-
-      <!-- ================= DETAIL / CHAT ================= -->
-      <div class="tickets-detail">
-        <v-card class="tickets-window" elevation="1">
+        <div class="tickets-list">
           <div
-            v-if="!activeTicketId"
-            class="no-select"
+            v-for="t in filteredTickets"
+            :key="t.id"
+            class="ticket"
+            :class="{ active: t.id === activeTicketId }"
+            @click="openTicket(t.id)"
           >
-            Select a ticket to view detail
+            <div class="line">
+              <span class="name">{{ t.customer_name }}</span>
+              <span class="time">{{ t.last_message_at }}</span>
+            </div>
+            <div class="line">
+              <span class="subject">{{ t.subject }}</span>
+              <span class="status" :class="t.status">{{ t.status }}</span>
+            </div>
           </div>
+        </div>
+      </aside>
 
-          <template v-else>
-            <!-- Header detail -->
-            <div
-              v-if="activeTicket"
-              class="tickets-header"
-            >
-              <div>
-                <h3 class="ticket-title">
-                  {{ activeTicket.customer_name }}
-                </h3>
-                <div class="ticket-desc">
-                  {{ activeTicket.subject }}
-                </div>
+      <!-- CHAT -->
+      <section class="tickets-chat">
+        <div v-if="!activeTicketId" class="no-ticket">
+          Select a ticket
+        </div>
+
+        <template v-else>
+          <header class="chat-header" v-if="activeTicket">
+            <div class="info">
+              <div class="title">
+                {{ activeTicket.customer_name }}
+                <span class="badge" :class="activeTicket.status">
+                  {{ activeTicket.status }}
+                </span>
               </div>
-
-              <div class="ticket-actions">
-                <v-select
-                  :items="[
-                    { value: 'pending', title: 'Pending' },
-                    { value: 'ongoing', title: 'Ongoing' },
-                    { value: 'closed',  title: 'Closed'  },
-                  ]"
-                  v-model="activeTicket.status"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  class="mr-2"
-                  style="max-width: 140px"
-                  @update:modelValue="updateStatus"
-                />
-
-                <v-select
-                  :items="agents.map(a => ({ value: a.id, title: a.name }))"
-                  :model-value="activeTicket.assigned_to"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  clearable
-                  label="Assign"
-                  style="max-width: 180px"
-                  @update:modelValue="assignAgent"
-                />
+              <div class="subtitle">
+                {{ activeTicket.subject }}
+                <span v-if="activeTicket.assigned_name">
+                  · Assigned to {{ activeTicket.assigned_name }}
+                </span>
               </div>
             </div>
 
-            <v-divider />
-
-            <!-- Body chat -->
-            <div
-              v-if="!loadingTicket"
-              class="tickets-body"
-            >
-              <div
-                v-for="m in messages"
-                :key="m.id"
-                :class="['bubble-wrapper', m.sender_type]"
-              >
-                <div class="bubble-meta">
-                  {{ m.sender_name ?? m.sender_type }} · {{ m.time }}
-                </div>
-
-                <div
-                  class="bubble"
-                  :class="m.sender_type"
-                >
-                  {{ m.message }}
-                </div>
-              </div>
-
-              <div
-                v-if="!messages.length"
-                class="no-messages"
-              >
-                No messages yet
-              </div>
-            </div>
-
-            <div
-              v-else
-              class="tickets-body loading-center"
-            >
-              Loading...
-            </div>
-
-            <v-divider />
-
-            <!-- Input reply -->
-            <div class="tickets-input">
-              <v-textarea
-                v-model="replyText"
-                placeholder="Type a reply..."
-                rows="1"
-                auto-grow
+            <div class="controls">
+              <v-select
+                density="compact"
                 variant="outlined"
                 hide-details
-                class="reply-text"
+                class="control"
+                :items="[
+                  { title:'Pending', value:'pending' },
+                  { title:'Ongoing', value:'ongoing' },
+                  { title:'Closed', value:'closed' },
+                ]"
+                v-model="activeTicket.status"
+                @update:modelValue="updateStatus"
               />
-              <v-btn
-                color="primary"
-                :loading="loadingReply"
-                @click="sendReply"
-                class="reply-btn"
-              >
-                SEND
-              </v-btn>
+
+              <v-select
+                density="compact"
+                variant="outlined"
+                hide-details
+                clearable
+                class="control"
+                label="Assign"
+                :items="agents.map(a => ({ title:a.name, value:a.id }))"
+                :model-value="activeTicket.assigned_to"
+                @update:modelValue="assignAgent"
+              />
             </div>
-          </template>
-        </v-card>
-      </div>
+          </header>
+
+          <div class="chat-body">
+            <div
+              v-for="m in messages"
+              :key="m.id"
+              class="bubble"
+              :class="m.sender_type"
+            >
+              <div class="meta">
+                {{ m.sender_name ?? m.sender_type }} · {{ m.time }}
+              </div>
+              <div class="text">{{ m.message }}</div>
+            </div>
+          </div>
+
+          <footer class="chat-input">
+            <v-textarea
+              v-model="replyText"
+              auto-grow
+              rows="1"
+              hide-details
+              placeholder="Type a reply..."
+              :disabled="activeTicket?.status === 'closed'"
+            />
+            <v-btn
+              color="primary"
+              :disabled="activeTicket?.status === 'closed'"
+              @click="sendReply"
+            >
+              SEND
+            </v-btn>
+          </footer>
+        </template>
+      </section>
     </div>
+
+    <!-- CREATE TICKET MODAL -->
+    <v-dialog v-model="showCreate" max-width="420">
+      <v-card>
+        <v-card-title>Create New Ticket</v-card-title>
+        <v-card-text>
+          <v-text-field label="Customer Name" v-model="newTicket.customer_name" />
+          <v-text-field label="Customer Phone" v-model="newTicket.customer_phone" />
+          <v-text-field label="Subject" v-model="newTicket.subject" />
+          <v-select
+            label="Priority"
+            :items="['low','medium','high']"
+            v-model="newTicket.priority"
+          />
+          <v-select
+            label="Channel"
+            :items="['whatsapp','email','phone','other']"
+            v-model="newTicket.channel"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn text @click="showCreate = false">Cancel</v-btn>
+          <v-btn color="primary" @click="createTicket">Create</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </AdminLayout>
 </template>
 
 <style scoped>
-/* Layout utama */
-.tickets-flex {
+/* ===============================
+   ROOT LAYOUT
+=============================== */
+.tickets-root {
   height: calc(100vh - 120px);
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 14px;
+  color: #e5e7eb;
 }
 
+/* ===============================
+   SIDEBAR (CHAT STYLE)
+=============================== */
 .tickets-sidebar {
-  flex: 0 0 26%;
-  max-width: 26%;
-}
-
-.tickets-detail {
-  flex: 1;
-}
-
-/* Sidebar card */
-.tickets-sidebar-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: 10px;
-}
-
-.tickets-search {
-  margin-bottom: 6px;
-}
-
-.tickets-search input {
-  font-size: 13px !important;
-}
-
-/* Chip filter */
-.tickets-chip-group {
-  margin: 4px 0 8px;
-}
-
-.tickets-chip-group .v-chip {
-  font-size: 11px !important;
-}
-
-/* List tiket */
-.tickets-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.tickets-item {
-  cursor: pointer !important;
-  padding: 8px 6px !important;
-  border-radius: 6px;
-}
-
-.tickets-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.active-ticket {
-  background-color: rgba(25, 118, 210, 0.1) !important;
-  border-left: 3px solid #1976d2;
-}
-
-/* Isi item tiket */
-.ticket-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ticket-name {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.ticket-time {
-  font-size: 11px;
-  color: #888;
-}
-
-.ticket-sub {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 2px;
-}
-
-.ticket-subject {
-  font-size: 12px;
-  max-width: 75%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ticket-badge {
-  font-size: 10px;
-}
-
-.no-tickets {
-  padding: 16px;
-  text-align: center;
-  font-size: 12px;
-  color: #777;
-}
-
-/* Detail window */
-.tickets-window {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.no-select {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #777;
-  font-size: 14px;
-}
-
-/* Header detail */
-.tickets-header {
-  padding: 12px 18px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ticket-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-}
-
-.ticket-desc {
-  font-size: 14px;
-  color: #777;
-}
-
-.ticket-actions {
-  display: flex;
-  align-items: center;
-}
-
-/* Body chat */
-.tickets-body {
-  flex: 1;
-  padding: 10px 20px;
-  overflow-y: auto;
-  background: #f8fafc;
-}
-
-.loading-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Bubble chat */
-.bubble-wrapper {
-  margin-bottom: 10px;
-  max-width: 78%;
-}
-
-.bubble-wrapper.agent {
-  margin-left: auto;
-  text-align: right;
-}
-
-.bubble-meta {
-  font-size: 11px;
-  margin-bottom: 2px;
-  color: #666;
-}
-
-.bubble {
-  display: inline-block;
-  padding: 8px 12px;
+  background: linear-gradient(180deg, #020617, #020617);
   border-radius: 16px;
-  white-space: pre-wrap;
-  font-size: 13px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.bubble.agent {
-  background: #d1f2d6;
-  border-radius: 14px 14px 4px 14px;
+.sidebar-top {
+  padding: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.bubble.customer {
-  background: #ffffff;
-  border-radius: 14px 14px 14px 4px;
-}
-
-.bubble.system {
-  background: #e0e0e0;
-  font-style: italic;
+/* SEARCH */
+.search .v-field {
+  background: rgba(148,163,184,.12) !important;
   border-radius: 12px;
 }
 
-.no-messages {
-  color: #777;
-  text-align: center;
-  margin-top: 20px;
-  font-size: 13px;
+.search input {
+  color: #f8fafc !important;
 }
 
-/* Input reply */
-.tickets-input {
-  padding: 10px 14px;
+.search input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ===============================
+   TICKET LIST (CHAT LIST FEEL)
+=============================== */
+.tickets-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.ticket {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.ticket:hover {
+  background: rgba(255,255,255,.04);
+}
+
+.ticket.active {
+  background: rgba(59,130,246,.18);
+  border-left: 3px solid #3b82f6;
+}
+
+.line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.subject {
+  font-size: 12px;
+  color: #cbd5f5;
+  max-width: 75%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+
+.status.pending {
+  color: #fb923c;
+  background: rgba(249,115,22,.15);
+}
+
+.status.ongoing {
+  color: #60a5fa;
+  background: rgba(59,130,246,.18);
+}
+
+.status.closed {
+  color: #4ade80;
+  background: rgba(34,197,94,.18);
+}
+
+/* ===============================
+   CHAT PANEL
+=============================== */
+.tickets-chat {
+  background: radial-gradient(circle at top, #0f172a, #020617);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* HEADER */
+.chat-header {
+  height: 60px;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.chat-header .info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-header .title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.chat-header .subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.controls {
   display: flex;
   gap: 10px;
-  background: #fff;
 }
 
-.reply-text {
+.control {
+  min-width: 130px;
+}
+
+/* BADGE */
+.badge {
+  font-size: 10px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: capitalize;
+}
+
+.badge.pending {
+  color: #fb923c;
+  background: rgba(249,115,22,.15);
+}
+
+.badge.ongoing {
+  color: #60a5fa;
+  background: rgba(59,130,246,.18);
+}
+
+.badge.closed {
+  color: #4ade80;
+  background: rgba(34,197,94,.18);
+}
+
+/* ===============================
+   CHAT BODY
+=============================== */
+.chat-body {
+  flex: 1;
+  padding: 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===============================
+   CHAT BUBBLE
+=============================== */
+.bubble {
+  max-width: 64%;
+  margin-bottom: 14px;
+  word-break: break-word;
+}
+
+.bubble.agent {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.bubble.customer {
+  align-self: flex-start;
+}
+
+.bubble .meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.bubble .text {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Agent bubble */
+.bubble.agent .text {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+}
+
+/* Customer bubble */
+.bubble.customer .text {
+  background: rgba(255,255,255,.08);
+  color: #e5e7eb;
+}
+
+/* ===============================
+   CHAT INPUT
+=============================== */
+.chat-input {
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  background: linear-gradient(
+    180deg,
+    rgba(2,6,23,.9),
+    rgba(2,6,23,1)
+  );
+}
+
+/* ===============================
+   EMPTY STATE
+=============================== */
+.no-ticket {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
   font-size: 13px;
 }
 
-.reply-btn {
-  height: 38px;
-  align-self: flex-end;
-}
-
-/* Sedikit responsif untuk layar kecil */
-@media (max-width: 1024px) {
-  .tickets-flex {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .tickets-sidebar,
-  .tickets-detail {
-    max-width: 100%;
-    flex: 1 1 auto;
-  }
-
-  .tickets-window {
-    min-height: 400px;
-  }
-}
 </style>
